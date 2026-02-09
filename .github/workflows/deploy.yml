@@ -29,12 +29,21 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies (root — resolves workspaces)
+      # Single root install — sets up workspace symlinks for @echos/core and @echos/ui.
+      # DO NOT run a second npm install inside apps/web — that breaks workspace resolution
+      # and causes Vite to produce a near-empty bundle (the 58 KB bug).
+      - name: Install dependencies
         run: npm install
 
-      - name: Install dependencies (apps/web — ensures local vite)
+      - name: Verify workspace resolution
         working-directory: apps/web
-        run: npm install
+        run: |
+          set -euo pipefail
+          echo "=== Verifying workspace packages are resolvable ==="
+          node -e "require.resolve('@echos/core')" && echo "OK: @echos/core resolves" || { echo "FAIL: @echos/core not found"; exit 1; }
+          node -e "require.resolve('@echos/ui')" && echo "OK: @echos/ui resolves" || { echo "FAIL: @echos/ui not found"; exit 1; }
+          node -e "require.resolve('vite')" && echo "OK: vite resolves" || { echo "FAIL: vite not found"; exit 1; }
+          echo "All workspace dependencies verified."
 
       - name: Build web app
         working-directory: apps/web
