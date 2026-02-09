@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, radius, transitions } from '../tokens.js';
+import { colors, transitions } from '../tokens.js';
 
 export interface Step {
   label: string;
@@ -18,8 +18,10 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '4px',
-        padding: '12px 0',
+        gap: '0',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
       }}
     >
       {steps.map((step, i) => {
@@ -28,64 +30,42 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
         const isClickable = onStepClick && i <= currentStep;
 
         return (
-          <React.Fragment key={step.key}>
-            {i > 0 && (
-              <div
+          <button
+            key={step.key}
+            onClick={() => isClickable && onStepClick?.(i)}
+            disabled={!isClickable}
+            style={{
+              position: 'relative',
+              padding: '8px 16px',
+              border: 'none',
+              background: 'transparent',
+              color: isActive ? colors.text1 : isCompleted ? colors.text2 : colors.text3,
+              fontSize: '13px',
+              fontWeight: isActive ? 600 : 400,
+              cursor: isClickable ? 'pointer' : 'default',
+              transition: `all ${transitions.normal}`,
+              whiteSpace: 'nowrap',
+              fontFamily: 'inherit',
+            }}
+          >
+            {isCompleted && (
+              <span style={{ marginRight: '4px', fontSize: '11px', opacity: 0.6 }}>&#10003;</span>
+            )}
+            {step.label}
+            {isActive && (
+              <span
                 style={{
-                  flex: 1,
+                  position: 'absolute',
+                  bottom: 0,
+                  left: '16px',
+                  right: '16px',
                   height: '2px',
-                  background: isCompleted ? colors.primary : colors.blackLighter,
-                  transition: `background ${transitions.normal}`,
-                  maxWidth: '48px',
+                  background: colors.accent,
+                  borderRadius: '1px',
                 }}
               />
             )}
-            <button
-              onClick={() => isClickable && onStepClick?.(i)}
-              disabled={!isClickable}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                borderRadius: radius.full,
-                border: 'none',
-                background: isActive
-                  ? colors.primary
-                  : isCompleted
-                    ? 'rgba(66, 33, 206, 0.2)'
-                    : 'transparent',
-                color: isActive || isCompleted ? colors.white : colors.whiteMuted,
-                fontSize: '13px',
-                fontWeight: isActive ? 600 : 400,
-                cursor: isClickable ? 'pointer' : 'default',
-                transition: `all ${transitions.normal}`,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span
-                style={{
-                  width: '22px',
-                  height: '22px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  background: isActive
-                    ? 'rgba(255,255,255,0.2)'
-                    : isCompleted
-                      ? colors.primary
-                      : colors.blackLighter,
-                  color: isCompleted || isActive ? colors.white : colors.whiteMuted,
-                }}
-              >
-                {isCompleted ? '\u2713' : i + 1}
-              </span>
-              {step.label}
-            </button>
-          </React.Fragment>
+          </button>
         );
       })}
     </div>

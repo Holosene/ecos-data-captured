@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StepIndicator, Button, colors } from '@echos/ui';
+import { StepIndicator, colors } from '@echos/ui';
 import type { Step } from '@echos/ui';
 import { useAppState, type WizardStep } from '../store/app-state.js';
 import { ImportStep } from '../components/ImportStep.js';
@@ -30,7 +30,6 @@ export function WizardPage() {
   const navigate = useNavigate();
   const currentIdx = getStepIndex(state.currentStep === 'home' ? 'import' : state.currentStep);
 
-  // Redirect to import on first load
   React.useEffect(() => {
     if (state.currentStep === 'home') {
       dispatch({ type: 'SET_STEP', step: 'import' });
@@ -42,61 +41,28 @@ export function WizardPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: colors.black,
-      }}
-    >
-      {/* Header */}
-      <header
+    <div style={{ background: colors.black, minHeight: 'calc(100vh - 64px)' }}>
+      {/* Step tabs */}
+      <div
         style={{
+          borderBottom: `1px solid ${colors.border}`,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 24px',
-          borderBottom: `1px solid ${colors.glassBorder}`,
-          background: 'rgba(26, 26, 26, 0.9)',
-          backdropFilter: 'blur(8px)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
+          padding: '0 24px',
+          maxWidth: '960px',
+          margin: '0 auto',
         }}
       >
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: colors.white,
-            fontSize: '20px',
-            fontWeight: 700,
-            letterSpacing: '-1px',
-            cursor: 'pointer',
-          }}
-        >
-          ECHOS
-        </button>
-
-        <div style={{ flex: 1, maxWidth: '700px', margin: '0 24px' }}>
-          <StepIndicator
-            steps={STEPS}
-            currentStep={currentIdx}
-            onStepClick={handleStepClick}
-          />
-        </div>
-
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-          Exit
-        </Button>
-      </header>
+        <StepIndicator
+          steps={STEPS}
+          currentStep={currentIdx}
+          onStepClick={handleStepClick}
+        />
+      </div>
 
       {/* Content */}
-      <main
+      <div
         style={{
-          flex: 1,
           maxWidth: '960px',
           width: '100%',
           margin: '0 auto',
@@ -109,7 +75,7 @@ export function WizardPage() {
         {state.currentStep === 'sync' && <SyncStep />}
         {state.currentStep === 'generate' && <GenerateStep />}
         {state.currentStep === 'viewer' && <ViewerStep />}
-      </main>
+      </div>
     </div>
   );
 }
