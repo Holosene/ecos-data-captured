@@ -8,8 +8,10 @@
     <link rel="icon" type="image/svg+xml" href="/echos-donees-capturees/favicon.svg" />
     <link rel="stylesheet" href="https://use.typekit.net/vrn7irl.css" />
     <title>Échos</title>
+    <script>(function(){var t=localStorage.getItem('echos-theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()</script>
     <style>
       body { margin: 0; background: #111; color: #F2F2F2; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      [data-theme="light"] body { background: #FAFAFA; color: #111; }
       #root { min-height: 100vh; }
       @keyframes echos-spin { to { transform: rotate(360deg); } }
     </style>

@@ -28,22 +28,7 @@ function Topbar() {
   const logoSrc = theme === 'dark' ? darkLogoSrc : lightLogoSrc;
 
   return (
-    <header
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        height: '72px',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '0 clamp(16px, 4vw, 40px)',
-        background: theme === 'dark' ? 'rgba(17, 17, 17, 0.88)' : 'rgba(245, 245, 245, 0.92)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid var(--c-border)',
-        transition: 'background 200ms ease',
-      }}
-    >
+    <header className="echos-topbar">
       {/* Logo */}
       <button
         onClick={() => navigate('/')}
@@ -170,7 +155,7 @@ function Topbar() {
             borderRadius: '9999px',
             border: 'none',
             background: colors.accent,
-            color: '#F2F2F2',
+            color: '#FFFFFF',
             fontSize: '14px',
             fontWeight: 500,
             cursor: 'pointer',
@@ -192,7 +177,7 @@ export function App() {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 200ms ease' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease' }}>
         <Topbar />
         <main style={{ flex: 1 }}>
           <Routes>

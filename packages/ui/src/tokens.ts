@@ -3,44 +3,44 @@
  */
 
 export const colors = {
-  // Brand triad
-  black: '#111111',
-  white: '#F2F2F2',
-  accent: '#4221CE',
-  accentHover: '#5835E4',
-  accentMuted: 'rgba(66, 33, 206, 0.15)',
+  // Brand triad — CSS variables for theme reactivity
+  black: 'var(--c-black)',
+  white: 'var(--c-white)',
+  accent: 'var(--c-accent)',
+  accentHover: 'var(--c-accent-hover)',
+  accentMuted: 'var(--c-accent-muted)',
 
   // Surfaces
-  surface: '#1A1A1E',
-  surfaceHover: '#222228',
-  surfaceRaised: '#252530',
+  surface: 'var(--c-surface)',
+  surfaceHover: 'var(--c-surface-hover)',
+  surfaceRaised: 'var(--c-surface-raised)',
 
   // Borders
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderHover: 'rgba(255, 255, 255, 0.15)',
-  borderActive: 'rgba(255, 255, 255, 0.25)',
+  border: 'var(--c-border)',
+  borderHover: 'var(--c-border-hover)',
+  borderActive: 'var(--c-border-active)',
 
   // Text
-  text1: '#F2F2F2',
-  text2: 'rgba(242, 242, 242, 0.55)',
-  text3: 'rgba(242, 242, 242, 0.3)',
+  text1: 'var(--c-text-1)',
+  text2: 'var(--c-text-2)',
+  text3: 'var(--c-text-3)',
 
   // Functional
-  success: '#34D399',
-  warning: '#FBBF24',
-  error: '#F87171',
+  success: 'var(--c-success)',
+  warning: 'var(--c-warning)',
+  error: 'var(--c-error)',
 
   // Legacy aliases (backward compat)
-  primary: '#4221CE',
-  primaryLight: '#5835E4',
+  primary: 'var(--c-accent)',
+  primaryLight: 'var(--c-accent-hover)',
   primaryDark: '#3318A8',
-  blackLight: '#1A1A1E',
-  blackLighter: '#252530',
-  whiteDim: 'rgba(242, 242, 242, 0.55)',
-  whiteMuted: 'rgba(242, 242, 242, 0.3)',
-  glass: '#1A1A1E',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
-  glassHover: '#222228',
+  blackLight: 'var(--c-surface)',
+  blackLighter: 'var(--c-surface-raised)',
+  whiteDim: 'var(--c-text-2)',
+  whiteMuted: 'var(--c-text-3)',
+  glass: 'var(--c-surface)',
+  glassBorder: 'var(--c-border)',
+  glassHover: 'var(--c-surface-hover)',
 } as const;
 
 export const spacing = {

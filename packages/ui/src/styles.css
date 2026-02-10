@@ -40,30 +40,58 @@
 
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
+
+  /* Topbar gradient — subtle Adobe Fonts-inspired */
+  --topbar-bg:
+    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(66, 33, 206, 0.045), transparent 70%),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.93) 0%, rgba(17, 17, 17, 0.88) 45%, rgba(17, 17, 17, 0.85) 100%);
+  --topbar-border: rgba(255, 255, 255, 0.06);
 }
 
 /* Light mode overrides */
 [data-theme="light"] {
-  --c-black: #F5F5F5;
+  --c-black: #FAFAFA;
   --c-white: #111111;
-  --c-surface: #EAEAEF;
-  --c-surface-hover: #E0E0E8;
-  --c-surface-raised: #D8D8E2;
-  --c-border: rgba(0, 0, 0, 0.1);
-  --c-border-hover: rgba(0, 0, 0, 0.18);
-  --c-border-active: rgba(0, 0, 0, 0.28);
+  --c-surface: #FFFFFF;
+  --c-surface-hover: #F0F0F5;
+  --c-surface-raised: #E8E8F0;
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-border-hover: rgba(0, 0, 0, 0.15);
+  --c-border-active: rgba(0, 0, 0, 0.25);
   --c-text-1: #111111;
   --c-text-2: rgba(17, 17, 17, 0.6);
   --c-text-3: rgba(17, 17, 17, 0.35);
-  --color-black: #F5F5F5;
+  --color-black: #FAFAFA;
   --color-white: #111111;
-  --color-surface: #EAEAEF;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --color-surface: #FFFFFF;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  /* Topbar gradient — light mode */
+  --topbar-bg:
+    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(66, 33, 206, 0.035), transparent 70%),
+    linear-gradient(90deg, rgba(250, 250, 250, 0.96) 0%, rgba(250, 250, 250, 0.93) 45%, rgba(250, 250, 250, 0.90) 100%);
+  --topbar-border: rgba(0, 0, 0, 0.06);
 }
 [data-theme="light"] body {
-  background: #F5F5F5;
+  background: #FAFAFA;
   color: #111111;
+}
+
+/* Topbar with gradient */
+.echos-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(16px, 4vw, 40px);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--topbar-border);
+  transition: background 350ms ease, border-color 350ms ease;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -80,6 +108,7 @@ body {
   color: var(--c-text-1);
   min-height: 100vh;
   line-height: 1.6;
+  transition: background 350ms ease, color 350ms ease;
 }
 
 #root { min-height: 100vh; }
