@@ -1,12 +1,16 @@
-import React from 'react';
+mport React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
 import { IconImage, IconArrowRight } from '../components/Icons.js';
+import { ImageLightbox } from '../components/ImageLightbox.js';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
 
   const FEATURES = [
     { title: t('home.feat1.title'), desc: t('home.feat1.desc'), num: '01' },
@@ -20,6 +24,25 @@ export function HomePage() {
     { value: '6', label: t('home.stat.steps') },
     { value: 'NRRD', label: t('home.stat.export') },
     { value: '0', label: t('home.stat.dataSent') },
+  ];
+
+  const openLightbox = (images: string[], startIndex: number) => {
+    setLightboxImages(images);
+    setLightboxIndex(startIndex);
+    setLightboxOpen(true);
+  };
+
+  const heroImages = [
+    `${import.meta.env.BASE_URL}hero-main.png`,
+    `${import.meta.env.BASE_URL}hero-side.png`,
+  ];
+
+  const galleryImages = [
+    `${import.meta.env.BASE_URL}gallery-01.png`,
+    `${import.meta.env.BASE_URL}gallery-03.png`,
+    `${import.meta.env.BASE_URL}gallery-04.png`,
+    `${import.meta.env.BASE_URL}gallery-05.png`,
+    `${import.meta.env.BASE_URL}gallery-06.png`,
   ];
 
   return (
@@ -85,25 +108,77 @@ export function HomePage() {
           }}
         >
           {/* Main hero visual */}
-          <div className="visual-placeholder" style={{ minHeight: '240px' }}>
+          <div 
+            className="visual-placeholder" 
+            style={{ 
+              minHeight: '240px',
+              cursor: 'pointer',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            onClick={() => openLightbox(heroImages, 0)}
+            onMouseEnter={(e) => {
+              const img = e.currentTarget.querySelector('img');
+              if (img) {
+                img.style.transform = 'scale(1.05)';
+                img.style.filter = 'brightness(1.1)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              const img = e.currentTarget.querySelector('img');
+              if (img) {
+                img.style.transform = 'scale(1)';
+                img.style.filter = 'brightness(1)';
+              }
+            }}
+          >
             <img
               src={`${import.meta.env.BASE_URL}hero-main.png`}
               alt=""
+              style={{
+                transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease',
+              }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
               <IconImage size={32} color={colors.text3} />
               <span style={{ fontSize: '13px' }}>hero-main.png</span>
             </div>
           </div>
           {/* Side visual */}
-          <div className="visual-placeholder" style={{ minHeight: '240px' }}>
+          <div 
+            className="visual-placeholder" 
+            style={{ 
+              minHeight: '240px',
+              cursor: 'pointer',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+            onClick={() => openLightbox(heroImages, 1)}
+            onMouseEnter={(e) => {
+              const img = e.currentTarget.querySelector('img');
+              if (img) {
+                img.style.transform = 'scale(1.05)';
+                img.style.filter = 'brightness(1.1)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              const img = e.currentTarget.querySelector('img');
+              if (img) {
+                img.style.transform = 'scale(1)';
+                img.style.filter = 'brightness(1)';
+              }
+            }}
+          >
             <img
               src={`${import.meta.env.BASE_URL}hero-side.png`}
               alt=""
+              style={{
+                transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease',
+              }}
               onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
-            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
               <IconImage size={32} color={colors.text3} />
               <span style={{ fontSize: '13px' }}>hero-side.png</span>
             </div>
@@ -221,11 +296,11 @@ export function HomePage() {
           }}
         >
           {[
-            { file: 'gallery-01.png', span: '2' },
-            { file: 'gallery-03.png', span: '1' },
-            { file: 'gallery-04.png', span: '1' },
-            { file: 'gallery-05.png', span: '1' },
-            { file: 'gallery-06.png', span: '1' },
+            { file: 'gallery-01.png', span: '2', index: 0 },
+            { file: 'gallery-03.png', span: '1', index: 1 },
+            { file: 'gallery-04.png', span: '1', index: 2 },
+            { file: 'gallery-05.png', span: '1', index: 3 },
+            { file: 'gallery-06.png', span: '1', index: 4 },
           ].map((item) => (
             <div
               key={item.file}
@@ -233,14 +308,35 @@ export function HomePage() {
               style={{
                 gridColumn: item.span === '2' ? 'span 2' : 'span 1',
                 minHeight: '200px',
+                cursor: 'pointer',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onClick={() => openLightbox(galleryImages, item.index)}
+              onMouseEnter={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) {
+                  img.style.transform = 'scale(1.05)';
+                  img.style.filter = 'brightness(1.1)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) {
+                  img.style.transform = 'scale(1)';
+                  img.style.filter = 'brightness(1)';
+                }
               }}
             >
               <img
                 src={`${import.meta.env.BASE_URL}${item.file}`}
                 alt=""
+                style={{
+                  transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease',
+                }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
-              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
                 <IconImage size={24} color={colors.text3} />
                 <span style={{ fontSize: '11px' }}>{item.file}</span>
               </div>
@@ -277,6 +373,16 @@ export function HomePage() {
           </Button>
         </div>
       </section>
+
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <ImageLightbox
+          images={lightboxImages}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onNavigate={(index) => setLightboxIndex(index)}
+        />
+      )}
     </div>
   );
 }
