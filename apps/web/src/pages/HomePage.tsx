@@ -47,21 +47,6 @@ export function HomePage() {
 
         <p
           style={{
-            fontFamily: fonts.display,
-            fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(24px, 3.5vw, 40px)',
-            lineHeight: 1.1,
-            letterSpacing: '-0.01em',
-            color: colors.text2,
-            maxWidth: '700px',
-            marginBottom: '20px',
-          }}
-        >
-          {t('home.subtitle')}
-        </p>
-
-        <p
-          style={{
             fontSize: 'clamp(15px, 1.2vw, 17px)',
             color: colors.text3,
             maxWidth: '560px',
@@ -284,18 +269,6 @@ export function HomePage() {
             alignItems: 'center',
           }}
         >
-          <h2
-            style={{
-              fontFamily: fonts.display,
-              fontVariationSettings: "'wght' 600",
-              fontSize: 'clamp(24px, 3vw, 36px)',
-              lineHeight: 1.1,
-              color: colors.text1,
-              marginBottom: '16px',
-            }}
-          >
-            {t('home.subtitle')}
-          </h2>
           <p style={{ fontSize: '15px', color: colors.text3, maxWidth: '480px', lineHeight: 1.7, marginBottom: '28px' }}>
             {t('home.description')}
           </p>
