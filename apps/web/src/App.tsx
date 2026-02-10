@@ -1,8 +1,8 @@
-import React, { useReducer } from 'react';
+import React, { useReducer, useState, useEffect } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { colors, fonts } from '@echos/ui';
 import { useTranslation } from './i18n/index.js';
-import { IconGlobe } from './components/Icons.js';
+import { IconGlobe, IconSun, IconMoon } from './components/Icons.js';
 import { AppContext, appReducer, INITIAL_STATE } from './store/app-state.js';
 import { HomePage } from './pages/HomePage.js';
 import { WizardPage } from './pages/WizardPage.js';
@@ -13,12 +13,77 @@ function Topbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, lang, setLang } = useTranslation();
+  const [docsInView, setDocsInView] = useState(false);
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('echos-theme') as 'dark' | 'light') || 'dark';
+    }
+    return 'dark';
+  });
+
+  // Theme effect
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('echos-theme', theme);
+  }, [theme]);
+
+  // IntersectionObserver for docs section on home page
+  useEffect(() => {
+    if (location.pathname !== '/') {
+      setDocsInView(false);
+      return;
+    }
+
+    let observer: IntersectionObserver | null = null;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const setup = () => {
+      const el = document.getElementById('docs-section');
+      if (!el) {
+        timeoutId = setTimeout(setup, 200);
+        return;
+      }
+      observer = new IntersectionObserver(
+        ([entry]) => setDocsInView(entry.isIntersecting),
+        { threshold: 0.1 },
+      );
+      observer.observe(el);
+    };
+
+    setup();
+
+    return () => {
+      clearTimeout(timeoutId);
+      observer?.disconnect();
+    };
+  }, [location.pathname]);
 
   const navItems = [
-    { label: t('nav.scan'), path: '/scan' },
-    { label: t('nav.manifesto'), path: '/manifesto' },
-    { label: t('nav.docs'), path: '/docs' },
+    { label: t('nav.docs'), key: 'docs', isDocsScroll: true },
+    { label: t('nav.manifesto'), key: 'manifesto', path: '/manifesto' },
+    { label: t('nav.scan'), key: 'scan', path: '/scan' },
   ];
+
+  const handleNavClick = (item: (typeof navItems)[0]) => {
+    if (item.isDocsScroll) {
+      if (location.pathname === '/') {
+        document.getElementById('docs-section')?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        navigate('/');
+        setTimeout(() => {
+          document.getElementById('docs-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 150);
+      }
+    } else if (item.path) {
+      navigate(item.path);
+    }
+  };
+
+  const isTabActive = (item: (typeof navItems)[0]) => {
+    if (item.isDocsScroll) return docsInView;
+    return item.path ? location.pathname === item.path : false;
+  };
 
   return (
     <header
@@ -35,10 +100,14 @@ function Topbar() {
         WebkitBackdropFilter: 'blur(16px)',
         borderBottom: `1px solid ${colors.border}`,
       }}
+      className="topbar"
     >
-      {/* Logo — logotype-02.svg only, no text */}
+      {/* Logo */}
       <button
-        onClick={() => navigate('/')}
+        onClick={() => {
+          navigate('/');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
         style={{
           background: 'none',
           border: 'none',
@@ -50,13 +119,13 @@ function Topbar() {
         }}
       >
         <img
-          src="/echos-donees-capturees/logotype-02-dark.svg"
+          src={`${import.meta.env.BASE_URL}logotype-02-dark.svg`}
           alt="échos"
           style={{ height: '28px', width: 'auto' }}
         />
       </button>
 
-      {/* Nav — hidden on mobile */}
+      {/* Nav — hidden on mobile via CSS */}
       <nav
         style={{
           display: 'flex',
@@ -67,38 +136,46 @@ function Topbar() {
         className="topbar-nav"
       >
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+          const active = isTabActive(item);
+          const hovered = hoveredTab === item.key;
           return (
             <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
+              key={item.key}
+              onClick={() => handleNavClick(item)}
+              onMouseEnter={() => setHoveredTab(item.key)}
+              onMouseLeave={() => setHoveredTab(null)}
+              className="topbar-tab"
               style={{
                 position: 'relative',
                 padding: '24px 18px',
                 background: 'none',
                 border: 'none',
-                color: isActive ? colors.text1 : colors.text2,
+                color: active ? colors.text1 : colors.text2,
                 fontSize: '15px',
-                fontWeight: isActive ? 500 : 400,
+                fontWeight: active ? 500 : 400,
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 transition: 'color 150ms ease',
               }}
             >
               {item.label}
-              {isActive && (
+              {/* Active indicator — thick, rounded, higher */}
+              {active && (
                 <span
+                  className="tab-active-indicator"
                   style={{
                     position: 'absolute',
-                    bottom: '0',
-                    left: '18px',
-                    right: '18px',
-                    height: '2px',
+                    bottom: '10px',
+                    left: '14px',
+                    right: '14px',
+                    height: '4px',
                     background: colors.accent,
-                    borderRadius: '1px',
+                    borderRadius: '3px',
                   }}
                 />
               )}
+              {/* Hover wave indicator — CSS animated */}
+              {hovered && !active && <span className="tab-wave-indicator" />}
             </button>
           );
         })}
@@ -123,7 +200,7 @@ function Topbar() {
           cursor: 'pointer',
           fontFamily: 'inherit',
           transition: 'all 150ms ease',
-          marginRight: '12px',
+          marginRight: '8px',
         }}
         title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
       >
@@ -131,24 +208,52 @@ function Topbar() {
         {lang === 'fr' ? 'EN' : 'FR'}
       </button>
 
-      {/* CTA */}
+      {/* Theme toggle */}
+      <button
+        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        className="topbar-theme-toggle"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '36px',
+          height: '36px',
+          borderRadius: '9999px',
+          border: `1px solid ${colors.border}`,
+          background: 'transparent',
+          color: colors.text2,
+          cursor: 'pointer',
+          transition: 'all 150ms ease',
+          marginRight: '12px',
+        }}
+        title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+      >
+        {theme === 'dark' ? <IconSun size={16} /> : <IconMoon size={16} />}
+      </button>
+
+      {/* CTA — hidden on mobile via CSS */}
       {!location.pathname.startsWith('/scan') && (
         <button
+          className="topbar-cta"
           onClick={() => navigate('/scan')}
           style={{
             padding: '10px 24px',
             borderRadius: '9999px',
             border: 'none',
             background: colors.accent,
-            color: colors.white,
+            color: '#F2F2F2',
             fontSize: '14px',
             fontWeight: 500,
             cursor: 'pointer',
             fontFamily: 'inherit',
             transition: 'background 150ms ease',
           }}
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = colors.accentHover; }}
-          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = colors.accent; }}
+          onMouseEnter={(e) => {
+            (e.target as HTMLElement).style.background = colors.accentHover;
+          }}
+          onMouseLeave={(e) => {
+            (e.target as HTMLElement).style.background = colors.accent;
+          }}
         >
           {t('nav.newScan')}
         </button>
@@ -162,7 +267,14 @@ export function App() {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: colors.black }}>
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          background: colors.black,
+        }}
+      >
         <Topbar />
         <main style={{ flex: 1 }}>
           <Routes>
