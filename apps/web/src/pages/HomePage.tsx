@@ -98,7 +98,7 @@ export function HomePage() {
           style={{
             display: 'grid',
             gridTemplateColumns: '2fr 1fr',
-            gridTemplateRows: 'minmax(240px, 360px)',
+            gridTemplateRows: 'minmax(324px, 486px)',
             gap: '16px',
           }}
         >
@@ -229,7 +229,7 @@ export function HomePage() {
         {/* Gallery container — single horizontal scroll block on mobile */}
         <div className="gallery-container">
           {/* Row 1: gallery-01 (wide) + gallery-03 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '280px', marginBottom: '16px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '378px', marginBottom: '16px' }}>
             {galleryRow1.map((item) => (
               <div
                 key={item.file}
@@ -260,7 +260,7 @@ export function HomePage() {
           </div>
 
           {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '240px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '324px' }}>
             {galleryRow2.map((item) => (
               <div
                 key={item.file}
