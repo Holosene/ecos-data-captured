@@ -50,7 +50,7 @@ function Topbar() {
         }}
       >
         <img
-          src="/echos-donees-capturees/logotype-02.svg"
+          src="/echos-donees-capturees/logotype-02-dark.svg"
           alt="échos"
           style={{ height: '28px', width: 'auto' }}
         />
