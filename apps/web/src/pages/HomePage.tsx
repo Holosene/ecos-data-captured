@@ -14,6 +14,7 @@ export function HomePage() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
+  const [hoveredImage, setHoveredImage] = useState<string | null>(null);
   const FEATURES = [
     { title: t('home.feat1.title'), desc: t('home.feat1.desc'), num: '01' },
     { title: t('home.feat2.title'), desc: t('home.feat2.desc'), num: '02' },
@@ -39,15 +40,18 @@ export function HomePage() {
     `${import.meta.env.BASE_URL}hero-side.png`,
   ];
 
-  const galleryItems = [
-    { file: 'gallery-01.png', span: '2' },
-    { file: 'gallery-03.png', span: '1' },
-    { file: 'gallery-04.png', span: '1' },
-    { file: 'gallery-05.png', span: '1' },
-    { file: 'gallery-06.png', span: '1' },
+  const galleryRow1 = [
+    { file: 'gallery-01.png', baseFlex: 2, index: 0 },
+    { file: 'gallery-03.png', baseFlex: 1, index: 1 },
+  ];
+  const galleryRow2 = [
+    { file: 'gallery-04.png', baseFlex: 1, index: 2 },
+    { file: 'gallery-05.png', baseFlex: 1, index: 3 },
+    { file: 'gallery-06.png', baseFlex: 1, index: 4 },
   ];
 
-  const galleryImages = galleryItems.map((item) => `${import.meta.env.BASE_URL}${item.file}`);
+  const allGalleryFiles = [...galleryRow1, ...galleryRow2];
+  const galleryImages = allGalleryFiles.map((item) => `${import.meta.env.BASE_URL}${item.file}`);
 
   return (
     <div style={{ background: colors.black }}>
@@ -203,7 +207,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Gallery — grid with hover grow on desktop, horizontal scroll on mobile */}
+      {/* Gallery — flex rows with hover zoom on desktop, horizontal scroll on mobile */}
       <section style={{ maxWidth: '1400px', margin: '0 auto', padding: `0 clamp(12px, 1.5vw, 16px) clamp(48px, 6vw, 100px)` }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
           <div>
@@ -224,46 +228,56 @@ export function HomePage() {
           </div>
         </div>
 
-        <div
-          className="gallery-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gridAutoRows: '200px',
-            gap: '12px',
-          }}
-        >
-          {galleryItems.map((item, i) => (
+        {/* Row 1: gallery-01 (wide) + gallery-03 */}
+        <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '280px', marginBottom: '16px' }}>
+          {galleryRow1.map((item) => (
             <div
               key={item.file}
-              className="gallery-item visual-placeholder"
+              className="gallery-card visual-placeholder"
               style={{
-                gridColumn: item.span === '2' ? 'span 2' : 'span 1',
+                flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
                 cursor: 'pointer',
                 position: 'relative',
                 overflow: 'hidden',
-                transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 300ms ease',
+                borderRadius: '12px',
               }}
-              onClick={() => openLightbox(galleryImages, i)}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = 'scale(1.04)';
-                (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.4)';
-                (e.currentTarget as HTMLElement).style.zIndex = '5';
-                const img = e.currentTarget.querySelector('img');
-                if (img) img.style.filter = 'brightness(1.08)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                (e.currentTarget as HTMLElement).style.boxShadow = 'none';
-                (e.currentTarget as HTMLElement).style.zIndex = '1';
-                const img = e.currentTarget.querySelector('img');
-                if (img) img.style.filter = 'brightness(1)';
-              }}
+              onClick={() => openLightbox(galleryImages, item.index)}
+              onMouseEnter={() => setHoveredImage(item.file)}
+              onMouseLeave={() => setHoveredImage(null)}
             >
               <img
                 src={`${import.meta.env.BASE_URL}${item.file}`}
                 alt=""
-                style={{ transition: 'filter 300ms ease' }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                <IconImage size={24} color={colors.text3} />
+                <span style={{ fontSize: '11px' }}>{item.file}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Row 2: gallery-04, gallery-05, gallery-06 */}
+        <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '240px' }}>
+          {galleryRow2.map((item) => (
+            <div
+              key={item.file}
+              className="gallery-card visual-placeholder"
+              style={{
+                flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                cursor: 'pointer',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: '12px',
+              }}
+              onClick={() => openLightbox(galleryImages, item.index)}
+              onMouseEnter={() => setHoveredImage(item.file)}
+              onMouseLeave={() => setHoveredImage(null)}
+            >
+              <img
+                src={`${import.meta.env.BASE_URL}${item.file}`}
+                alt=""
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
               <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
