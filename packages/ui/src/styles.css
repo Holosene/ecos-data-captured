@@ -188,10 +188,10 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   display: block;
 }
 
-/* Nav active indicator — thicker, rounded, higher, with wave ripple */
+/* Nav active indicator — thicker, rounded, higher */
 .nav-indicator {
   position: absolute;
-  bottom: 10px;
+  bottom: 8px;
   left: 18px;
   right: 18px;
   height: 3px;
@@ -210,7 +210,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 .nav-item::after {
   content: '';
   position: absolute;
-  bottom: 6px;
+  bottom: 8px;
   left: 18px;
   right: 18px;
   height: 3px;
@@ -234,8 +234,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   100% { transform: scaleX(1); opacity: 0.3; }
 }
 
-/* Gallery rows */
-.gallery-row { min-height: 0; }
+/* Gallery grid */
 .gallery-item { min-width: 0; }
 
 /* Responsive: hide nav + CTA on small screens, stack layout */
@@ -274,15 +273,23 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .manifesto-grid > *, .docs-grid > * {
     grid-column: 1 !important;
   }
-  /* Gallery: stack vertically on mobile, no clipping */
-  .gallery-row {
-    flex-direction: column !important;
+  /* Gallery: horizontal scroll on mobile, keep original layout */
+  .gallery-grid {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    gap: 12px !important;
+    padding-bottom: 8px;
   }
-  .gallery-item {
-    flex: 1 1 auto !important;
-    height: auto !important;
-    min-height: 180px !important;
+  .gallery-grid > .gallery-item {
+    flex: 0 0 75vw !important;
+    height: 200px !important;
+    scroll-snap-align: start;
+    grid-column: span 1 !important;
   }
+  /* Hide lightbox arrows on mobile */
+  .lightbox-arrow { display: none !important; }
 }
 
 @media (max-width: 480px) {

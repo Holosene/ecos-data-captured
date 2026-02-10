@@ -19,7 +19,7 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
         display: 'flex',
         alignItems: 'center',
         width: '100%',
-        padding: '24px 0',
+        padding: '28px 0',
         overflowX: 'auto',
         WebkitOverflowScrolling: 'touch',
         scrollbarWidth: 'none',
@@ -45,20 +45,20 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
                 border: 'none',
                 cursor: isClickable ? 'pointer' : 'default',
                 padding: '0',
-                minWidth: '64px',
+                minWidth: '76px',
                 flexShrink: 0,
               }}
             >
               {/* Circle */}
               <div
                 style={{
-                  width: '36px',
-                  height: '36px',
+                  width: '44px',
+                  height: '44px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '13px',
+                  fontSize: '15px',
                   fontWeight: 600,
                   fontFamily: fonts.body,
                   transition: `all ${transitions.normal}`,
@@ -93,7 +93,7 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
               {/* Label */}
               <span
                 style={{
-                  fontSize: '12px',
+                  fontSize: '13px',
                   fontWeight: isActive ? 600 : 400,
                   color: isActive ? colors.text1 : isCompleted ? colors.text2 : colors.text3,
                   whiteSpace: 'nowrap',
@@ -114,7 +114,7 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
                   minWidth: '24px',
                   background: i < currentStep ? colors.accent : colors.border,
                   transition: `background ${transitions.normal}`,
-                  marginBottom: '28px',
+                  marginBottom: '32px',
                 }}
               />
             )}

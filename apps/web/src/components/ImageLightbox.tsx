@@ -147,9 +147,10 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
         </button>
       </div>
 
-      {/* Navigation arrows */}
+      {/* Navigation arrows — hidden on mobile via CSS class */}
       {currentIndex > 0 && (
         <button
+          className="lightbox-arrow"
           onClick={(e) => { e.stopPropagation(); goTo(currentIndex - 1, 'right'); }}
           style={{
             position: 'absolute',
@@ -178,6 +179,7 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
       )}
       {currentIndex < images.length - 1 && (
         <button
+          className="lightbox-arrow"
           onClick={(e) => { e.stopPropagation(); goTo(currentIndex + 1, 'left'); }}
           style={{
             position: 'absolute',
@@ -255,9 +257,9 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
                 goTo(i, dir);
               }}
               style={{
-                width: '48px',
-                height: '36px',
-                borderRadius: '6px',
+                width: '64px',
+                height: '48px',
+                borderRadius: '8px',
                 overflow: 'hidden',
                 border: i === currentIndex ? '2px solid rgba(255,255,255,0.8)' : '2px solid transparent',
                 padding: 0,
