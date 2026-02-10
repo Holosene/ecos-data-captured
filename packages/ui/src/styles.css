@@ -42,9 +42,10 @@
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
 
-  /* Shared layout gutter — single source of truth for header + content alignment */
-  --layout-padding: clamp(16px, 4vw, 40px);
-  --layout-max-width: 1400px;
+  /* Layout gutter system — topbar full-width, content aligned to logo right edge */
+  --page-gutter: clamp(16px, 3vw, 40px);
+  --logo-block-w: 140px;
+  --content-gutter: calc(var(--page-gutter) + var(--logo-block-w));
 
   /* Topbar gradient — subtle Adobe Fonts-inspired */
   --topbar-bg:
@@ -96,13 +97,11 @@
   transition: background 350ms ease, border-color 350ms ease;
 }
 .topbar-inner {
-  max-width: var(--layout-max-width);
-  margin: 0 auto;
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 var(--layout-padding);
+  padding: 0 var(--page-gutter);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -265,6 +264,9 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Responsive: hide nav + CTA on small screens, stack layout */
 @media (max-width: 768px) {
+  :root {
+    --content-gutter: var(--page-gutter);
+  }
   .topbar-nav {
     display: none !important;
   }

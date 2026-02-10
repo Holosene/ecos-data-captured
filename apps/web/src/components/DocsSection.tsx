@@ -29,7 +29,7 @@ export function DocsSection() {
   ];
 
   return (
-    <div style={{ maxWidth: 'var(--layout-max-width)', margin: '0 auto' }}>
+    <div>
       <h2
         style={{
           fontFamily: fonts.display,

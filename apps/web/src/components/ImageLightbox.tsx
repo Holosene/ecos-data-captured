@@ -22,7 +22,7 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
 
   const handleClose = useCallback(() => {
     setExiting(true);
-    setTimeout(onClose, 250);
+    setTimeout(onClose, 350);
   }, [onClose]);
 
   const goTo = useCallback((index: number, direction: 'left' | 'right') => {
@@ -78,8 +78,8 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
   const getImageTransform = () => {
     if (sliding === 'left') return 'translateX(-30px) scale(0.96)';
     if (sliding === 'right') return 'translateX(30px) scale(0.96)';
-    if (entering) return 'scale(0.85)';
-    if (exiting) return 'scale(0.85)';
+    if (entering) return 'scale(0.92)';
+    if (exiting) return 'scale(0.97)';
     if (zoomed) return 'scale(1.8)';
     return 'scale(1)';
   };
@@ -102,11 +102,11 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
         alignItems: 'center',
         justifyContent: 'center',
         cursor: zoomed ? 'zoom-out' : 'default',
-        transition: 'background 300ms ease, backdrop-filter 300ms ease',
+        transition: 'background 350ms ease, backdrop-filter 350ms ease, -webkit-backdrop-filter 350ms ease',
         touchAction: 'none',
       }}
     >
-      {/* Main image */}
+      {/* Main image — uniform 2/3 screen height, proportional */}
       <img
         src={images[currentIndex]}
         alt=""
@@ -115,14 +115,16 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
           setZoomed(!zoomed);
         }}
         style={{
-          maxWidth: zoomed ? '100vw' : '88vw',
-          maxHeight: zoomed ? '100vh' : '78vh',
+          maxWidth: zoomed ? '100vw' : '90vw',
+          height: zoomed ? 'auto' : '66vh',
+          maxHeight: zoomed ? '100vh' : '66vh',
           objectFit: 'contain',
           borderRadius: '12px',
           cursor: zoomed ? 'zoom-out' : 'zoom-in',
           transform: getImageTransform(),
-          opacity: entering || exiting || sliding ? 0.6 : 1,
-          transition: 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 250ms ease, max-width 300ms ease, max-height 300ms ease',
+          opacity: entering ? 0 : exiting ? 0 : sliding ? 0.6 : 1,
+          filter: exiting ? 'blur(6px)' : 'none',
+          transition: 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 300ms ease, filter 300ms ease, max-width 300ms ease, height 300ms ease',
           pointerEvents: 'auto',
           userSelect: 'none',
         }}
