@@ -228,64 +228,69 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Row 1: gallery-01 (wide) + gallery-03 */}
-        <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '280px', marginBottom: '16px' }}>
-          {galleryRow1.map((item) => (
-            <div
-              key={item.file}
-              className="gallery-card visual-placeholder"
-              style={{
-                flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: '12px',
-              }}
-              onClick={() => openLightbox(galleryImages, item.index)}
-              onMouseEnter={() => setHoveredImage(item.file)}
-              onMouseLeave={() => setHoveredImage(null)}
-            >
-              <img
-                src={`${import.meta.env.BASE_URL}${item.file}`}
-                alt=""
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                <IconImage size={24} color={colors.text3} />
-                <span style={{ fontSize: '11px' }}>{item.file}</span>
+        {/* Gallery container — single horizontal scroll block on mobile */}
+        <div className="gallery-container">
+          {/* Row 1: gallery-01 (wide) + gallery-03 */}
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '280px', marginBottom: '16px' }}>
+            {galleryRow1.map((item) => (
+              <div
+                key={item.file}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                  alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
 
-        {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-        <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '240px' }}>
-          {galleryRow2.map((item) => (
-            <div
-              key={item.file}
-              className="gallery-card visual-placeholder"
-              style={{
-                flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: '12px',
-              }}
-              onClick={() => openLightbox(galleryImages, item.index)}
-              onMouseEnter={() => setHoveredImage(item.file)}
-              onMouseLeave={() => setHoveredImage(null)}
-            >
-              <img
-                src={`${import.meta.env.BASE_URL}${item.file}`}
-                alt=""
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                <IconImage size={24} color={colors.text3} />
-                <span style={{ fontSize: '11px' }}>{item.file}</span>
+          {/* Row 2: gallery-04, gallery-05, gallery-06 */}
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '240px' }}>
+            {galleryRow2.map((item) => (
+              <div
+                key={item.file}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                  alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 

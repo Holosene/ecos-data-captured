@@ -1,5 +1,4 @@
 import React, { useEffect, useCallback, useState, useRef } from 'react';
-import { IconX } from './Icons.js';
 
 interface ImageLightboxProps {
   images: string[];
@@ -95,7 +94,7 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
-        background: entering || exiting ? 'rgba(0, 0, 0, 0)' : 'rgba(0, 0, 0, 0.92)',
+        background: entering || exiting ? 'rgba(0, 0, 0, 0)' : 'rgba(0, 0, 0, 0.35)',
         backdropFilter: entering || exiting ? 'blur(0px)' : 'blur(20px)',
         WebkitBackdropFilter: entering || exiting ? 'blur(0px)' : 'blur(20px)',
         display: 'flex',
@@ -107,106 +106,6 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
         touchAction: 'none',
       }}
     >
-      {/* Top bar — close + counter */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '16px 20px',
-          opacity: entering || exiting ? 0 : 1,
-          transition: 'opacity 300ms ease',
-        }}
-      >
-        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', fontWeight: 500 }}>
-          {currentIndex + 1} / {images.length}
-        </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); handleClose(); }}
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: '50%',
-            width: '36px',
-            height: '36px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.7)',
-            transition: 'all 150ms ease',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.15)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)'; }}
-        >
-          <IconX size={16} />
-        </button>
-      </div>
-
-      {/* Navigation arrows — hidden on mobile via CSS class */}
-      {currentIndex > 0 && (
-        <button
-          className="lightbox-arrow"
-          onClick={(e) => { e.stopPropagation(); goTo(currentIndex - 1, 'right'); }}
-          style={{
-            position: 'absolute',
-            left: '16px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '12px',
-            width: '48px',
-            height: '64px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.7)',
-            fontSize: '24px',
-            transition: 'all 150ms ease',
-            opacity: entering || exiting ? 0 : 1,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-        >
-          &#8249;
-        </button>
-      )}
-      {currentIndex < images.length - 1 && (
-        <button
-          className="lightbox-arrow"
-          onClick={(e) => { e.stopPropagation(); goTo(currentIndex + 1, 'left'); }}
-          style={{
-            position: 'absolute',
-            right: '16px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '12px',
-            width: '48px',
-            height: '64px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.7)',
-            fontSize: '24px',
-            transition: 'all 150ms ease',
-            opacity: entering || exiting ? 0 : 1,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.12)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
-        >
-          &#8250;
-        </button>
-      )}
-
       {/* Main image */}
       <img
         src={images[currentIndex]}
@@ -219,23 +118,24 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
           maxWidth: zoomed ? '100vw' : '88vw',
           maxHeight: zoomed ? '100vh' : '78vh',
           objectFit: 'contain',
-          borderRadius: zoomed ? '0' : '6px',
+          borderRadius: '12px',
           cursor: zoomed ? 'zoom-out' : 'zoom-in',
           transform: getImageTransform(),
           opacity: entering || exiting || sliding ? 0.6 : 1,
-          transition: 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 250ms ease, max-width 300ms ease, max-height 300ms ease, border-radius 300ms ease',
+          transition: 'transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 250ms ease, max-width 300ms ease, max-height 300ms ease',
           pointerEvents: 'auto',
           userSelect: 'none',
         }}
         draggable={false}
       />
 
-      {/* Thumbnail strip */}
+      {/* Thumbnail strip — only selection interface */}
       {images.length > 1 && (
         <div
+          className="lightbox-thumbs"
           style={{
             position: 'absolute',
-            bottom: '16px',
+            bottom: '32px',
             left: '50%',
             transform: 'translateX(-50%)',
             display: 'flex',
@@ -257,8 +157,8 @@ export function ImageLightbox({ images, currentIndex, onClose, onNavigate }: Ima
                 goTo(i, dir);
               }}
               style={{
-                width: '64px',
-                height: '48px',
+                width: '77px',
+                height: '58px',
                 borderRadius: '8px',
                 overflow: 'hidden',
                 border: i === currentIndex ? '2px solid rgba(255,255,255,0.8)' : '2px solid transparent',

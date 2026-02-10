@@ -75,7 +75,13 @@ function Topbar() {
       <div className="topbar-inner">
       {/* Logo */}
       <button
-        onClick={() => navigate('/')}
+        onClick={() => {
+          if (location.pathname === '/') {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            navigate('/');
+          }
+        }}
         style={{
           background: 'none',
           border: 'none',
