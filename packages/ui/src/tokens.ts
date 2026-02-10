@@ -1,24 +1,46 @@
 /**
- * ECHOS Design Tokens
+ * ECHOS Design Tokens — Marketplace-inspired, 3-color system
  */
 
 export const colors = {
+  // Brand triad
+  black: '#111111',
+  white: '#F2F2F2',
+  accent: '#4221CE',
+  accentHover: '#5835E4',
+  accentMuted: 'rgba(66, 33, 206, 0.15)',
+
+  // Surfaces
+  surface: '#1A1A1E',
+  surfaceHover: '#222228',
+  surfaceRaised: '#252530',
+
+  // Borders
+  border: 'rgba(255, 255, 255, 0.08)',
+  borderHover: 'rgba(255, 255, 255, 0.15)',
+  borderActive: 'rgba(255, 255, 255, 0.25)',
+
+  // Text
+  text1: '#F2F2F2',
+  text2: 'rgba(242, 242, 242, 0.55)',
+  text3: 'rgba(242, 242, 242, 0.3)',
+
+  // Functional
+  success: '#34D399',
+  warning: '#FBBF24',
+  error: '#F87171',
+
+  // Legacy aliases (backward compat)
   primary: '#4221CE',
-  primaryLight: '#5A3DE8',
+  primaryLight: '#5835E4',
   primaryDark: '#3318A8',
-  black: '#1A1A1A',
-  blackLight: '#2A2A2A',
-  blackLighter: '#3A3A3A',
-  white: '#E1E0EB',
-  whiteDim: '#B0AFBA',
-  whiteMuted: '#8A8994',
-  glass: 'rgba(30, 30, 42, 0.65)',
-  glassBorder: 'rgba(225, 224, 235, 0.12)',
-  glassHover: 'rgba(30, 30, 42, 0.80)',
-  success: '#2DD4A0',
-  warning: '#F5A623',
-  error: '#EF4444',
-  surface: '#222233',
+  blackLight: '#1A1A1E',
+  blackLighter: '#252530',
+  whiteDim: 'rgba(242, 242, 242, 0.55)',
+  whiteMuted: 'rgba(242, 242, 242, 0.3)',
+  glass: '#1A1A1E',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  glassHover: '#222228',
 } as const;
 
 export const spacing = {
@@ -39,19 +61,20 @@ export const radius = {
 } as const;
 
 export const fonts = {
+  display: "'halyard-display-variable', sans-serif",
   body: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   mono: "'JetBrains Mono', 'Fira Code', monospace",
 } as const;
 
 export const shadows = {
-  sm: '0 2px 8px rgba(0, 0, 0, 0.25)',
-  md: '0 4px 16px rgba(0, 0, 0, 0.3)',
-  lg: '0 8px 32px rgba(0, 0, 0, 0.4)',
-  glow: `0 0 20px rgba(66, 33, 206, 0.3)`,
+  sm: '0 1px 2px rgba(0, 0, 0, 0.3)',
+  md: '0 4px 12px rgba(0, 0, 0, 0.4)',
+  lg: '0 8px 24px rgba(0, 0, 0, 0.5)',
+  glow: '0 0 20px rgba(66, 33, 206, 0.25)',
 } as const;
 
 export const transitions = {
   fast: '150ms ease',
-  normal: '250ms ease',
-  slow: '400ms ease',
+  normal: '200ms ease',
+  slow: '350ms ease',
 } as const;

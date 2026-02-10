@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, radius } from '../tokens.js';
+import { colors } from '../tokens.js';
 
 export interface SliderProps {
   label: string;
@@ -36,9 +36,9 @@ export function Slider({
       >
         <label
           style={{
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: 500,
-            color: colors.white,
+            color: colors.text1,
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
@@ -55,9 +55,9 @@ export function Slider({
                 width: '16px',
                 height: '16px',
                 borderRadius: '50%',
-                background: colors.blackLighter,
-                color: colors.whiteMuted,
-                fontSize: '11px',
+                border: `1px solid ${colors.border}`,
+                color: colors.text3,
+                fontSize: '10px',
                 cursor: 'help',
               }}
             >
@@ -67,9 +67,9 @@ export function Slider({
         </label>
         <span
           style={{
-            fontSize: '14px',
+            fontSize: '13px',
             fontWeight: 600,
-            color: colors.primary,
+            color: colors.text1,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -84,18 +84,14 @@ export function Slider({
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
         disabled={disabled}
-        style={{
-          width: '100%',
-          accentColor: colors.primary,
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
+        style={{ width: '100%' }}
       />
       <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           fontSize: '11px',
-          color: colors.whiteMuted,
+          color: colors.text3,
           marginTop: '4px',
         }}
       >

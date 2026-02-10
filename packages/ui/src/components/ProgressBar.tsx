@@ -13,7 +13,7 @@ export function ProgressBar({
   value,
   label,
   showPercent = true,
-  height = 8,
+  height = 4,
 }: ProgressBarProps) {
   const pct = Math.min(100, Math.max(0, value * 100));
 
@@ -28,15 +28,15 @@ export function ProgressBar({
             fontSize: '13px',
           }}
         >
-          {label && <span style={{ color: colors.whiteDim }}>{label}</span>}
-          {showPercent && <span style={{ color: colors.whiteMuted }}>{pct.toFixed(0)}%</span>}
+          {label && <span style={{ color: colors.text2 }}>{label}</span>}
+          {showPercent && <span style={{ color: colors.text3 }}>{pct.toFixed(0)}%</span>}
         </div>
       )}
       <div
         style={{
           width: '100%',
           height: `${height}px`,
-          background: colors.blackLighter,
+          background: colors.surfaceRaised,
           borderRadius: radius.full,
           overflow: 'hidden',
         }}
@@ -45,7 +45,7 @@ export function ProgressBar({
           style={{
             width: `${pct}%`,
             height: '100%',
-            background: `linear-gradient(90deg, ${colors.primary}, ${colors.primaryLight})`,
+            background: colors.accent,
             borderRadius: radius.full,
             transition: `width ${transitions.normal}`,
           }}

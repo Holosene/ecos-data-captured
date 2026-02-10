@@ -8,9 +8,10 @@ import {
   qcReportToBlob,
 } from '@echos/core';
 import type { Volume } from '@echos/core';
+import { useTranslation } from '../i18n/index.js';
+import { IconDownload } from './Icons.js';
 import { useAppState } from '../store/app-state.js';
 
-// Transfer function presets for sonar data
 const PRESETS = {
   'Water Off': {
     description: 'Suppress water column, show strong echoes',
@@ -62,9 +63,6 @@ const PRESETS = {
 
 type PresetName = keyof typeof PRESETS;
 
-/**
- * Render orthogonal slices of the volume onto canvases.
- */
 function renderSlice(
   canvas: HTMLCanvasElement,
   volume: Volume,
@@ -78,16 +76,9 @@ function renderSlice(
   if (!ctx) return;
 
   let w: number, h: number;
-  if (axis === 'z') {
-    w = dimX;
-    h = dimY;
-  } else if (axis === 'y') {
-    w = dimX;
-    h = dimZ;
-  } else {
-    w = dimY;
-    h = dimZ;
-  }
+  if (axis === 'z') { w = dimX; h = dimY; }
+  else if (axis === 'y') { w = dimX; h = dimZ; }
+  else { w = dimY; h = dimZ; }
 
   canvas.width = w;
   canvas.height = h;
@@ -97,18 +88,10 @@ function renderSlice(
   for (let row = 0; row < h; row++) {
     for (let col = 0; col < w; col++) {
       let val: number;
-      if (axis === 'z') {
-        // XY plane at fixed Z
-        val = data[sliceIndex * dimY * dimX + row * dimX + col];
-      } else if (axis === 'y') {
-        // XZ plane at fixed Y
-        val = data[row * dimY * dimX + sliceIndex * dimX + col];
-      } else {
-        // YZ plane at fixed X
-        val = data[row * dimY * dimX + col * dimX + sliceIndex];
-      }
+      if (axis === 'z') val = data[sliceIndex * dimY * dimX + row * dimX + col];
+      else if (axis === 'y') val = data[row * dimY * dimX + sliceIndex * dimX + col];
+      else val = data[row * dimY * dimX + col * dimX + sliceIndex];
 
-      // Apply color map
       const clamped = Math.max(0, Math.min(1, val));
       let r = 0, g = 0, b = 0, a = 0;
 
@@ -163,10 +146,10 @@ function SliceView({
   };
 
   return (
-    <GlassPanel padding="12px">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <div style={{ fontSize: '13px', fontWeight: 600, color: colors.primary }}>{label}</div>
-        <div style={{ fontSize: '11px', color: colors.whiteMuted }}>
+    <GlassPanel padding="16px">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 600, color: colors.accent }}>{label}</div>
+        <div style={{ fontSize: '12px', color: colors.text3 }}>
           {axisLabels[axis].h} / {axisLabels[axis].v}
         </div>
       </div>
@@ -180,8 +163,8 @@ function SliceView({
           background: colors.black,
         }}
       />
-      <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span style={{ fontSize: '11px', color: colors.whiteMuted, minWidth: '24px' }}>
+      <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <span style={{ fontSize: '12px', color: colors.text3, minWidth: '28px', fontVariantNumeric: 'tabular-nums' }}>
           {sliceIdx}
         </span>
         <input
@@ -190,9 +173,9 @@ function SliceView({
           max={maxSlice}
           value={sliceIdx}
           onChange={(e) => setSliceIdx(parseInt(e.target.value))}
-          style={{ flex: 1, accentColor: colors.primary }}
+          style={{ flex: 1 }}
         />
-        <span style={{ fontSize: '11px', color: colors.whiteMuted, minWidth: '24px', textAlign: 'right' }}>
+        <span style={{ fontSize: '12px', color: colors.text3, minWidth: '28px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
           {maxSlice}
         </span>
       </div>
@@ -211,6 +194,7 @@ function download(blob: Blob, filename: string) {
 
 export function ViewerStep() {
   const { state, dispatch } = useAppState();
+  const { t } = useTranslation();
   const [preset, setPreset] = useState<PresetName>('Water Off');
 
   const { volume, qcReport, mappings } = state;
@@ -249,14 +233,15 @@ export function ViewerStep() {
 
   if (!volume) {
     return (
-      <div style={{ textAlign: 'center', padding: '48px' }}>
-        <p style={{ color: colors.whiteMuted }}>No volume data. Go back and generate first.</p>
+      <div style={{ textAlign: 'center', padding: '64px 24px' }}>
+        <p style={{ color: colors.text3, fontSize: '16px' }}>{t('viewer.noVolume')}</p>
         <Button
           variant="secondary"
+          size="lg"
           onClick={() => dispatch({ type: 'SET_STEP', step: 'generate' })}
-          style={{ marginTop: '16px' }}
+          style={{ marginTop: '20px' }}
         >
-          Back to Generate
+          {t('viewer.backToGenerate')}
         </Button>
       </div>
     );
@@ -265,24 +250,25 @@ export function ViewerStep() {
   const [dimX, dimY, dimZ] = volume.metadata.dimensions;
 
   return (
-    <div style={{ display: 'grid', gap: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '24px', fontWeight: 600 }}>Volume Viewer</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
+    <div style={{ display: 'grid', gap: '32px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={{ fontSize: 'clamp(24px, 2.5vw, 32px)', fontWeight: 600 }}>{t('viewer.title')}</h2>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {(Object.keys(PRESETS) as PresetName[]).map((name) => (
             <button
               key={name}
               onClick={() => setPreset(name)}
               style={{
-                padding: '6px 12px',
+                padding: '7px 14px',
                 borderRadius: '20px',
-                border: `1px solid ${preset === name ? colors.primary : colors.glassBorder}`,
-                background: preset === name ? 'rgba(66, 33, 206, 0.2)' : 'transparent',
-                color: preset === name ? colors.primary : colors.whiteDim,
-                fontSize: '12px',
+                border: `1px solid ${preset === name ? colors.accent : colors.border}`,
+                background: preset === name ? colors.accentMuted : 'transparent',
+                color: preset === name ? colors.accent : colors.text2,
+                fontSize: '13px',
                 fontWeight: 500,
                 cursor: 'pointer',
                 transition: 'all 150ms ease',
+                fontFamily: 'inherit',
               }}
             >
               {name}
@@ -291,71 +277,66 @@ export function ViewerStep() {
         </div>
       </div>
 
-      <GlassPanel padding="12px">
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-          <span style={{ color: colors.whiteMuted }}>
+      <GlassPanel padding="16px">
+        <div className="grid-4-cols" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <span style={{ color: colors.text3 }}>
             Volume: {dimX} x {dimY} x {dimZ}
           </span>
-          <span style={{ color: colors.whiteMuted }}>
+          <span style={{ color: colors.text3 }}>
             Spacing: {volume.metadata.spacing.map((s) => s.toFixed(3)).join(' x ')} m
           </span>
-          <span style={{ color: colors.whiteMuted }}>
+          <span style={{ color: colors.text3 }}>
             Distance: {volume.metadata.totalDistanceM.toFixed(1)} m
           </span>
-          <span style={{ color: colors.whiteMuted }}>
+          <span style={{ color: colors.text3 }}>
             Depth: {volume.metadata.depthMaxM} m
           </span>
         </div>
       </GlassPanel>
 
-      {/* Slice views */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <SliceView volume={volume} axis="y" label="Cross-section (XZ)" preset={preset} />
-        <SliceView volume={volume} axis="z" label="Plan View (XY)" preset={preset} />
+      <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <SliceView volume={volume} axis="y" label={t('viewer.crossSection')} preset={preset} />
+        <SliceView volume={volume} axis="z" label={t('viewer.planView')} preset={preset} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-        <SliceView volume={volume} axis="x" label="Longitudinal (YZ)" preset={preset} />
-      </div>
+      <SliceView volume={volume} axis="x" label={t('viewer.longitudinal')} preset={preset} />
 
-      {/* QC Report summary */}
       {qcReport && qcReport.warnings.length > 0 && (
-        <GlassPanel padding="12px" style={{ borderColor: colors.warning }}>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: colors.warning, marginBottom: '8px' }}>
-            Warnings
+        <GlassPanel padding="16px" style={{ borderColor: colors.warning }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: colors.warning, marginBottom: '10px' }}>
+            {t('viewer.warnings')}
           </div>
           {qcReport.warnings.map((w, i) => (
-            <div key={i} style={{ fontSize: '12px', color: colors.whiteDim, marginBottom: '4px' }}>
+            <div key={i} style={{ fontSize: '13px', color: colors.text2, marginBottom: '4px' }}>
               - {w}
             </div>
           ))}
         </GlassPanel>
       )}
 
-      {/* Export */}
-      <GlassPanel>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>Export</h3>
+      <GlassPanel padding="28px">
+        <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>{t('viewer.export')}</h3>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Button variant="primary" onClick={handleExportNrrd}>
-            Download volume.nrrd
+            <IconDownload size={16} /> {t('viewer.dlVolume')}
           </Button>
           <Button variant="secondary" onClick={handleExportMapping}>
-            Download mapping.json
+            {t('viewer.dlMapping')}
           </Button>
           <Button variant="secondary" onClick={handleExportQc}>
-            Download qc_report.json
+            {t('viewer.dlQc')}
           </Button>
           <Button variant="secondary" onClick={handleExportSession}>
-            Save Session (.echos.json)
+            {t('viewer.saveSession')}
           </Button>
         </div>
       </GlassPanel>
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button variant="ghost" onClick={() => dispatch({ type: 'SET_STEP', step: 'generate' })}>
-          Back
+        <Button variant="ghost" size="lg" onClick={() => dispatch({ type: 'SET_STEP', step: 'generate' })}>
+          {t('viewer.back')}
         </Button>
-        <Button variant="ghost" onClick={() => dispatch({ type: 'RESET' })}>
-          New Scan
+        <Button variant="ghost" size="lg" onClick={() => dispatch({ type: 'RESET' })}>
+          {t('viewer.newScan')}
         </Button>
       </div>
     </div>

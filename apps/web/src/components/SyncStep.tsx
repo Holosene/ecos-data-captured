@@ -1,10 +1,12 @@
 import React, { useMemo } from 'react';
 import { GlassPanel, Button, Slider, colors } from '@echos/ui';
 import { enrichTrackpoints } from '@echos/core';
+import { useTranslation } from '../i18n/index.js';
 import { useAppState } from '../store/app-state.js';
 
 export function SyncStep() {
   const { state, dispatch } = useAppState();
+  const { t } = useTranslation();
   const { gpxTrack, videoDurationS, sync } = state;
 
   const enriched = useMemo(
@@ -14,7 +16,6 @@ export function SyncStep() {
 
   const maxDist = enriched.length > 0 ? enriched[enriched.length - 1].cumulativeDistanceM : 0;
 
-  // Simple distance chart as SVG
   const chartWidth = 600;
   const chartHeight = 120;
   const chartPoints = useMemo(() => {
@@ -30,45 +31,47 @@ export function SyncStep() {
   }, [enriched, maxDist]);
 
   return (
-    <div style={{ display: 'grid', gap: '24px' }}>
-      <h2 style={{ fontSize: '24px', fontWeight: 600 }}>Synchronization</h2>
-      <p style={{ color: colors.whiteDim, fontSize: '14px' }}>
-        Align video timeline with GPS track. Default: video start = GPX start, video end = GPX end.
-        Adjust offset if recording started before or after GPS.
-      </p>
+    <div style={{ display: 'grid', gap: '32px' }}>
+      <div>
+        <h2 style={{ fontSize: 'clamp(24px, 2.5vw, 32px)', fontWeight: 600, marginBottom: '12px' }}>
+          {t('sync.title')}
+        </h2>
+        <p style={{ color: colors.text2, fontSize: '16px', lineHeight: 1.7, maxWidth: '640px' }}>
+          {t('sync.desc')}
+        </p>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <GlassPanel padding="16px">
-          <div style={{ fontSize: '13px', color: colors.whiteMuted, marginBottom: '4px' }}>Video Duration</div>
-          <div style={{ fontSize: '20px', fontWeight: 600 }}>{videoDurationS.toFixed(1)}s</div>
+      <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <GlassPanel padding="24px">
+          <div style={{ fontSize: '13px', color: colors.text3, marginBottom: '6px' }}>{t('sync.videoDuration')}</div>
+          <div style={{ fontSize: '24px', fontWeight: 600 }}>{videoDurationS.toFixed(1)}s</div>
         </GlassPanel>
-        <GlassPanel padding="16px">
-          <div style={{ fontSize: '13px', color: colors.whiteMuted, marginBottom: '4px' }}>GPX Duration</div>
-          <div style={{ fontSize: '20px', fontWeight: 600 }}>{gpxTrack?.durationS.toFixed(1) ?? '—'}s</div>
+        <GlassPanel padding="24px">
+          <div style={{ fontSize: '13px', color: colors.text3, marginBottom: '6px' }}>{t('sync.gpxDuration')}</div>
+          <div style={{ fontSize: '24px', fontWeight: 600 }}>{gpxTrack?.durationS.toFixed(1) ?? '—'}s</div>
         </GlassPanel>
       </div>
 
-      <GlassPanel>
+      <GlassPanel padding="28px">
         <Slider
-          label="Time Offset"
+          label={t('sync.timeOffset')}
           value={sync.offsetS}
           min={-30}
           max={30}
           step={0.5}
           unit=" s"
-          tooltip="Positive: GPX starts after video. Negative: GPX starts before video. Adjust if the tracks don't align."
+          tooltip={t('sync.timeOffsetTooltip')}
           onChange={(v) => dispatch({ type: 'SET_SYNC', sync: { offsetS: v } })}
         />
 
-        <div style={{ marginTop: '16px' }}>
-          <div style={{ fontSize: '13px', color: colors.whiteMuted, marginBottom: '8px' }}>
-            Distance over time (GPX)
+        <div style={{ marginTop: '20px' }}>
+          <div style={{ fontSize: '13px', color: colors.text3, marginBottom: '10px' }}>
+            {t('sync.distOverTime')}
           </div>
           <svg
             viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-            style={{ width: '100%', height: '120px', background: colors.blackLight, borderRadius: '8px' }}
+            style={{ width: '100%', height: '120px', background: colors.surface, borderRadius: '8px' }}
           >
-            {/* Offset indicator */}
             {sync.offsetS !== 0 && gpxTrack && (
               <line
                 x1={(Math.abs(sync.offsetS) / (gpxTrack.durationS || 1)) * chartWidth}
@@ -80,26 +83,25 @@ export function SyncStep() {
                 strokeDasharray="4 3"
               />
             )}
-            {/* Distance curve */}
             <polyline
               points={chartPoints}
               fill="none"
-              stroke={colors.primary}
+              stroke={colors.accent}
               strokeWidth={2}
             />
           </svg>
         </div>
       </GlassPanel>
 
-      <GlassPanel padding="16px">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', textAlign: 'center' }}>
+      <GlassPanel padding="24px">
+        <div className="grid-4-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', textAlign: 'center' }}>
           <div>
-            <div style={{ fontSize: '11px', color: colors.whiteMuted }}>Total Distance</div>
-            <div style={{ fontSize: '16px', fontWeight: 600 }}>{maxDist.toFixed(0)} m</div>
+            <div style={{ fontSize: '12px', color: colors.text3 }}>{t('sync.totalDist')}</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>{maxDist.toFixed(0)} m</div>
           </div>
           <div>
-            <div style={{ fontSize: '11px', color: colors.whiteMuted }}>Avg Speed</div>
-            <div style={{ fontSize: '16px', fontWeight: 600 }}>
+            <div style={{ fontSize: '12px', color: colors.text3 }}>{t('sync.avgSpeed')}</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>
               {gpxTrack && gpxTrack.durationS > 0
                 ? (maxDist / gpxTrack.durationS).toFixed(1)
                 : '—'}{' '}
@@ -107,8 +109,8 @@ export function SyncStep() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '11px', color: colors.whiteMuted }}>Time Ratio</div>
-            <div style={{ fontSize: '16px', fontWeight: 600 }}>
+            <div style={{ fontSize: '12px', color: colors.text3 }}>{t('sync.timeRatio')}</div>
+            <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>
               {gpxTrack ? (gpxTrack.durationS / videoDurationS).toFixed(2) : '—'}x
             </div>
           </div>
@@ -116,11 +118,11 @@ export function SyncStep() {
       </GlassPanel>
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button variant="ghost" onClick={() => dispatch({ type: 'SET_STEP', step: 'calibration' })}>
-          Back
+        <Button variant="ghost" size="lg" onClick={() => dispatch({ type: 'SET_STEP', step: 'calibration' })}>
+          {t('sync.back')}
         </Button>
-        <Button variant="primary" onClick={() => dispatch({ type: 'SET_STEP', step: 'generate' })}>
-          Next: Generate Volume
+        <Button variant="primary" size="lg" onClick={() => dispatch({ type: 'SET_STEP', step: 'generate' })}>
+          {t('sync.next')}
         </Button>
       </div>
     </div>

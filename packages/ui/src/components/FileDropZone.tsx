@@ -50,13 +50,13 @@ export function FileDropZone({
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
       style={{
-        border: `2px dashed ${dragOver ? colors.primary : colors.glassBorder}`,
-        borderRadius: radius.lg,
-        padding: '32px',
+        border: `1px dashed ${dragOver ? colors.accent : colors.borderHover}`,
+        borderRadius: radius.md,
+        padding: '32px 24px',
         textAlign: 'center',
         cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        background: dragOver ? 'rgba(66, 33, 206, 0.08)' : 'transparent',
+        opacity: disabled ? 0.4 : 1,
+        background: dragOver ? colors.accentMuted : 'transparent',
         transition: `all ${transitions.normal}`,
       }}
     >
@@ -67,12 +67,12 @@ export function FileDropZone({
         onChange={handleChange}
         style={{ display: 'none' }}
       />
-      {icon && <div style={{ marginBottom: '12px', fontSize: '32px' }}>{icon}</div>}
-      <div style={{ fontSize: '15px', fontWeight: 500, color: colors.white, marginBottom: '4px' }}>
+      {icon && <div style={{ marginBottom: '12px', fontSize: '28px', opacity: 0.7 }}>{icon}</div>}
+      <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text1, marginBottom: '4px' }}>
         {label}
       </div>
       {hint && (
-        <div style={{ fontSize: '13px', color: colors.whiteMuted }}>
+        <div style={{ fontSize: '13px', color: colors.text3 }}>
           {hint}
         </div>
       )}

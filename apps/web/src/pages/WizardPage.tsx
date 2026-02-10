@@ -1,24 +1,14 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { StepIndicator, Button, colors } from '@echos/ui';
+import { StepIndicator, colors } from '@echos/ui';
 import type { Step } from '@echos/ui';
+import { useTranslation } from '../i18n/index.js';
 import { useAppState, type WizardStep } from '../store/app-state.js';
-import { Logo } from '../components/Logo.js';
 import { ImportStep } from '../components/ImportStep.js';
 import { CropStep } from '../components/CropStep.js';
 import { CalibrationStep } from '../components/CalibrationStep.js';
 import { SyncStep } from '../components/SyncStep.js';
 import { GenerateStep } from '../components/GenerateStep.js';
 import { ViewerStep } from '../components/ViewerStep.js';
-
-const STEPS: Step[] = [
-  { key: 'import', label: 'Import' },
-  { key: 'crop', label: 'Crop' },
-  { key: 'calibration', label: 'Calibrate' },
-  { key: 'sync', label: 'Sync' },
-  { key: 'generate', label: 'Generate' },
-  { key: 'viewer', label: 'Viewer' },
-];
 
 const STEP_ORDER: WizardStep[] = ['import', 'crop', 'calibration', 'sync', 'generate', 'viewer'];
 
@@ -28,10 +18,18 @@ function getStepIndex(step: WizardStep): number {
 
 export function WizardPage() {
   const { state, dispatch } = useAppState();
-  const navigate = useNavigate();
+  const { t } = useTranslation();
   const currentIdx = getStepIndex(state.currentStep === 'home' ? 'import' : state.currentStep);
 
-  // Redirect to import on first load
+  const STEPS: Step[] = [
+    { key: 'import', label: t('step.import') },
+    { key: 'crop', label: t('step.crop') },
+    { key: 'calibration', label: t('step.calibration') },
+    { key: 'sync', label: t('step.sync') },
+    { key: 'generate', label: t('step.generate') },
+    { key: 'viewer', label: t('step.viewer') },
+  ];
+
   React.useEffect(() => {
     if (state.currentStep === 'home') {
       dispatch({ type: 'SET_STEP', step: 'import' });
@@ -43,52 +41,30 @@ export function WizardPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: colors.black,
-      }}
-    >
-      {/* Header */}
-      <header
+    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)' }}>
+      {/* Stepper */}
+      <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 24px',
-          borderBottom: `1px solid ${colors.glassBorder}`,
-          background: 'rgba(26, 26, 26, 0.9)',
-          backdropFilter: 'blur(8px)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
+          borderBottom: `1px solid ${colors.border}`,
+          padding: '0 clamp(20px, 5vw, 48px)',
+          maxWidth: '1100px',
+          margin: '0 auto',
         }}
       >
-        <Logo height={28} onClick={() => navigate('/')} />
-
-        <div style={{ flex: 1, maxWidth: '700px', margin: '0 24px' }}>
-          <StepIndicator
-            steps={STEPS}
-            currentStep={currentIdx}
-            onStepClick={handleStepClick}
-          />
-        </div>
-
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-          Exit
-        </Button>
-      </header>
+        <StepIndicator
+          steps={STEPS}
+          currentStep={currentIdx}
+          onStepClick={handleStepClick}
+        />
+      </div>
 
       {/* Content */}
-      <main
+      <div
         style={{
-          flex: 1,
-          maxWidth: '960px',
+          maxWidth: '1100px',
           width: '100%',
           margin: '0 auto',
-          padding: '32px 24px',
+          padding: 'clamp(24px, 3vw, 48px) clamp(20px, 5vw, 48px)',
         }}
       >
         {(state.currentStep === 'home' || state.currentStep === 'import') && <ImportStep />}
@@ -97,7 +73,7 @@ export function WizardPage() {
         {state.currentStep === 'sync' && <SyncStep />}
         {state.currentStep === 'generate' && <GenerateStep />}
         {state.currentStep === 'viewer' && <ViewerStep />}
-      </main>
+      </div>
     </div>
   );
 }
