@@ -313,19 +313,17 @@ export function HomePage() {
             width: '44px',
             height: '44px',
             borderRadius: '50%',
-            border: `1px solid ${colors.border}`,
-            background: colors.surface,
-            color: colors.text2,
+            border: 'none',
+            background: colors.accent,
+            color: '#FFFFFF',
             cursor: 'pointer',
-            transition: 'border-color 200ms ease, color 200ms ease',
+            transition: 'background 200ms ease',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = 'var(--c-border-hover)';
-            (e.currentTarget as HTMLElement).style.color = 'var(--c-text-1)';
+            (e.currentTarget as HTMLElement).style.background = 'var(--c-accent-hover)';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLElement).style.borderColor = 'var(--c-border)';
-            (e.currentTarget as HTMLElement).style.color = 'var(--c-text-2)';
+            (e.currentTarget as HTMLElement).style.background = 'var(--c-accent)';
           }}
         >
           <IconChevronUp size={20} />
