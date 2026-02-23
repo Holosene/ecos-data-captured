@@ -192,6 +192,73 @@ export const translations = {
     'docs.privacyText': 'Tout le traitement se fait localement dans votre navigateur web. Aucune donn\u00e9e vid\u00e9o, GPS ou de volume n\u2019est envoy\u00e9e \u00e0 un serveur. L\u2019application est un site statique h\u00e9berg\u00e9 sur GitHub Pages.',
     'docs.cta': 'Lancer un scan',
 
+    // V2 Nav
+    'nav.map': 'Carte',
+
+    // V2 Scan
+    'v2.scan.title': 'Nouveau scan volumétrique',
+    'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
+    'v2.scan.configure': 'Configurer & Générer',
+
+    // V2 Config
+    'v2.config.title': 'Configuration du volume',
+    'v2.config.preprocessing': 'Prétraitement image',
+    'v2.config.beamGrid': 'Faisceau & Grille',
+    'v2.config.upscale': 'Facteur upscale',
+    'v2.config.denoise': 'Débruitage bilatéral',
+    'v2.config.gamma': 'Correction gamma',
+    'v2.config.gaussianSigma': 'Lissage gaussien (σ)',
+    'v2.config.deblock': 'Suppression artefacts',
+    'v2.config.beamAngle': 'Angle faisceau (°)',
+    'v2.config.depthMax': 'Profondeur max (m)',
+    'v2.config.falloff': 'Falloff latéral (σ)',
+    'v2.config.resX': 'Résolution X',
+    'v2.config.resY': 'Résolution Y',
+    'v2.config.resZ': 'Résolution Z',
+    'v2.config.fps': 'Extraction FPS',
+    'v2.config.memory': 'Mémoire estimée',
+    'v2.config.viewMode': 'Mode de visualisation',
+    'v2.config.generate': 'Générer le volume',
+
+    // V2 Modes
+    'v2.mode.instrument': 'Volume Instrument',
+    'v2.mode.instrumentDesc': 'Visualisez le sonar comme instrument acoustique. Volume fixe en forme de cône, axe temporel interne.',
+    'v2.mode.spatial': 'Trace Spatiale',
+    'v2.mode.spatialDesc': 'Déroulez l\u2019enregistrement dans l\u2019espace 3D le long de la trace GPS. Accumulation fantôme multi-passes.',
+
+    // V2 Pipeline
+    'v2.pipeline.title': 'Génération en cours\u2026',
+    'v2.pipeline.extracting': 'Extraction des frames\u2026',
+    'v2.pipeline.preprocessing': 'Prétraitement frame',
+    'v2.pipeline.projecting': 'Projection conique',
+    'v2.pipeline.accumulating': 'Accumulation probabiliste',
+    'v2.pipeline.ready': 'Volume prêt !',
+    'v2.pipeline.abort': 'Annuler',
+
+    // V2 Viewer
+    'v2.viewer.title': 'Visualiseur volumétrique',
+    'v2.viewer.noData': 'Aucune donnée volumétrique chargée.',
+    'v2.viewer.reconfigure': 'Reconfigurer',
+    'v2.viewer.newScan': 'Nouveau scan',
+
+    // V2 Controls
+    'v2.controls.title': 'Contrôles de rendu',
+    'v2.controls.palette': 'Palette chromatique',
+    'v2.controls.opacity': 'Opacité',
+    'v2.controls.threshold': 'Seuil',
+    'v2.controls.density': 'Densité',
+    'v2.controls.smoothing': 'Lissage',
+    'v2.controls.ghost': 'Renforcement fantôme',
+    'v2.controls.steps': 'Pas ray march',
+    'v2.controls.showBeam': 'Afficher le faisceau',
+
+    // V2 Map
+    'v2.map.title': 'Sessions d\u2019enregistrement',
+    'v2.map.sessions': 'sessions',
+    'v2.map.empty': 'Importez un scan pour voir les traces GPS sur la carte.',
+    'v2.map.noSessions': 'Aucune session enregistrée.',
+    'v2.map.newScan': 'Nouveau scan',
+
     // Common
     'common.back': 'Retour',
     'common.next': 'Suivant',
@@ -387,6 +454,73 @@ export const translations = {
     'docs.privacy': 'Privacy & processing',
     'docs.privacyText': 'All processing happens locally in your web browser. No video, GPS, or volume data is ever sent to a server. The application is a static site hosted on GitHub Pages.',
     'docs.cta': 'Start scanning',
+
+    // V2 Nav
+    'nav.map': 'Map',
+
+    // V2 Scan
+    'v2.scan.title': 'New Volumetric Scan',
+    'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX). Preprocessing and conic projection will run automatically.',
+    'v2.scan.configure': 'Configure & Generate',
+
+    // V2 Config
+    'v2.config.title': 'Volume Configuration',
+    'v2.config.preprocessing': 'Image Preprocessing',
+    'v2.config.beamGrid': 'Beam & Grid',
+    'v2.config.upscale': 'Upscale Factor',
+    'v2.config.denoise': 'Bilateral Denoise',
+    'v2.config.gamma': 'Gamma Correction',
+    'v2.config.gaussianSigma': 'Gaussian Smooth (\u03c3)',
+    'v2.config.deblock': 'Artifact Removal',
+    'v2.config.beamAngle': 'Beam Angle (\u00b0)',
+    'v2.config.depthMax': 'Max Depth (m)',
+    'v2.config.falloff': 'Lateral Falloff (\u03c3)',
+    'v2.config.resX': 'Resolution X',
+    'v2.config.resY': 'Resolution Y',
+    'v2.config.resZ': 'Resolution Z',
+    'v2.config.fps': 'Extraction FPS',
+    'v2.config.memory': 'Estimated Memory',
+    'v2.config.viewMode': 'Visualization Mode',
+    'v2.config.generate': 'Generate Volume',
+
+    // V2 Modes
+    'v2.mode.instrument': 'Instrument Volume',
+    'v2.mode.instrumentDesc': 'View the sonar as an acoustic instrument. Fixed cone-shaped volume with internal time axis.',
+    'v2.mode.spatial': 'Spatial Trace',
+    'v2.mode.spatialDesc': 'Unroll the recording into 3D space along the GPS trace. Multi-pass ghost accumulation.',
+
+    // V2 Pipeline
+    'v2.pipeline.title': 'Generating\u2026',
+    'v2.pipeline.extracting': 'Extracting frames\u2026',
+    'v2.pipeline.preprocessing': 'Preprocessing frame',
+    'v2.pipeline.projecting': 'Conic projection',
+    'v2.pipeline.accumulating': 'Probabilistic accumulation',
+    'v2.pipeline.ready': 'Volume ready!',
+    'v2.pipeline.abort': 'Cancel',
+
+    // V2 Viewer
+    'v2.viewer.title': 'Volumetric Viewer',
+    'v2.viewer.noData': 'No volume data loaded.',
+    'v2.viewer.reconfigure': 'Reconfigure',
+    'v2.viewer.newScan': 'New Scan',
+
+    // V2 Controls
+    'v2.controls.title': 'Render Controls',
+    'v2.controls.palette': 'Chromatic Palette',
+    'v2.controls.opacity': 'Opacity',
+    'v2.controls.threshold': 'Threshold',
+    'v2.controls.density': 'Density',
+    'v2.controls.smoothing': 'Smoothing',
+    'v2.controls.ghost': 'Ghost Enhancement',
+    'v2.controls.steps': 'Ray March Steps',
+    'v2.controls.showBeam': 'Show Beam',
+
+    // V2 Map
+    'v2.map.title': 'Recording Sessions',
+    'v2.map.sessions': 'sessions',
+    'v2.map.empty': 'Import a scan to see GPS traces on the map.',
+    'v2.map.noSessions': 'No sessions recorded yet.',
+    'v2.map.newScan': 'New Scan',
 
     // Common
     'common.back': 'Back',
