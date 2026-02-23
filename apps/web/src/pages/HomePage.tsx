@@ -68,7 +68,13 @@ export function HomePage() {
           <img
             src={`${import.meta.env.BASE_URL}assets/branding/texte-titre.svg`}
             alt="echos - donnees capturees"
-            style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
+            style={{
+              width: 'clamp(280px, 35vw, 480px)',
+              height: 'auto',
+              display: 'block',
+              filter: theme === 'light' ? 'invert(1)' : 'none',
+              transition: 'filter 350ms ease',
+            }}
           />
         </div>
 
