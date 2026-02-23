@@ -39,6 +39,7 @@ interface VolumeViewerProps {
 const WINDOW_SIZE = 12;
 
 const CAMERA_PRESETS: { key: CameraPreset; label: string; icon: string }[] = [
+  { key: 'frontal', label: 'Frontale 2D', icon: '▣' },
   { key: 'horizontal', label: 'Horizontale', icon: '⬛' },
   { key: 'vertical', label: 'Coupe verticale', icon: '▮' },
   { key: 'free', label: 'Libre', icon: '◇' },
@@ -61,9 +62,7 @@ export function VolumeViewer({
     showBeam: mode === 'instrument',
     ghostEnhancement: mode === 'spatial' ? 0.5 : 0,
   });
-  const [controlsOpen, setControlsOpen] = useState(true);
-  const [slicesOpen, setSlicesOpen] = useState(true);
-  const [cameraPreset, setCameraPreset] = useState<CameraPreset>('horizontal');
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>(mode === 'instrument' ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
 
@@ -86,6 +85,10 @@ export function VolumeViewer({
     const renderer = new VolumeRenderer(containerRef.current, settings);
     rendererRef.current = renderer;
 
+    // Set default camera preset based on mode
+    const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
+    renderer.setCameraPreset(defaultPreset);
+
     return () => {
       renderer.dispose();
       rendererRef.current = null;
@@ -107,17 +110,55 @@ export function VolumeViewer({
     }
   }, [volumeData, dimensions, extent, isTemporalMode]);
 
-  // Temporal projection: reproject cone volume when frame changes (Mode A)
+  // Pre-computed frame projection cache for smooth playback
+  const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
+
+  // Pre-compute frame projections ahead of current position
+  useEffect(() => {
+    if (!isTemporalMode) return;
+
+    const cache = frameCacheRef.current;
+    const lookAhead = 16;
+
+    // Pre-compute frames ahead in a microtask to avoid blocking
+    let cancelled = false;
+    (async () => {
+      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
+        const idx = currentFrame + offset;
+        if (idx >= frames!.length || cache.has(idx)) continue;
+        const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
+        if (!cancelled) cache.set(idx, result);
+        // Yield to main thread every few frames
+        if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+      }
+
+      // Evict old entries to limit memory
+      const minKeep = Math.max(0, currentFrame - 4);
+      for (const key of cache.keys()) {
+        if (key < minKeep) cache.delete(key);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isTemporalMode, currentFrame, frames, beam, grid]);
+
+  // Temporal projection: use cache or compute on-demand
   useEffect(() => {
     if (!isTemporalMode || !rendererRef.current) return;
 
-    const result = projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
+    const cache = frameCacheRef.current;
+    let result = cache.get(currentFrame);
+    if (!result) {
+      result = projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
+      cache.set(currentFrame, result);
+    }
+
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
     setSliceVolumeData(result.normalized);
     setSliceDimensions(result.dimensions);
   }, [isTemporalMode, currentFrame, frames, beam, grid]);
 
-  // Playback animation loop
+  // Playback animation loop — uses requestAnimationFrame for smooth timing
   useEffect(() => {
     if (!isTemporalMode) return;
     playingRef.current = playing;
@@ -125,18 +166,27 @@ export function VolumeViewer({
 
     if (!playing) return;
 
-    const interval = setInterval(() => {
-      if (!playingRef.current) return;
-      const next = currentFrameRef.current + 1;
-      if (next >= frames!.length) {
-        setPlaying(false);
-        return;
-      }
-      currentFrameRef.current = next;
-      setCurrentFrame(next);
-    }, 1000 / playSpeed);
+    let lastTime = 0;
+    const intervalMs = 1000 / playSpeed;
+    let rafId: number;
 
-    return () => clearInterval(interval);
+    const tick = (timestamp: number) => {
+      if (!playingRef.current) return;
+      if (timestamp - lastTime >= intervalMs) {
+        lastTime = timestamp;
+        const next = currentFrameRef.current + 1;
+        if (next >= frames!.length) {
+          setPlaying(false);
+          return;
+        }
+        currentFrameRef.current = next;
+        setCurrentFrame(next);
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
   }, [playing, playSpeed, isTemporalMode, frames, currentFrame]);
 
   // Update settings
@@ -177,9 +227,9 @@ export function VolumeViewer({
   const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', flex: 1, gap: '8px', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {/* Main row: 3D viewport + controls */}
-      <div style={{ display: 'flex', flex: 1, gap: '10px', overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 180px)', minHeight: '400px' }}>
         {/* 3D viewport */}
         <div
           ref={containerRef}
@@ -190,7 +240,6 @@ export function VolumeViewer({
             border: `1px solid ${colors.border}`,
             background: '#080810',
             position: 'relative',
-            minHeight: 0,
           }}
         >
           {/* Mode badge */}
@@ -265,117 +314,96 @@ export function VolumeViewer({
           )}
         </div>
 
-        {/* Controls panel */}
+        {/* Controls panel — always visible */}
         <div
           style={{
-            width: controlsOpen ? '240px' : '36px',
-            transition: 'width 200ms ease',
+            width: '240px',
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            overflow: 'hidden',
+            overflowY: 'auto',
           }}
         >
-          <button
-            onClick={() => setControlsOpen((o) => !o)}
-            style={{
-              width: '100%',
-              padding: '6px',
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '8px',
-              color: colors.text2,
-              cursor: 'pointer',
-              fontSize: '12px',
-            }}
-          >
-            {controlsOpen ? '▶' : '◀'}
-          </button>
+          <GlassPanel style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+              {t('v2.controls.title')}
+            </h3>
 
-          {controlsOpen && (
-            <>
-              <GlassPanel style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-                  {t('v2.controls.title')}
-                </h3>
+            {/* Chromatic mode */}
+            <div>
+              <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+                {t('v2.controls.palette')}
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                {chromaticModes.map((m: ChromaticMode) => (
+                  <button
+                    key={m}
+                    onClick={() => updateSetting('chromaticMode', m)}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                      background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                      color: settings.chromaticMode === m ? colors.text1 : colors.text2,
+                      fontSize: '10px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                {/* Chromatic mode */}
-                <div>
-                  <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
-                    {t('v2.controls.palette')}
-                  </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                    {chromaticModes.map((m: ChromaticMode) => (
-                      <button
-                        key={m}
-                        onClick={() => updateSetting('chromaticMode', m)}
-                        style={{
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                          background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                          color: settings.chromaticMode === m ? colors.text1 : colors.text2,
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
 
-                <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
+            {/* Threshold with auto toggle */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+                <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="checkbox"
+                    checked={autoThreshold}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
+                    style={{ width: '12px', height: '12px' }}
+                  />
+                  Auto
+                </label>
+              </div>
+              <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
+            </div>
 
-                {/* Threshold with auto toggle */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-                    <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <input
-                        type="checkbox"
-                        checked={autoThreshold}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
-                        style={{ width: '12px', height: '12px' }}
-                      />
-                      Auto
-                    </label>
-                  </div>
-                  <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
-                </div>
+            <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
+            <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
 
-                <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
-                <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
+            {mode === 'spatial' && (
+              <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
+            )}
 
-                {mode === 'spatial' && (
-                  <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
-                )}
+            <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
 
-                <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
+            {mode === 'instrument' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+                <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
+                {t('v2.controls.showBeam')}
+              </label>
+            )}
 
-                {mode === 'instrument' && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                    {t('v2.controls.showBeam')}
-                  </label>
-                )}
+            {isTemporalMode && (
+              <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
+            )}
+          </GlassPanel>
 
-                {isTemporalMode && (
-                  <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-                )}
-              </GlassPanel>
-
-              {/* Export panel */}
-              <ExportPanel
-                volumeData={sliceVolumeData}
-                dimensions={sliceDimensions}
-                extent={extent}
-                onCaptureScreenshot={handleCaptureScreenshot}
-              />
-            </>
-          )}
+          {/* Export panel */}
+          <ExportPanel
+            volumeData={sliceVolumeData}
+            dimensions={sliceDimensions}
+            extent={extent}
+            onCaptureScreenshot={handleCaptureScreenshot}
+          />
         </div>
       </div>
 
@@ -438,52 +466,35 @@ export function VolumeViewer({
         </div>
       )}
 
-      {/* Orthogonal slice panels */}
+      {/* Orthogonal slice panels — always visible */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <div style={{ flexShrink: 0 }}>
-          <button
-            onClick={() => setSlicesOpen((o) => !o)}
-            style={{
-              width: '100%',
-              padding: '6px 12px',
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
-              borderRadius: '8px',
-              color: colors.text2,
-              cursor: 'pointer',
-              fontSize: '12px',
-              marginBottom: '6px',
-              textAlign: 'left',
-            }}
-          >
-            {slicesOpen ? '▾' : '▸'} {t('v2.slices.title') || 'Coupes orthogonales'}
-          </button>
-
-          {slicesOpen && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              <SlicePanel
-                volumeData={sliceVolumeData}
-                dimensions={sliceDimensions}
-                axis="y"
-                label={t('v2.slices.crossSection') || 'Transversale (XZ)'}
-                chromaticMode={settings.chromaticMode}
-              />
-              <SlicePanel
-                volumeData={sliceVolumeData}
-                dimensions={sliceDimensions}
-                axis="z"
-                label={t('v2.slices.planView') || 'Vue en plan (XY)'}
-                chromaticMode={settings.chromaticMode}
-              />
-              <SlicePanel
-                volumeData={sliceVolumeData}
-                dimensions={sliceDimensions}
-                axis="x"
-                label={t('v2.slices.longitudinal') || 'Longitudinale (YZ)'}
-                chromaticMode={settings.chromaticMode}
-              />
-            </div>
-          )}
+        <div>
+          <h3 style={{ fontSize: '13px', color: colors.text1, fontWeight: 600, marginBottom: '8px' }}>
+            {t('v2.slices.title') || 'Coupes orthogonales'}
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+            <SlicePanel
+              volumeData={sliceVolumeData}
+              dimensions={sliceDimensions}
+              axis="y"
+              label={t('v2.slices.crossSection') || 'Transversale (XZ)'}
+              chromaticMode={settings.chromaticMode}
+            />
+            <SlicePanel
+              volumeData={sliceVolumeData}
+              dimensions={sliceDimensions}
+              axis="z"
+              label={t('v2.slices.planView') || 'Vue en plan (XY)'}
+              chromaticMode={settings.chromaticMode}
+            />
+            <SlicePanel
+              volumeData={sliceVolumeData}
+              dimensions={sliceDimensions}
+              axis="x"
+              label={t('v2.slices.longitudinal') || 'Longitudinale (YZ)'}
+              chromaticMode={settings.chromaticMode}
+            />
+          </div>
         </div>
       )}
     </div>

@@ -17,58 +17,71 @@ function Topbar() {
   const location = useLocation();
   const { t, lang, setLang } = useTranslation();
   const { theme, toggleTheme } = useTheme();
-  const [docsInView, setDocsInView] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
 
-  // Scroll detection: highlight "Documentation" when docs section is visible on homepage
+  // Multi-section scroll-spy for homepage sections
   useEffect(() => {
     if (location.pathname !== '/') {
-      setDocsInView(false);
+      setActiveSection(null);
       return;
     }
-    const el = document.getElementById('docs-section');
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setDocsInView(entry.isIntersecting),
-      { threshold: 0.15 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    const sectionIds = ['docs-section', 'manifesto-section', 'map-section'];
+    const observers: IntersectionObserver[] = [];
+
+    for (const id of sectionIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveSection(id);
+          } else {
+            setActiveSection((prev) => (prev === id ? null : prev));
+          }
+        },
+        { threshold: 0.15 },
+      );
+      observer.observe(el);
+      observers.push(observer);
+    }
+
+    return () => observers.forEach((o) => o.disconnect());
   }, [location.pathname]);
 
-  // Nav items — Documentation first (desktop only, hidden on mobile anyway)
+  // Nav items: Scan is a route, others scroll on homepage
   const navItems = [
     { label: t('nav.scan'), path: '/scan' },
-    { label: t('nav.map'), path: '/map' },
+    { label: t('nav.map'), path: '/map', scrollTarget: 'map-section' },
     { label: t('nav.docs'), path: '/docs', scrollTarget: 'docs-section' },
-    { label: t('nav.manifesto'), path: '/manifesto' },
+    { label: t('nav.manifesto'), path: '/manifesto', scrollTarget: 'manifesto-section' },
   ];
 
   const isNavActive = (item: typeof navItems[0]) => {
-    if (item.path === '/docs') {
-      return location.pathname === '/docs' || (location.pathname === '/' && docsInView);
+    if (location.pathname === '/' && item.scrollTarget) {
+      return activeSection === item.scrollTarget;
     }
+    if (item.path === '/docs') return location.pathname === '/docs';
+    if (item.path === '/manifesto') return location.pathname === '/manifesto';
+    if (item.path === '/map') return location.pathname === '/map';
     return location.pathname === item.path;
   };
 
   const handleNavClick = (item: typeof navItems[0]) => {
     if (item.scrollTarget && location.pathname === '/') {
-      // Smooth scroll to section on homepage
       const el = document.getElementById(item.scrollTarget);
       if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
     }
     if (item.scrollTarget) {
-      // Navigate to home then scroll
       navigate('/');
       setTimeout(() => {
         const el = document.getElementById(item.scrollTarget!);
         if (el) el.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      }, 150);
       return;
     }
     navigate(item.path);
   };
 
-  // Logo: dark.png en mode sombre, white.png en mode clair
   const darkLogoSrc = `${import.meta.env.BASE_URL}logotype-02-dark.png`;
   const lightLogoSrc = `${import.meta.env.BASE_URL}logotype-02-white.png`;
   const logoSrc = theme === 'dark' ? darkLogoSrc : lightLogoSrc;
@@ -76,7 +89,6 @@ function Topbar() {
   return (
     <header className="echos-topbar">
       <div className="topbar-inner">
-      {/* Logo */}
       <button
         onClick={() => {
           if (location.pathname === '/') {
@@ -97,23 +109,10 @@ function Topbar() {
           flexShrink: 0,
         }}
       >
-        <img
-          src={logoSrc}
-          alt="echos"
-          style={{ height: '28px', width: 'auto' }}
-        />
+        <img src={logoSrc} alt="echos" style={{ height: '28px', width: 'auto' }} />
       </button>
 
-      {/* Nav — hidden on mobile via CSS */}
-      <nav
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0',
-          marginLeft: '40px',
-        }}
-        className="topbar-nav"
-      >
+      <nav style={{ display: 'flex', alignItems: 'center', gap: '0', marginLeft: '40px' }} className="topbar-nav">
         {navItems.map((item) => {
           const active = isNavActive(item);
           return (
@@ -135,10 +134,7 @@ function Topbar() {
               }}
             >
               {item.label}
-              {/* Active indicator — thicker, rounded, higher */}
-              {active && (
-                <span className="nav-indicator" />
-              )}
+              {active && <span className="nav-indicator" />}
             </button>
           );
         })}
@@ -146,21 +142,13 @@ function Topbar() {
 
       <div style={{ flex: 1 }} />
 
-      {/* Theme toggle */}
       <button
         onClick={toggleTheme}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '32px',
-          height: '32px',
-          borderRadius: '9999px',
-          border: '1px solid var(--c-border)',
-          background: 'transparent',
-          color: 'var(--c-text-2)',
-          cursor: 'pointer',
-          transition: 'all 150ms ease',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: '32px', height: '32px', borderRadius: '9999px',
+          border: '1px solid var(--c-border)', background: 'transparent',
+          color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
           marginRight: '8px',
         }}
         title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
@@ -168,23 +156,14 @@ function Topbar() {
         {theme === 'dark' ? <IconSun size={14} /> : <IconMoon size={14} />}
       </button>
 
-      {/* Language toggle */}
       <button
         onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '6px 12px',
-          borderRadius: '9999px',
-          border: '1px solid var(--c-border)',
-          background: 'transparent',
-          color: 'var(--c-text-2)',
-          fontSize: '13px',
-          fontWeight: 500,
-          cursor: 'pointer',
-          fontFamily: 'inherit',
-          transition: 'all 150ms ease',
+          display: 'flex', alignItems: 'center', gap: '6px',
+          padding: '6px 12px', borderRadius: '9999px',
+          border: '1px solid var(--c-border)', background: 'transparent',
+          color: 'var(--c-text-2)', fontSize: '13px', fontWeight: 500,
+          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms ease',
           marginRight: '12px',
         }}
         title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
@@ -193,21 +172,14 @@ function Topbar() {
         {lang === 'fr' ? 'EN' : 'FR'}
       </button>
 
-      {/* CTA — hidden on mobile via CSS class */}
       {!location.pathname.startsWith('/scan') && (
         <button
           className="topbar-cta"
           onClick={() => navigate('/scan')}
           style={{
-            padding: '10px 24px',
-            borderRadius: '9999px',
-            border: 'none',
-            background: colors.accent,
-            color: '#FFFFFF',
-            fontSize: '14px',
-            fontWeight: 500,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
+            padding: '10px 24px', borderRadius: '9999px', border: 'none',
+            background: colors.accent, color: '#FFFFFF', fontSize: '14px',
+            fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
             transition: 'background 150ms ease',
           }}
           onMouseEnter={(e) => { (e.target as HTMLElement).style.background = colors.accentHover; }}

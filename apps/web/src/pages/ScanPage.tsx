@@ -441,7 +441,7 @@ export function ScanPage() {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: colors.black, height: 'calc(100vh - 72px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)', display: 'flex', flexDirection: 'column' }}>
       {/* Pipeline Step Indicator */}
       <div style={{ padding: '12px var(--content-gutter) 0', flexShrink: 0 }}>
         <StepIndicator
@@ -458,7 +458,7 @@ export function ScanPage() {
         />
       </div>
 
-      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
@@ -810,7 +810,7 @@ export function ScanPage() {
 
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
               <h1 style={{ color: colors.text1, fontSize: '18px', fontWeight: 600, margin: 0 }}>
                 {t('v2.viewer.title')}
