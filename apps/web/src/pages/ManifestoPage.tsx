@@ -8,9 +8,9 @@ export function ManifestoPage() {
   const { t, tArray } = useTranslation();
 
   return (
-    <div style={{ background: colors.black, padding: 'clamp(40px, 5vw, 80px) clamp(20px, 5vw, 48px)' }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-        {/* Header — full width */}
+    <div style={{ background: colors.black, padding: 'clamp(40px, 5vw, 80px) var(--content-gutter)' }}>
+      <div>
+        {/* Header - full width */}
         <h1
           style={{
             fontFamily: fonts.display,
@@ -37,7 +37,7 @@ export function ManifestoPage() {
           {t('manifesto.subtitle')}
         </p>
 
-        {/* Two-column grid — Z-reading order */}
+        {/* Two-column grid - Z-reading order */}
         <div
           className="manifesto-grid"
           style={{
@@ -48,7 +48,7 @@ export function ManifestoPage() {
         >
           {/* Row 1, Left */}
           <GlassPanel padding="32px">
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s1.title')}
             </h2>
             <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
@@ -61,7 +61,7 @@ export function ManifestoPage() {
 
           {/* Row 1, Right */}
           <GlassPanel padding="32px">
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s2.title')}
             </h2>
             <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
@@ -74,7 +74,7 @@ export function ManifestoPage() {
 
           {/* Row 2, Left */}
           <GlassPanel padding="32px">
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s3.title')}
             </h2>
             <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
@@ -87,13 +87,13 @@ export function ManifestoPage() {
 
           {/* Row 2, Right */}
           <GlassPanel padding="32px">
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s4.title')}
             </h2>
             <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gap: '8px' }}>
               {tArray('manifesto.s4.items').map((item, i) => (
                 <li key={i} style={{ display: 'flex', gap: '12px' }}>
-                  <span style={{ color: colors.text3, flexShrink: 0 }}>--</span>
+                  <span style={{ color: colors.accent, flexShrink: 0 }}>-</span>
                   {item}
                 </li>
               ))}
@@ -102,7 +102,7 @@ export function ManifestoPage() {
 
           {/* Row 3, full width */}
           <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s5.title')}
             </h2>
             <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>

@@ -18,7 +18,7 @@ export interface ButtonProps {
 
 const variantStyles: Record<ButtonVariant, { base: React.CSSProperties; hover: React.CSSProperties }> = {
   primary: {
-    base: { background: colors.accent, color: colors.white, border: 'none' },
+    base: { background: colors.accent, color: colors.onAccent, border: 'none' },
     hover: { background: colors.accentHover },
   },
   secondary: {

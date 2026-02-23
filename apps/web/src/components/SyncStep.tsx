@@ -48,7 +48,7 @@ export function SyncStep() {
         </GlassPanel>
         <GlassPanel padding="24px">
           <div style={{ fontSize: '13px', color: colors.text3, marginBottom: '6px' }}>{t('sync.gpxDuration')}</div>
-          <div style={{ fontSize: '24px', fontWeight: 600 }}>{gpxTrack?.durationS.toFixed(1) ?? '—'}s</div>
+          <div style={{ fontSize: '24px', fontWeight: 600 }}>{gpxTrack?.durationS.toFixed(1) ?? '-'}s</div>
         </GlassPanel>
       </div>
 
@@ -104,14 +104,14 @@ export function SyncStep() {
             <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>
               {gpxTrack && gpxTrack.durationS > 0
                 ? (maxDist / gpxTrack.durationS).toFixed(1)
-                : '—'}{' '}
+                : '-'}{' '}
               m/s
             </div>
           </div>
           <div>
             <div style={{ fontSize: '12px', color: colors.text3 }}>{t('sync.timeRatio')}</div>
             <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>
-              {gpxTrack ? (gpxTrack.durationS / videoDurationS).toFixed(2) : '—'}x
+              {gpxTrack ? (gpxTrack.durationS / videoDurationS).toFixed(2) : '-'}x
             </div>
           </div>
         </div>

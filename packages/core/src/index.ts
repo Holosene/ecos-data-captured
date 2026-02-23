@@ -2,7 +2,8 @@
  * @echos/core — Main entry point
  */
 
-// Types
+// ─── V1 Types ───────────────────────────────────────────────────────────────
+
 export type {
   GpxTrackpoint,
   GpxTrack,
@@ -23,25 +24,79 @@ export type {
 
 export { DEFAULT_CALIBRATION, DEFAULT_PROCESSING_CONFIG } from './types.js';
 
-// Haversine
+// ─── V2 Types ───────────────────────────────────────────────────────────────
+
+export type {
+  PreprocessingSettings,
+  BeamSettings,
+  VolumeGridSettings,
+  ProbabilisticVolume,
+  PreprocessedFrame,
+  RecordingSession,
+  ViewMode,
+  TransferFunctionPoint,
+  ChromaticMode,
+  PipelineV2Stage,
+  PipelineV2Progress,
+  RendererSettings,
+  PerformanceConfig,
+} from './v2-types.js';
+
+export {
+  DEFAULT_PREPROCESSING,
+  DEFAULT_BEAM,
+  DEFAULT_GRID,
+  DEFAULT_RENDERER,
+  DEFAULT_PERFORMANCE,
+} from './v2-types.js';
+
+// ─── Haversine ──────────────────────────────────────────────────────────────
+
 export { haversineDistance, cumulativeDistances } from './haversine.js';
 
-// GPX
+// ─── GPX ────────────────────────────────────────────────────────────────────
+
 export { parseGpx, enrichTrackpoints, interpolateDistance } from './gpx-parser.js';
 
-// Sync
+// ─── Sync ───────────────────────────────────────────────────────────────────
+
 export { createSyncContext, mapFrameToPosition, mapAllFrames } from './sync.js';
 export type { SyncContext } from './sync.js';
 
-// Volume
+// ─── V1 Volume ──────────────────────────────────────────────────────────────
+
 export { buildVolume, estimateVolume } from './volume-builder.js';
 export type { VolumeBuilderInput } from './volume-builder.js';
 
-// NRRD
+// ─── V2 Preprocessing ──────────────────────────────────────────────────────
+
+export {
+  extractFrameImageData,
+  preprocessFrame,
+  preprocessFrames,
+  autoDetectCropRegion,
+  autoDetectDepthMax,
+} from './preprocessing.js';
+
+// ─── V2 Conic Projection ───────────────────────────────────────────────────
+
+export {
+  createEmptyVolume,
+  projectFrameIntoCone,
+  projectFramesSpatial,
+  normalizeVolume,
+  buildInstrumentVolume,
+  estimateVolumeMemoryMB,
+} from './conic-projection.js';
+
+// ─── NRRD ───────────────────────────────────────────────────────────────────
+
 export { encodeNrrd, nrrdToBlob } from './nrrd-export.js';
 
-// Session
+// ─── Session ────────────────────────────────────────────────────────────────
+
 export { createSession, serializeSession, deserializeSession, sessionToBlob } from './session.js';
 
-// QC Report
+// ─── QC Report ──────────────────────────────────────────────────────────────
+
 export { generateQcReport, qcReportToBlob } from './qc-report.js';

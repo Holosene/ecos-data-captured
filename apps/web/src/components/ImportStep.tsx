@@ -108,7 +108,7 @@ export function ImportStep() {
             label={state.videoFile ? state.videoFile.name : t('import.dropVideo')}
             hint={
               state.videoFile
-                ? `${state.videoWidth}x${state.videoHeight} — ${state.videoDurationS.toFixed(1)}s`
+                ? `${state.videoWidth}x${state.videoHeight} -${state.videoDurationS.toFixed(1)}s`
                 : t('import.videoHint')
             }
             onFile={handleVideoFile}
@@ -122,7 +122,7 @@ export function ImportStep() {
             label={state.gpxFile ? state.gpxFile.name : t('import.dropGpx')}
             hint={
               state.gpxTrack
-                ? `${state.gpxTrack.points.length} pts — ${state.gpxTrack.totalDistanceM.toFixed(0)}m — ${state.gpxTrack.durationS.toFixed(0)}s`
+                ? `${state.gpxTrack.points.length} pts -${state.gpxTrack.totalDistanceM.toFixed(0)}m -${state.gpxTrack.durationS.toFixed(0)}s`
                 : t('import.gpxHint')
             }
             onFile={handleGpxFile}

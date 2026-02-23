@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
-import { IconImage, IconArrowRight } from '../components/Icons.js';
-
-const SIDE_PAD = 'clamp(16px, 2.5vw, 24px)';
+import { useTheme } from '../theme/index.js';
+import { IconImage, IconChevronUp } from '../components/Icons.js';
+import { ImageLightbox } from '../components/ImageLightbox.js';
+import { DocsSection } from '../components/DocsSection.js';
 
 export function HomePage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
-
   const FEATURES = [
     { title: t('home.feat1.title'), desc: t('home.feat1.desc'), num: '01' },
     { title: t('home.feat2.title'), desc: t('home.feat2.desc'), num: '02' },
@@ -25,128 +29,45 @@ export function HomePage() {
     { value: '0', label: t('home.stat.dataSent') },
   ];
 
-  const galleryRow1 = [
-    { file: 'gallery-01.png', baseFlex: 2 },
-    { file: 'gallery-03.png', baseFlex: 1 },
-  ];
-
-  const galleryRow2 = [
-    { file: 'gallery-04.png', baseFlex: 1 },
-    { file: 'gallery-05.png', baseFlex: 1 },
-    { file: 'gallery-06.png', baseFlex: 1 },
-  ];
-
-  const stepsLeft = [
-    { title: t('docs.step1.title'), body: t('docs.step1.body') },
-    { title: t('docs.step2.title'), body: t('docs.step2.body') },
-    { title: t('docs.step3.title'), body: t('docs.step3.body') },
-    { title: t('docs.step4.title'), body: t('docs.step4.body') },
-  ];
-
-  const stepsRight = [
-    { title: t('docs.step5.title'), body: t('docs.step5.body') },
-    { title: t('docs.step6.title'), body: t('docs.step6.body') },
-    { title: t('docs.step7.title'), body: t('docs.step7.body') },
-  ];
-
-  const techTerms = [
-    { term: t('docs.cropRegion'), def: t('docs.cropRegionDef') },
-    { term: t('docs.depthMax'), def: t('docs.depthMaxDef') },
-    { term: t('docs.yStep'), def: t('docs.yStepDef') },
-    { term: t('docs.fpsExtraction'), def: t('docs.fpsExtractionDef') },
-    { term: t('docs.downscale'), def: t('docs.downscaleDef') },
-    { term: t('docs.nrrd'), def: t('docs.nrrdDef') },
-    { term: t('docs.transferFn'), def: t('docs.transferFnDef') },
-  ];
-
-  const renderGalleryCard = (item: { file: string; baseFlex: number }) => {
-    const isHovered = hoveredImage === item.file;
-    return (
-      <div
-        key={item.file}
-        className="gallery-card"
-        onMouseEnter={() => setHoveredImage(item.file)}
-        onMouseLeave={() => setHoveredImage(null)}
-        style={{
-          flex: isHovered ? item.baseFlex * 1.8 : item.baseFlex,
-          transition: 'flex 0.45s cubic-bezier(0.22, 0.61, 0.36, 1)',
-          borderRadius: '12px',
-          overflow: 'hidden',
-          border: `1px solid ${colors.border}`,
-          background: colors.surface,
-          position: 'relative',
-          cursor: 'pointer',
-        }}
-      >
-        <img
-          src={`${import.meta.env.BASE_URL}${item.file}`}
-          alt=""
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            display: 'block',
-          }}
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            color: colors.text3,
-            pointerEvents: 'none',
-          }}
-        >
-          <IconImage size={24} color={colors.text3} />
-          <span style={{ fontSize: '11px' }}>{item.file}</span>
-        </div>
-      </div>
-    );
+  const openLightbox = (images: string[], startIndex: number) => {
+    setLightboxImages(images);
+    setLightboxIndex(startIndex);
+    setLightboxOpen(true);
   };
+
+  const heroImages = [
+    `${import.meta.env.BASE_URL}hero-main.png`,
+    `${import.meta.env.BASE_URL}hero-side.png`,
+  ];
+
+  const galleryRow1 = [
+    { file: 'gallery-01.png', baseFlex: 2, index: 0 },
+    { file: 'gallery-03.png', baseFlex: 1, index: 1 },
+  ];
+  const galleryRow2 = [
+    { file: 'gallery-04.png', baseFlex: 1, index: 2 },
+    { file: 'gallery-05.png', baseFlex: 1, index: 3 },
+    { file: 'gallery-06.png', baseFlex: 1, index: 4 },
+  ];
+
+  const allGalleryFiles = [...galleryRow1, ...galleryRow2];
+  const galleryImages = allGalleryFiles.map((item) => `${import.meta.env.BASE_URL}${item.file}`);
 
   return (
     <div style={{ background: colors.black }}>
-      {/* ── Hero ── */}
+      {/* Hero */}
       <section
         style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `clamp(48px, 8vw, 100px) ${SIDE_PAD} clamp(32px, 4vw, 64px)`,
+          padding: 'clamp(48px, 8vw, 100px) var(--content-gutter) clamp(32px, 4vw, 64px)',
         }}
       >
         <div style={{ marginBottom: '32px' }}>
           <img
-            src={`${import.meta.env.BASE_URL}logotype.svg`}
-            alt="échos — données capturées"
-            style={{
-              width: 'clamp(280px, 35vw, 480px)',
-              height: 'auto',
-              display: 'block',
-            }}
+            src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'logotype.png' : 'logotype-dark.png'}`}
+            alt="echos - donnees capturees"
+            style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
           />
         </div>
-
-        <p
-          style={{
-            fontFamily: fonts.display,
-            fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(24px, 3.5vw, 40px)',
-            lineHeight: 1.1,
-            letterSpacing: '-0.01em',
-            color: colors.text2,
-            maxWidth: '700px',
-            marginBottom: '20px',
-          }}
-        >
-          {t('home.subtitle')}
-        </p>
 
         <p
           style={{
@@ -170,76 +91,49 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ── Hero visual zone ── */}
-      <section
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `0 ${SIDE_PAD} clamp(48px, 5vw, 80px)`,
-        }}
-      >
+      {/* Hero visual zone */}
+      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 5vw, 80px)` }}>
         <div
           className="hero-visual-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: '2fr 1fr',
-            gridTemplateRows: 'minmax(240px, 360px)',
+            gridTemplateRows: 'minmax(324px, 486px)',
             gap: '16px',
           }}
         >
-          <div className="visual-placeholder" style={{ minHeight: '240px' }}>
-            <img
-              src={`${import.meta.env.BASE_URL}hero-main.png`}
-              alt=""
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
+          {heroImages.map((src, i) => (
             <div
-              style={{
-                position: 'absolute',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '8px',
+              key={src}
+              className="visual-placeholder"
+              style={{ minHeight: '240px', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+              onClick={() => openLightbox(heroImages, i)}
+              onMouseEnter={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) { img.style.transform = 'scale(1.05)'; img.style.filter = 'brightness(1.1)'; }
+              }}
+              onMouseLeave={(e) => {
+                const img = e.currentTarget.querySelector('img');
+                if (img) { img.style.transform = 'scale(1)'; img.style.filter = 'brightness(1)'; }
               }}
             >
-              <IconImage size={32} color={colors.text3} />
-              <span style={{ fontSize: '13px' }}>hero-main.png</span>
+              <img
+                src={src}
+                alt=""
+                style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease' }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
+                <IconImage size={32} color={colors.text3} />
+                <span style={{ fontSize: '13px' }}>{i === 0 ? 'hero-main.png' : 'hero-side.png'}</span>
+              </div>
             </div>
-          </div>
-          <div className="visual-placeholder" style={{ minHeight: '240px' }}>
-            <img
-              src={`${import.meta.env.BASE_URL}hero-side.png`}
-              alt=""
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <IconImage size={32} color={colors.text3} />
-              <span style={{ fontSize: '13px' }}>hero-side.png</span>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Stats ── */}
-      <section
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `0 ${SIDE_PAD} clamp(40px, 4vw, 64px)`,
-        }}
-      >
+      {/* Stats */}
+      <section style={{ padding: `0 var(--content-gutter) clamp(40px, 4vw, 64px)` }}>
         <div
           className="stats-row"
           style={{
@@ -260,32 +154,17 @@ export function HomePage() {
                 flex: 1,
               }}
             >
-              <div
-                style={{
-                  fontSize: '24px',
-                  fontWeight: 600,
-                  color: colors.text1,
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
+              <div style={{ fontSize: '24px', fontWeight: 600, color: colors.text1, fontVariantNumeric: 'tabular-nums' }}>
                 {stat.value}
               </div>
-              <div style={{ fontSize: '13px', color: colors.text3, marginTop: '4px' }}>
-                {stat.label}
-              </div>
+              <div style={{ fontSize: '13px', color: colors.text3, marginTop: '4px' }}>{stat.label}</div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `clamp(40px, 4vw, 64px) ${SIDE_PAD}`,
-        }}
-      >
+      {/* How it works */}
+      <section style={{ padding: `clamp(40px, 4vw, 64px) var(--content-gutter)` }}>
         <h2
           style={{
             fontFamily: fonts.display,
@@ -317,14 +196,7 @@ export function HomePage() {
               >
                 {f.num}
               </div>
-              <h3
-                style={{
-                  fontSize: '18px',
-                  fontWeight: 600,
-                  color: colors.text1,
-                  marginBottom: '10px',
-                }}
-              >
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: colors.text1, marginBottom: '10px' }}>
                 {f.title}
               </h3>
               <p style={{ fontSize: '15px', color: colors.text2, lineHeight: 1.6 }}>{f.desc}</p>
@@ -333,22 +205,9 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ── Gallery with hover zoom ── */}
-      <section
-        style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `0 ${SIDE_PAD} clamp(48px, 6vw, 100px)`,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'baseline',
-            marginBottom: '24px',
-          }}
-        >
+      {/* Gallery — flex rows with hover zoom on desktop, horizontal scroll on mobile */}
+      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 6vw, 100px)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
           <div>
             <h2
               style={{
@@ -363,220 +222,123 @@ export function HomePage() {
             >
               {t('home.gallery.title')}
             </h2>
-            <p style={{ fontSize: '15px', color: colors.text3 }}>
-              {t('home.gallery.subtitle')}
-            </p>
+            <p style={{ fontSize: '15px', color: colors.text3 }}>{t('home.gallery.subtitle')}</p>
           </div>
         </div>
 
-        {/* Flex-based gallery rows — hover zoom pushes neighbors */}
-        <div className="gallery-rows">
-          <div
-            className="gallery-row"
-            style={{
-              display: 'flex',
-              gap: '16px',
-              height: '280px',
-              marginBottom: '16px',
-            }}
-          >
-            {galleryRow1.map(renderGalleryCard)}
+        {/* Gallery container — single horizontal scroll block on mobile */}
+        <div className="gallery-container">
+          {/* Row 1: gallery-01 (wide) + gallery-03 */}
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '378px', marginBottom: '16px' }}>
+            {galleryRow1.map((item) => (
+              <div
+                key={item.file}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                  alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div
-            className="gallery-row"
-            style={{
-              display: 'flex',
-              gap: '16px',
-              height: '220px',
-            }}
-          >
-            {galleryRow2.map(renderGalleryCard)}
+
+          {/* Row 2: gallery-04, gallery-05, gallery-06 */}
+          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '324px' }}>
+            {galleryRow2.map((item) => (
+              <div
+                key={item.file}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <img
+                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                  alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Inline Documentation Section ── */}
+      {/* Documentation — inline continuation */}
       <section
         id="docs-section"
         style={{
-          maxWidth: '1400px',
-          margin: '0 auto',
-          padding: `clamp(48px, 5vw, 80px) ${SIDE_PAD}`,
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
         }}
       >
-        <h2
+        <DocsSection />
+      </section>
+
+      {/* Scroll to top */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 clamp(32px, 4vw, 56px)' }}>
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           style={{
-            fontFamily: fonts.display,
-            fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(36px, 4vw, 56px)',
-            lineHeight: 1,
-            letterSpacing: '-0.02em',
-            color: colors.text1,
-            marginBottom: '40px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            border: 'none',
+            background: colors.accent,
+            color: '#FFFFFF',
+            cursor: 'pointer',
+            transition: 'background 200ms ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--c-accent-hover)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--c-accent)';
           }}
         >
-          {t('docs.title')}
-        </h2>
+          <IconChevronUp size={20} />
+        </button>
+      </div>
 
-        <div
-          className="docs-grid"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px' }}
-        >
-          {/* User Guide — Left */}
-          <GlassPanel padding="32px">
-            <h3
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-                marginBottom: '24px',
-                color: colors.accent,
-              }}
-            >
-              {t('docs.userGuide')}
-            </h3>
-            {stepsLeft.map(({ title, body }) => (
-              <div key={title} style={{ marginBottom: '20px' }}>
-                <h4
-                  style={{
-                    fontSize: '16px',
-                    fontWeight: 700,
-                    marginBottom: '8px',
-                    color: colors.text1,
-                  }}
-                >
-                  {title}
-                </h4>
-                <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '15px' }}>{body}</p>
-              </div>
-            ))}
-          </GlassPanel>
-
-          {/* User Guide (cont.) + Coordinate System — Right */}
-          <div style={{ display: 'grid', gap: '28px' }}>
-            <GlassPanel padding="32px">
-              <h3
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  marginBottom: '24px',
-                  color: colors.accent,
-                }}
-              >
-                {t('docs.userGuide')} (suite)
-              </h3>
-              {stepsRight.map(({ title, body }) => (
-                <div key={title} style={{ marginBottom: '20px' }}>
-                  <h4
-                    style={{
-                      fontSize: '16px',
-                      fontWeight: 700,
-                      marginBottom: '8px',
-                      color: colors.text1,
-                    }}
-                  >
-                    {title}
-                  </h4>
-                  <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '15px' }}>
-                    {body}
-                  </p>
-                </div>
-              ))}
-            </GlassPanel>
-
-            <GlassPanel padding="32px">
-              <h3
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  marginBottom: '16px',
-                  color: colors.accent,
-                }}
-              >
-                {t('docs.coordSystem')}
-              </h3>
-              <ul
-                style={{
-                  color: colors.text2,
-                  lineHeight: '2',
-                  fontSize: '15px',
-                  paddingLeft: '20px',
-                }}
-              >
-                <li>
-                  <strong style={{ color: colors.text1 }}>X</strong> — {t('docs.coordX')}
-                </li>
-                <li>
-                  <strong style={{ color: colors.text1 }}>Y</strong> — {t('docs.coordY')}
-                </li>
-                <li>
-                  <strong style={{ color: colors.text1 }}>Z</strong> — {t('docs.coordZ')}
-                </li>
-              </ul>
-              <p
-                style={{
-                  color: colors.text2,
-                  lineHeight: '1.8',
-                  fontSize: '14px',
-                  marginTop: '14px',
-                  fontFamily: 'var(--font-mono)',
-                }}
-              >
-                {t('docs.coordNote')}
-              </p>
-            </GlassPanel>
-          </div>
-
-          {/* Technical Concepts — Left */}
-          <GlassPanel padding="32px">
-            <h3
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-                marginBottom: '24px',
-                color: colors.accent,
-              }}
-            >
-              {t('docs.techConcepts')}
-            </h3>
-            <div style={{ display: 'grid', gap: '18px' }}>
-              {techTerms.map(({ term, def }) => (
-                <div key={term}>
-                  <dt style={{ fontSize: '15px', fontWeight: 600, color: colors.text1 }}>
-                    {term}
-                  </dt>
-                  <dd
-                    style={{
-                      fontSize: '15px',
-                      color: colors.text2,
-                      lineHeight: '1.6',
-                      margin: '4px 0 0 0',
-                    }}
-                  >
-                    {def}
-                  </dd>
-                </div>
-              ))}
-            </div>
-          </GlassPanel>
-
-          {/* Privacy — Right */}
-          <GlassPanel padding="32px">
-            <h3
-              style={{
-                fontSize: '20px',
-                fontWeight: 700,
-                marginBottom: '16px',
-                color: colors.accent,
-              }}
-            >
-              {t('docs.privacy')}
-            </h3>
-            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
-              {t('docs.privacyText')}
-            </p>
-          </GlassPanel>
-        </div>
-      </section>
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <ImageLightbox
+          images={lightboxImages}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onNavigate={(index) => setLightboxIndex(index)}
+        />
+      )}
     </div>
   );
 }
