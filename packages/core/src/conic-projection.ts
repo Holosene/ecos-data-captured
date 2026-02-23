@@ -261,6 +261,114 @@ export function buildInstrumentVolume(
   };
 }
 
+// ─── Instrument mode: temporal window projection ─────────────────────────────
+
+/**
+ * Project a sliding window of frames into a cone volume (Mode A temporal).
+ *
+ * Instead of baking all frames into one static volume, this projects only
+ * the frames around `centerIndex` (±windowHalf) into a fresh cone volume.
+ * Recent frames are weighted more heavily for a natural "live sonar" feel.
+ *
+ * The Y axis maps to frames within the window (time thickness).
+ */
+export function projectFrameWindow(
+  frames: PreprocessedFrame[],
+  centerIndex: number,
+  windowSize: number,
+  beam: BeamSettings,
+  grid: VolumeGridSettings,
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
+  const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+  const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
+  const extentX = maxRadius * 2.5;
+  const extentY = beam.depthMaxM * 0.5; // Thin Y — this is a live slice, not full track
+  const extentZ = beam.depthMaxM;
+
+  const halfWin = Math.floor(windowSize / 2);
+  const startIdx = Math.max(0, centerIndex - halfWin);
+  const endIdx = Math.min(frames.length - 1, centerIndex + halfWin);
+  const windowFrames = endIdx - startIdx + 1;
+
+  const windowGrid: VolumeGridSettings = {
+    resX: grid.resX,
+    resY: Math.min(grid.resY, Math.max(1, windowFrames)),
+    resZ: grid.resZ,
+  };
+
+  const volume = createEmptyVolume(windowGrid, extentX, extentY, extentZ);
+
+  for (let i = startIdx; i <= endIdx; i++) {
+    const localIdx = i - startIdx;
+    const yi = windowFrames > 1
+      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resY - 1))
+      : Math.floor(windowGrid.resY / 2);
+
+    // Recency weight: frames closer to center are stronger
+    const distFromCenter = Math.abs(i - centerIndex) / Math.max(1, halfWin);
+    const recencyWeight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
+
+    projectFrameIntoConeWeighted(frames[i], volume, beam, yi, recencyWeight);
+  }
+
+  const normalized = normalizeVolume(volume);
+  return {
+    normalized,
+    dimensions: volume.dimensions,
+    extent: volume.extent,
+  };
+}
+
+/**
+ * Same as projectFrameIntoCone but with an extra weight multiplier.
+ */
+function projectFrameIntoConeWeighted(
+  frame: PreprocessedFrame,
+  volume: ProbabilisticVolume,
+  beam: BeamSettings,
+  ySliceIndex: number,
+  weight: number,
+): void {
+  const [resX, _resY, resZ] = volume.dimensions;
+  const [extX, , extZ] = volume.extent;
+  const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+
+  for (let row = 0; row < frame.height; row++) {
+    const depth = (row / frame.height) * beam.depthMaxM;
+    if (depth < beam.nearFieldM) continue;
+
+    const radiusAtDepth = coneRadiusAtDepth(depth, halfAngle);
+    const sigma = beam.lateralFalloffSigma * radiusAtDepth;
+    const sigma2x2 = 2 * sigma * sigma;
+
+    const zi = Math.floor((depth / extZ) * resZ);
+    if (zi < 0 || zi >= resZ) continue;
+
+    for (let col = 0; col < frame.width; col++) {
+      const intensity = frame.intensity[row * frame.width + col];
+      if (intensity < 0.001) continue;
+
+      const normalizedCol = (col / frame.width - 0.5) * 2;
+      const lateralOffset = normalizedCol * radiusAtDepth;
+
+      const lateralDist2 = lateralOffset * lateralOffset;
+      const gaussWeight = sigma2x2 > 0
+        ? Math.exp(-lateralDist2 / sigma2x2)
+        : 1.0;
+
+      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
+      if (xi < 0 || xi >= resX) continue;
+
+      const voxelIdx = zi * volume.dimensions[1] * resX + ySliceIndex * resX + xi;
+      if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
+        const w = gaussWeight * weight;
+        volume.data[voxelIdx] += intensity * w;
+        volume.weights[voxelIdx] += w;
+      }
+    }
+  }
+}
+
 // ─── Estimate memory ────────────────────────────────────────────────────────
 
 export function estimateVolumeMemoryMB(grid: VolumeGridSettings): number {

@@ -18,7 +18,6 @@ import {
   extractFrameImageData,
   preprocessFrame,
   projectFramesSpatial,
-  buildInstrumentVolume,
   createEmptyVolume,
   normalizeVolume,
   estimateVolumeMemoryMB,
@@ -75,6 +74,9 @@ export function ScanPage() {
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
+  const [instrumentFrames, setInstrumentFrames] = useState<Array<{
+    index: number; timeS: number; intensity: Float32Array; width: number; height: number;
+  }> | null>(null);
   const abortRef = useRef(false);
 
   // ─── File handlers ────────────────────────────────────────────────────
@@ -344,29 +346,23 @@ export function ScanPage() {
     URL.revokeObjectURL(video.src);
     if (abortRef.current) return;
 
-    setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
-
     let normalizedData: Float32Array;
     let dims: [number, number, number];
     let extent: [number, number, number];
 
     if (viewMode === 'instrument') {
-      const result = buildInstrumentVolume(
-        preprocessedFrames, beam, grid,
-        (current, total) => {
-          setProgress({
-            stage: 'projecting',
-            progress: current / total,
-            message: `${t('v2.pipeline.projecting')} ${current}/${total}`,
-            currentFrame: current,
-            totalFrames: total,
-          });
-        },
-      );
-      normalizedData = result.normalized;
-      dims = result.dimensions;
-      extent = result.extent;
+      // Mode A: store preprocessed frames for live temporal playback
+      // No static volume baking — the viewer will project frames in real-time
+      setInstrumentFrames(preprocessedFrames);
+      normalizedData = new Float32Array(0);
+      dims = [grid.resX, grid.resY, grid.resZ];
+      extent = [1, 1, 1];
+
+      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     } else {
+      setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+      setInstrumentFrames(null);
+
       const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
       const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
       const volume = createEmptyVolume(grid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
@@ -387,9 +383,10 @@ export function ScanPage() {
       normalizedData = normalizeVolume(volume);
       dims = volume.dimensions;
       extent = volume.extent;
+
+      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     }
 
-    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     setVolumeData(normalizedData);
     setVolumeDims(dims);
     setVolumeExtent(extent);
@@ -809,6 +806,9 @@ export function ScanPage() {
               dimensions={volumeDims}
               extent={volumeExtent}
               mode={viewMode}
+              frames={instrumentFrames ?? undefined}
+              beam={beam}
+              grid={grid}
             />
           </div>
         )}

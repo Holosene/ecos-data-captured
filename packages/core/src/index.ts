@@ -86,6 +86,7 @@ export {
   projectFramesSpatial,
   normalizeVolume,
   buildInstrumentVolume,
+  projectFrameWindow,
   estimateVolumeMemoryMB,
 } from './conic-projection.js';
 
