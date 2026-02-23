@@ -34,7 +34,7 @@ function Topbar() {
       setActiveSection(null);
       return;
     }
-    const sectionIds = ['docs-section', 'manifesto-section', 'map-section'];
+    const sectionIds = ['map-section', 'docs-section', 'manifesto-section'];
     const observers: IntersectionObserver[] = [];
 
     for (const id of sectionIds) {

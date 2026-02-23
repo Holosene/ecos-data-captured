@@ -299,7 +299,54 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Documentation — inline continuation */}
+      {/* Map — after Accueil, matching nav order: Accueil > Carte > Docs > Manifeste */}
+      <section
+        id="map-section"
+        style={{
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2
+            style={{
+              fontFamily: fonts.display,
+              fontVariationSettings: "'wght' 600",
+              fontSize: 'clamp(28px, 3vw, 36px)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              color: colors.text1,
+              margin: 0,
+            }}
+          >
+            {t('v2.map.title')}
+          </h2>
+          <span style={{ color: colors.text3, fontSize: '13px' }}>
+            {state.sessions.length} {t('v2.map.sessions')}
+          </span>
+        </div>
+
+        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden' }}>
+          <MapView
+            sessions={state.sessions}
+            selectedSessionId={state.activeSessionId}
+            onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
+            gpxTracks={state.gpxTracks}
+          />
+        </div>
+
+        {state.sessions.length === 0 && (
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <p style={{ color: colors.text3, fontSize: '14px', marginBottom: '12px' }}>
+              {t('v2.map.noSessions')}
+            </p>
+            <Button variant="primary" size="sm" onClick={() => navigate('/scan')}>
+              {t('v2.map.newScan')}
+            </Button>
+          </div>
+        )}
+      </section>
+
+      {/* Documentation */}
       <section
         id="docs-section"
         style={{
@@ -309,7 +356,7 @@ export function HomePage() {
         <DocsSection />
       </section>
 
-      {/* Manifesto — inline section */}
+      {/* Manifesto */}
       <section
         id="manifesto-section"
         style={{
@@ -408,53 +455,6 @@ export function HomePage() {
             {t('manifesto.cta')}
           </Button>
         </div>
-      </section>
-
-      {/* Map — full-width open source scans */}
-      <section
-        id="map-section"
-        style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2
-            style={{
-              fontFamily: fonts.display,
-              fontVariationSettings: "'wght' 600",
-              fontSize: 'clamp(28px, 3vw, 36px)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-              color: colors.text1,
-              margin: 0,
-            }}
-          >
-            {t('v2.map.title')}
-          </h2>
-          <span style={{ color: colors.text3, fontSize: '13px' }}>
-            {state.sessions.length} {t('v2.map.sessions')}
-          </span>
-        </div>
-
-        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden' }}>
-          <MapView
-            sessions={state.sessions}
-            selectedSessionId={state.activeSessionId}
-            onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
-            gpxTracks={state.gpxTracks}
-          />
-        </div>
-
-        {state.sessions.length === 0 && (
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <p style={{ color: colors.text3, fontSize: '14px', marginBottom: '12px' }}>
-              {t('v2.map.noSessions')}
-            </p>
-            <Button variant="primary" size="sm" onClick={() => navigate('/scan')}>
-              {t('v2.map.newScan')}
-            </Button>
-          </div>
-        )}
       </section>
 
       {/* Scroll to top */}
