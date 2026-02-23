@@ -6,6 +6,8 @@ import { useTheme } from './theme/index.js';
 import { IconGlobe, IconSun, IconMoon } from './components/Icons.js';
 import { AppContext, appReducer, INITIAL_STATE } from './store/app-state.js';
 import { HomePage } from './pages/HomePage.js';
+import { ScanPage } from './pages/ScanPage.js';
+import { MapPage } from './pages/MapPage.js';
 import { WizardPage } from './pages/WizardPage.js';
 import { ManifestoPage } from './pages/ManifestoPage.js';
 import { DocsPage } from './pages/DocsPage.js';
@@ -35,8 +37,9 @@ function Topbar() {
 
   // Nav items — Documentation first (desktop only, hidden on mobile anyway)
   const navItems = [
-    { label: t('nav.docs'), path: '/docs', scrollTarget: 'docs-section' },
     { label: t('nav.scan'), path: '/scan' },
+    { label: t('nav.map'), path: '/map' },
+    { label: t('nav.docs'), path: '/docs', scrollTarget: 'docs-section' },
     { label: t('nav.manifesto'), path: '/manifesto' },
   ];
 
@@ -228,7 +231,9 @@ export function App() {
         <main style={{ flex: 1 }}>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/scan" element={<WizardPage />} />
+            <Route path="/scan" element={<ScanPage />} />
+            <Route path="/scan/classic" element={<WizardPage />} />
+            <Route path="/map" element={<MapPage />} />
             <Route path="/manifesto" element={<ManifestoPage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
