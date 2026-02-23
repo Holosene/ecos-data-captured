@@ -259,10 +259,13 @@ export class VolumeRenderer {
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
     // Rotate volume so depth (data Z) maps to -Y in world space:
-    // Surface at top, ground (deep water) at bottom
-    this.volumeMesh.rotation.x = -Math.PI / 2;
+    // Surface at top (small Z → +Y), ground (deep water) at bottom (large Z → -Y)
+    this.volumeMesh.rotation.x = Math.PI / 2;
 
     this.scene.add(this.volumeMesh);
+
+    // Force world matrix update so worldToLocal() works on the first frame
+    this.volumeMesh.updateMatrixWorld(true);
 
     // Re-apply current camera preset with new volume scale
     this.setCameraPreset(this.currentPreset);
@@ -518,8 +521,12 @@ void main() {
 
     this.controls.update();
 
-    if (this.material) {
-      this.material.uniforms.uCameraPos.value.copy(this.camera.position);
+    if (this.material && this.volumeMesh) {
+      // Camera position must be in volume local space for correct ray marching
+      // (the shader works in local space but the camera is in world space)
+      const camLocal = this.camera.position.clone();
+      this.volumeMesh.worldToLocal(camLocal);
+      this.material.uniforms.uCameraPos.value.copy(camLocal);
     }
 
     this.renderer.render(this.scene, this.camera);
