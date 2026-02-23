@@ -278,6 +278,7 @@ export const translations = {
     'v2.controls.ghost': 'Renforcement fantôme',
     'v2.controls.steps': 'Pas ray march',
     'v2.controls.showBeam': 'Afficher le faisceau',
+    'v2.controls.playSpeed': 'Vitesse lecture',
 
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
@@ -568,6 +569,7 @@ export const translations = {
     'v2.controls.ghost': 'Ghost Enhancement',
     'v2.controls.steps': 'Ray March Steps',
     'v2.controls.showBeam': 'Show Beam',
+    'v2.controls.playSpeed': 'Playback Speed',
 
     // V2 Map
     'v2.map.title': 'Recording Sessions',
