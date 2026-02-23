@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, colors } from '@echos/ui';
+import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, StepIndicator, colors } from '@echos/ui';
 import {
   parseGpx,
   createSyncContext,
@@ -42,6 +42,18 @@ import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
 
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
+
+const PIPELINE_STEPS: { label: string; key: ScanPhase }[] = [
+  { label: 'Importer', key: 'import' },
+  { label: 'Recadrer', key: 'crop' },
+  { label: 'Configurer', key: 'settings' },
+  { label: 'Traitement', key: 'processing' },
+  { label: 'Visualiser', key: 'viewer' },
+];
+
+function phaseToIndex(phase: ScanPhase): number {
+  return PIPELINE_STEPS.findIndex((s) => s.key === phase);
+}
 
 export function ScanPage() {
   const { state, dispatch } = useAppState();
@@ -430,7 +442,23 @@ export function ScanPage() {
 
   return (
     <div style={{ background: colors.black, height: 'calc(100vh - 72px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: 'clamp(12px, 2vw, 24px) var(--content-gutter)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Pipeline Step Indicator */}
+      <div style={{ padding: '12px var(--content-gutter) 0', flexShrink: 0 }}>
+        <StepIndicator
+          steps={PIPELINE_STEPS.map((s) => ({ label: s.label, key: s.key }))}
+          currentStep={phaseToIndex(phase)}
+          onStepClick={(idx: number) => {
+            const target = PIPELINE_STEPS[idx];
+            if (!target) return;
+            // Allow navigating back to completed steps
+            if (idx < phaseToIndex(phase)) {
+              setPhase(target.key);
+            }
+          }}
+        />
+      </div>
+
+      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
