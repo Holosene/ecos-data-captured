@@ -280,6 +280,15 @@ export const translations = {
     'v2.controls.showBeam': 'Afficher le faisceau',
     'v2.controls.playSpeed': 'Vitesse lecture',
 
+    // V2 Slices
+    'v2.slices.title': 'Coupes orthogonales',
+    'v2.slices.crossSection': 'Transversale (XZ)',
+    'v2.slices.planView': 'Vue en plan (XY)',
+    'v2.slices.longitudinal': 'Longitudinale (YZ)',
+
+    // V2 Export
+    'v2.export.title': 'Exporter',
+
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
     'v2.map.sessions': 'sessions',
@@ -570,6 +579,15 @@ export const translations = {
     'v2.controls.steps': 'Ray March Steps',
     'v2.controls.showBeam': 'Show Beam',
     'v2.controls.playSpeed': 'Playback Speed',
+
+    // V2 Slices
+    'v2.slices.title': 'Orthogonal Slices',
+    'v2.slices.crossSection': 'Cross-Section (XZ)',
+    'v2.slices.planView': 'Plan View (XY)',
+    'v2.slices.longitudinal': 'Longitudinal (YZ)',
+
+    // V2 Export
+    'v2.export.title': 'Export',
 
     // V2 Map
     'v2.map.title': 'Recording Sessions',

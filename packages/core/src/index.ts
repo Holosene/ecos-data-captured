@@ -101,3 +101,7 @@ export { createSession, serializeSession, deserializeSession, sessionToBlob } fr
 // ─── QC Report ──────────────────────────────────────────────────────────────
 
 export { generateQcReport, qcReportToBlob } from './qc-report.js';
+
+// ─── Adaptive Threshold ─────────────────────────────────────────────────────
+
+export { computeAutoThreshold, computeVolumeStats } from './adaptive-threshold.js';
