@@ -234,7 +234,9 @@ export function buildInstrumentVolume(
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
-  const extentY = frames.length; // 1 unit per frame (time)
+  // Use depth-proportional extent for Y so the volume has a sensible aspect ratio
+  // (frame count made Y dominate enormously, producing an invisible thin slab)
+  const extentY = beam.depthMaxM * 1.5;
   const extentZ = beam.depthMaxM;
 
   // Adjust Y resolution to match frame count

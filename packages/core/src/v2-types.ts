@@ -25,11 +25,11 @@ export interface PreprocessingSettings {
 }
 
 export const DEFAULT_PREPROCESSING: PreprocessingSettings = {
-  upscaleFactor: 2,
-  denoiseStrength: 0.4,
+  upscaleFactor: 1,
+  denoiseStrength: 0.2,
   gamma: 0.85,
-  gaussianSigma: 1.2,
-  deblockStrength: 0.5,
+  gaussianSigma: 0.8,
+  deblockStrength: 0.3,
 };
 
 // ─── Conic Projection ───────────────────────────────────────────────────────
@@ -64,9 +64,9 @@ export interface VolumeGridSettings {
 }
 
 export const DEFAULT_GRID: VolumeGridSettings = {
-  resX: 128,
-  resY: 256,
-  resZ: 128,
+  resX: 96,
+  resY: 128,
+  resZ: 96,
 };
 
 // ─── Probabilistic Volume ───────────────────────────────────────────────────
@@ -187,10 +187,10 @@ export const DEFAULT_RENDERER: RendererSettings = {
   opacityScale: 1.0,
   threshold: 0.05,
   densityScale: 1.0,
-  smoothing: 0.5,
+  smoothing: 0.3,
   showBeam: false,
   ghostEnhancement: 0.0,
-  stepCount: 256,
+  stepCount: 128,
   chromaticMode: 'thermal',
 };
 
