@@ -1,10 +1,12 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { GlassPanel, Button, colors } from '@echos/ui';
 import type { CropRect } from '@echos/core';
+import { useTranslation } from '../i18n/index.js';
 import { useAppState } from '../store/app-state.js';
 
 export function CropStep() {
   const { state, dispatch } = useAppState();
+  const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [frameReady, setFrameReady] = useState(false);
@@ -13,7 +15,6 @@ export function CropStep() {
   const [localCrop, setLocalCrop] = useState<CropRect>(state.crop);
   const [scale, setScale] = useState(1);
 
-  // Grab a frame from the video for preview
   useEffect(() => {
     if (!state.videoFile) return;
     const url = URL.createObjectURL(state.videoFile);
@@ -89,13 +90,10 @@ export function CropStep() {
     setDragStart(null);
   }, []);
 
-  // Draw crop overlay
   useEffect(() => {
     if (!frameReady) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-
-    // Re-grab frame and draw overlay
     if (!state.videoFile) return;
     const url = URL.createObjectURL(state.videoFile);
     const video = document.createElement('video');
@@ -112,11 +110,9 @@ export function CropStep() {
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Dark overlay outside crop
       ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Clear crop area
       const cx = localCrop.x * scale;
       const cy = localCrop.y * scale;
       const cw = localCrop.width * scale;
@@ -128,16 +124,14 @@ export function CropStep() {
         cx, cy, cw, ch,
       );
 
-      // Crop border
-      ctx.strokeStyle = colors.primary;
+      ctx.strokeStyle = colors.accent;
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(cx, cy, cw, ch);
       ctx.setLineDash([]);
 
-      // Corner handles
       const handleSize = 8;
-      ctx.fillStyle = colors.primary;
+      ctx.fillStyle = colors.accent;
       for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
         ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
       }
@@ -150,21 +144,24 @@ export function CropStep() {
   }, [frameReady, localCrop, scale, state.videoFile]);
 
   return (
-    <div style={{ display: 'grid', gap: '24px' }}>
-      <h2 style={{ fontSize: '24px', fontWeight: 600 }}>Crop Sonar Region</h2>
-      <p style={{ color: colors.whiteDim, fontSize: '14px' }}>
-        Draw a rectangle over the sonar display area. Exclude menus, sidebars, and decorations.
-        Only the echo/depth data should be inside the crop.
-      </p>
+    <div style={{ display: 'grid', gap: '32px' }}>
+      <div>
+        <h2 style={{ fontSize: 'clamp(24px, 2.5vw, 32px)', fontWeight: 600, marginBottom: '12px' }}>
+          {t('crop.title')}
+        </h2>
+        <p style={{ color: colors.text2, fontSize: '16px', lineHeight: 1.7, maxWidth: '640px' }}>
+          {t('crop.desc')}
+        </p>
+      </div>
 
-      <GlassPanel padding="20px">
+      <GlassPanel padding="24px">
         <div
           ref={containerRef}
           style={{
             position: 'relative',
             display: 'flex',
             justifyContent: 'center',
-            cursor: dragging ? 'crosshair' : 'crosshair',
+            cursor: 'crosshair',
           }}
         >
           <canvas
@@ -183,31 +180,33 @@ export function CropStep() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: colors.whiteMuted,
+                color: colors.text3,
+                fontSize: '15px',
               }}
             >
-              Loading video frame...
+              {t('crop.loading')}
             </div>
           )}
         </div>
 
         <div
+          className="grid-4-cols"
           style={{
-            marginTop: '16px',
+            marginTop: '20px',
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '12px',
+            gap: '16px',
           }}
         >
           {[
             { label: 'X', value: localCrop.x },
             { label: 'Y', value: localCrop.y },
-            { label: 'Width', value: localCrop.width },
-            { label: 'Height', value: localCrop.height },
+            { label: 'W', value: localCrop.width },
+            { label: 'H', value: localCrop.height },
           ].map(({ label, value }) => (
             <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '11px', color: colors.whiteMuted, marginBottom: '4px' }}>{label}</div>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: colors.primary, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '4px' }}>{label}</div>
+              <div style={{ fontSize: '18px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
                 {value}px
               </div>
             </div>
@@ -216,15 +215,16 @@ export function CropStep() {
       </GlassPanel>
 
       {state.error && (
-        <div style={{ color: colors.error, fontSize: '14px', padding: '8px' }}>{state.error}</div>
+        <div style={{ color: colors.error, fontSize: '15px', padding: '8px' }}>{state.error}</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <Button variant="ghost" onClick={() => dispatch({ type: 'SET_STEP', step: 'import' })}>
-          Back
+        <Button variant="ghost" size="lg" onClick={() => dispatch({ type: 'SET_STEP', step: 'import' })}>
+          {t('crop.back')}
         </Button>
         <Button
           variant="primary"
+          size="lg"
           disabled={localCrop.width < 20 || localCrop.height < 20}
           onClick={() => {
             dispatch({ type: 'SET_CROP', crop: localCrop });
@@ -232,7 +232,7 @@ export function CropStep() {
             dispatch({ type: 'SET_STEP', step: 'calibration' });
           }}
         >
-          Confirm Crop
+          {t('crop.confirm')}
         </Button>
       </div>
     </div>

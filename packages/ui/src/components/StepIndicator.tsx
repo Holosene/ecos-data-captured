@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, radius, transitions } from '../tokens.js';
+import { colors, transitions, fonts } from '../tokens.js';
 
 export interface Step {
   label: string;
@@ -18,8 +18,11 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '4px',
-        padding: '12px 0',
+        width: '100%',
+        padding: '28px 0',
+        overflowX: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none',
       }}
     >
       {steps.map((step, i) => {
@@ -29,62 +32,92 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
 
         return (
           <React.Fragment key={step.key}>
-            {i > 0 && (
-              <div
-                style={{
-                  flex: 1,
-                  height: '2px',
-                  background: isCompleted ? colors.primary : colors.blackLighter,
-                  transition: `background ${transitions.normal}`,
-                  maxWidth: '48px',
-                }}
-              />
-            )}
+            {/* Step node */}
             <button
               onClick={() => isClickable && onStepClick?.(i)}
               disabled={!isClickable}
               style={{
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '6px 12px',
-                borderRadius: radius.full,
+                background: 'none',
                 border: 'none',
-                background: isActive
-                  ? colors.primary
-                  : isCompleted
-                    ? 'rgba(66, 33, 206, 0.2)'
-                    : 'transparent',
-                color: isActive || isCompleted ? colors.white : colors.whiteMuted,
-                fontSize: '13px',
-                fontWeight: isActive ? 600 : 400,
                 cursor: isClickable ? 'pointer' : 'default',
-                transition: `all ${transitions.normal}`,
-                whiteSpace: 'nowrap',
+                padding: '0',
+                minWidth: '76px',
+                flexShrink: 0,
               }}
             >
-              <span
+              {/* Circle */}
+              <div
                 style={{
-                  width: '22px',
-                  height: '22px',
+                  width: '44px',
+                  height: '44px',
                   borderRadius: '50%',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '12px',
+                  fontSize: '15px',
                   fontWeight: 600,
-                  background: isActive
-                    ? 'rgba(255,255,255,0.2)'
-                    : isCompleted
-                      ? colors.primary
-                      : colors.blackLighter,
-                  color: isCompleted || isActive ? colors.white : colors.whiteMuted,
+                  fontFamily: fonts.body,
+                  transition: `all ${transitions.normal}`,
+                  ...(isCompleted
+                    ? {
+                        background: colors.accent,
+                        color: colors.onAccent,
+                        border: `2px solid ${colors.accent}`,
+                      }
+                    : isActive
+                    ? {
+                        background: 'transparent',
+                        color: colors.accent,
+                        border: `2px solid ${colors.accent}`,
+                      }
+                    : {
+                        background: 'transparent',
+                        color: colors.text3,
+                        border: `2px solid ${colors.border}`,
+                      }),
                 }}
               >
-                {isCompleted ? '\u2713' : i + 1}
+                {isCompleted ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                ) : (
+                  i + 1
+                )}
+              </div>
+
+              {/* Label */}
+              <span
+                style={{
+                  fontSize: '13px',
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? colors.text1 : isCompleted ? colors.text2 : colors.text3,
+                  whiteSpace: 'nowrap',
+                  transition: `color ${transitions.normal}`,
+                  fontFamily: fonts.body,
+                }}
+              >
+                {step.label}
               </span>
-              {step.label}
             </button>
+
+            {/* Connector line */}
+            {i < steps.length - 1 && (
+              <div
+                style={{
+                  flex: 1,
+                  height: '2px',
+                  minWidth: '24px',
+                  background: i < currentStep ? colors.accent : colors.border,
+                  transition: `background ${transitions.normal}`,
+                  marginBottom: '32px',
+                }}
+              />
+            )}
           </React.Fragment>
         );
       })}

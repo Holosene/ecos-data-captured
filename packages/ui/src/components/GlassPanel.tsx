@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, radius, shadows } from '../tokens.js';
+import { colors, radius } from '../tokens.js';
 
 export interface GlassPanelProps {
   children: React.ReactNode;
@@ -18,17 +18,14 @@ export function GlassPanel({
 }: GlassPanelProps) {
   return (
     <div
-      className={`glass ${className}`}
+      className={`card ${className}`}
       onClick={onClick}
       style={{
-        background: colors.glass,
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: `1px solid ${colors.glassBorder}`,
-        borderRadius: radius.lg,
-        boxShadow: shadows.md,
+        background: colors.surface,
+        border: `1px solid ${colors.border}`,
+        borderRadius: radius.md,
         padding,
-        transition: 'background 250ms ease, box-shadow 250ms ease',
+        transition: 'border-color 200ms ease',
         ...style,
       }}
     >

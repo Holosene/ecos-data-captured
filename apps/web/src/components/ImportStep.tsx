@@ -1,15 +1,18 @@
 import React, { useCallback } from 'react';
 import { GlassPanel, FileDropZone, Button, colors } from '@echos/ui';
 import { parseGpx } from '@echos/core';
+import { useTranslation } from '../i18n/index.js';
+import { IconVideo, IconMapPin, IconFolder } from './Icons.js';
 import { useAppState } from '../store/app-state.js';
 
 export function ImportStep() {
   const { state, dispatch } = useAppState();
+  const { t } = useTranslation();
 
   const handleVideoFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith('video/') && !file.name.endsWith('.mp4')) {
-        dispatch({ type: 'SET_ERROR', error: 'Please select an MP4 video file.' });
+        dispatch({ type: 'SET_ERROR', error: t('import.errorMp4') });
         return;
       }
 
@@ -37,13 +40,13 @@ export function ImportStep() {
         dispatch({ type: 'SET_ERROR', error: `Could not read video: ${(e as Error).message}` });
       }
     },
-    [dispatch],
+    [dispatch, t],
   );
 
   const handleGpxFile = useCallback(
     async (file: File) => {
       if (!file.name.endsWith('.gpx')) {
-        dispatch({ type: 'SET_ERROR', error: 'Please select a GPX file (.gpx).' });
+        dispatch({ type: 'SET_ERROR', error: t('import.errorGpx') });
         return;
       }
 
@@ -59,7 +62,7 @@ export function ImportStep() {
         dispatch({ type: 'SET_ERROR', error: `Could not parse GPX: ${(e as Error).message}` });
       }
     },
-    [dispatch],
+    [dispatch, t],
   );
 
   const handleSessionFile = useCallback(
@@ -77,7 +80,7 @@ export function ImportStep() {
             cropConfirmed: true,
           },
         });
-        dispatch({ type: 'ADD_LOG', message: `Session loaded: ${file.name}. Re-import your video and GPX files.` });
+        dispatch({ type: 'ADD_LOG', message: `Session loaded: ${file.name}` });
       } catch (e) {
         dispatch({ type: 'SET_ERROR', error: `Invalid session file: ${(e as Error).message}` });
       }
@@ -88,50 +91,53 @@ export function ImportStep() {
   const canProceed = state.videoFile !== null && state.gpxFile !== null;
 
   return (
-    <div style={{ display: 'grid', gap: '24px' }}>
-      <h2 style={{ fontSize: '24px', fontWeight: 600 }}>Import Files</h2>
-      <p style={{ color: colors.whiteDim, fontSize: '14px' }}>
-        Drag and drop your sonar screen recording (MP4) and GPS track (GPX).
-        Both files must cover the same session.
-      </p>
+    <div style={{ display: 'grid', gap: '32px' }}>
+      <div>
+        <h2 style={{ fontSize: 'clamp(24px, 2.5vw, 32px)', fontWeight: 600, marginBottom: '12px' }}>
+          {t('import.title')}
+        </h2>
+        <p style={{ color: colors.text2, fontSize: '16px', lineHeight: 1.7, maxWidth: '640px' }}>
+          {t('import.desc')}
+        </p>
+      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <GlassPanel padding="0">
           <FileDropZone
             accept="video/mp4,video/*"
-            label={state.videoFile ? state.videoFile.name : 'Drop MP4 video'}
+            label={state.videoFile ? state.videoFile.name : t('import.dropVideo')}
             hint={
               state.videoFile
-                ? `${state.videoWidth}x${state.videoHeight} — ${state.videoDurationS.toFixed(1)}s`
-                : 'Screen recording of your sonar display'
+                ? `${state.videoWidth}x${state.videoHeight} -${state.videoDurationS.toFixed(1)}s`
+                : t('import.videoHint')
             }
             onFile={handleVideoFile}
-            icon={<span>🎬</span>}
+            icon={<IconVideo size={28} color={colors.text3} />}
           />
         </GlassPanel>
 
         <GlassPanel padding="0">
           <FileDropZone
             accept=".gpx"
-            label={state.gpxFile ? state.gpxFile.name : 'Drop GPX track'}
+            label={state.gpxFile ? state.gpxFile.name : t('import.dropGpx')}
             hint={
               state.gpxTrack
-                ? `${state.gpxTrack.points.length} pts — ${state.gpxTrack.totalDistanceM.toFixed(0)}m — ${state.gpxTrack.durationS.toFixed(0)}s`
-                : 'GPS trace from your smartphone'
+                ? `${state.gpxTrack.points.length} pts -${state.gpxTrack.totalDistanceM.toFixed(0)}m -${state.gpxTrack.durationS.toFixed(0)}s`
+                : t('import.gpxHint')
             }
             onFile={handleGpxFile}
-            icon={<span>📍</span>}
+            icon={<IconMapPin size={28} color={colors.text3} />}
           />
         </GlassPanel>
       </div>
 
-      <GlassPanel padding="16px" style={{ opacity: 0.7 }}>
+      <GlassPanel padding="0" style={{ opacity: 0.7 }}>
         <FileDropZone
           accept=".json,.echos.json"
-          label="Load previous session (.echos.json)"
-          hint="Optional — restores crop, calibration and sync settings"
+          label={t('import.loadSession')}
+          hint={t('import.loadSessionHint')}
           onFile={handleSessionFile}
-          icon={<span>📂</span>}
+          icon={<IconFolder size={24} color={colors.text3} />}
         />
       </GlassPanel>
 
@@ -141,9 +147,9 @@ export function ImportStep() {
             background: 'rgba(239, 68, 68, 0.1)',
             border: `1px solid ${colors.error}`,
             borderRadius: '12px',
-            padding: '12px 16px',
+            padding: '14px 18px',
             color: colors.error,
-            fontSize: '14px',
+            fontSize: '15px',
           }}
         >
           {state.error}
@@ -153,10 +159,11 @@ export function ImportStep() {
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button
           variant="primary"
+          size="lg"
           disabled={!canProceed}
           onClick={() => dispatch({ type: 'SET_STEP', step: 'crop' })}
         >
-          Next: Crop Region
+          {t('import.next')}
         </Button>
       </div>
     </div>
