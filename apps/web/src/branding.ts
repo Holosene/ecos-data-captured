@@ -20,7 +20,10 @@ export const BRANDING = {
     dark: () => `${base()}assets/branding/favicon-dark.svg`,
     light: () => `${base()}assets/branding/favicon-light.svg`,
   },
-  texteTitle: () => `${base()}assets/branding/texte-titre.svg`,
+  texteTitle: {
+    dark: () => `${base()}assets/branding/texte-titre-dark.svg`,
+    light: () => `${base()}assets/branding/texte-titre-light.svg`,
+  },
 } as const;
 
 /** Returns the correct asset variant for the current theme */
@@ -29,5 +32,6 @@ export function getBrandingForTheme(theme: 'dark' | 'light') {
     logotype: theme === 'dark' ? BRANDING.logotype.dark() : BRANDING.logotype.light(),
     favicon: theme === 'dark' ? BRANDING.favicon.dark() : BRANDING.favicon.light(),
     logo: theme === 'dark' ? BRANDING.logo.dark() : BRANDING.logo.light(),
+    texteTitle: theme === 'dark' ? BRANDING.texteTitle.dark() : BRANDING.texteTitle.light(),
   };
 }

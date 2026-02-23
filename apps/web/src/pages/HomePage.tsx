@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
 import { useTheme } from '../theme/index.js';
+import { getBrandingForTheme } from '../branding.js';
 import { IconImage, IconChevronUp } from '../components/Icons.js';
 import { ImageLightbox } from '../components/ImageLightbox.js';
 import { DocsSection } from '../components/DocsSection.js';
@@ -66,15 +67,9 @@ export function HomePage() {
       >
         <div style={{ marginBottom: '32px' }}>
           <img
-            src={`${import.meta.env.BASE_URL}assets/branding/texte-titre.svg`}
+            src={getBrandingForTheme(theme).texteTitle}
             alt="echos - donnees capturees"
-            style={{
-              width: 'clamp(280px, 35vw, 480px)',
-              height: 'auto',
-              display: 'block',
-              filter: theme === 'light' ? 'invert(1)' : 'none',
-              transition: 'filter 350ms ease',
-            }}
+            style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
           />
         </div>
 
