@@ -210,7 +210,14 @@ function medianFilter3x3(
 
 /**
  * Auto-detect the sonar display region from a video frame.
- * Finds the content area by detecting dark/solid borders (status bars, UI chrome).
+ *
+ * Strategy:
+ *   1. Skip mobile status bar (top 6-8% of screen)
+ *   2. Skip bottom navigation bar if present (bottom 5%)
+ *   3. Analyze block-level variance to find the sonar echo region
+ *   4. Exclude UI overlay panels (Profondeur, Température, menus)
+ *      by looking for the largest high-variance rectangular region
+ *
  * Returns an optimized CropRect.
  */
 export function autoDetectCropRegion(
@@ -218,88 +225,210 @@ export function autoDetectCropRegion(
 ): { x: number; y: number; width: number; height: number } {
   const { data, width, height } = imageData;
 
-  // Calculate row and column mean brightness
-  const rowMeans = new Float32Array(height);
-  const colMeans = new Float32Array(width);
+  // Step 1: Skip mobile status bar and bottom nav
+  const statusBarH = Math.ceil(height * 0.07); // ~7% top for status bar
+  const bottomNavH = Math.ceil(height * 0.04); // ~4% bottom for nav bar
+  const safeTop = statusBarH;
+  const safeBottom = height - bottomNavH;
 
-  for (let y = 0; y < height; y++) {
-    let sum = 0;
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4;
-      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+  // Step 2: Divide the safe area into blocks and compute variance per block
+  const blockSize = 16;
+  const blocksW = Math.floor(width / blockSize);
+  const blocksH = Math.floor((safeBottom - safeTop) / blockSize);
+  const blockVariance = new Float32Array(blocksW * blocksH);
+
+  for (let by = 0; by < blocksH; by++) {
+    for (let bx = 0; bx < blocksW; bx++) {
+      const startY = safeTop + by * blockSize;
+      const startX = bx * blockSize;
+      let sum = 0;
+      let sumSq = 0;
+      const count = blockSize * blockSize;
+
+      for (let dy = 0; dy < blockSize; dy++) {
+        for (let dx = 0; dx < blockSize; dx++) {
+          const px = startX + dx;
+          const py = startY + dy;
+          const i = (py * width + px) * 4;
+          const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+          sum += brightness;
+          sumSq += brightness * brightness;
+        }
+      }
+
+      const mean = sum / count;
+      const variance = sumSq / count - mean * mean;
+      blockVariance[by * blocksW + bx] = variance;
     }
-    rowMeans[y] = sum / width;
   }
 
-  for (let x = 0; x < width; x++) {
-    let sum = 0;
-    for (let y = 0; y < height; y++) {
-      const i = (y * width + x) * 4;
-      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+  // Step 3: Find the high-variance threshold (sonar echo has high variance)
+  // Use percentile-based threshold: the sonar area should be >30% of the frame
+  const sortedVariances = Array.from(blockVariance).sort((a, b) => a - b);
+  const p60 = sortedVariances[Math.floor(sortedVariances.length * 0.4)] || 0;
+  const varianceThreshold = Math.max(p60, 100); // at least 100
+
+  // Step 4: Find the bounding box of high-variance blocks
+  let bTop = blocksH;
+  let bBottom = 0;
+  let bLeft = blocksW;
+  let bRight = 0;
+
+  for (let by = 0; by < blocksH; by++) {
+    for (let bx = 0; bx < blocksW; bx++) {
+      if (blockVariance[by * blocksW + bx] >= varianceThreshold) {
+        if (by < bTop) bTop = by;
+        if (by > bBottom) bBottom = by;
+        if (bx < bLeft) bLeft = bx;
+        if (bx > bRight) bRight = bx;
+      }
     }
-    colMeans[x] = sum / height;
   }
 
-  // Also compute row variance (sonar area has more variance than solid UI)
-  const rowVariance = new Float32Array(height);
-  for (let y = 0; y < height; y++) {
-    const mean = rowMeans[y];
-    let variance = 0;
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4;
-      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-      const diff = brightness - mean;
-      variance += diff * diff;
+  // Step 5: Refine — look for the largest contiguous high-variance rectangle
+  // Count high-variance blocks per column to detect UI panels on the sides
+  const colHighCount = new Float32Array(blocksW);
+  for (let bx = 0; bx < blocksW; bx++) {
+    let count = 0;
+    for (let by = bTop; by <= bBottom; by++) {
+      if (blockVariance[by * blocksW + bx] >= varianceThreshold) count++;
     }
-    rowVariance[y] = variance / width;
+    colHighCount[bx] = count / (bBottom - bTop + 1);
   }
 
-  // Threshold: rows/cols with very low brightness or very low variance are borders
-  const brightnessThreshold = 12;
-  const varianceThreshold = 50;
+  // Trim columns where less than 30% of rows have high variance (likely UI panels)
+  while (bLeft < bRight && colHighCount[bLeft] < 0.3) bLeft++;
+  while (bRight > bLeft && colHighCount[bRight] < 0.3) bRight--;
 
-  let top = 0;
-  let bottom = height - 1;
-  let left = 0;
-  let right = width - 1;
+  // Same for rows
+  const rowHighCount = new Float32Array(blocksH);
+  for (let by = 0; by < blocksH; by++) {
+    let count = 0;
+    for (let bx = bLeft; bx <= bRight; bx++) {
+      if (blockVariance[by * blocksW + bx] >= varianceThreshold) count++;
+    }
+    rowHighCount[by] = count / (bRight - bLeft + 1);
+  }
 
-  // Find top: skip dark/uniform rows
-  while (top < height && (rowMeans[top] < brightnessThreshold || rowVariance[top] < varianceThreshold)) top++;
-  // Find bottom
-  while (bottom > top && (rowMeans[bottom] < brightnessThreshold || rowVariance[bottom] < varianceThreshold)) bottom--;
-  // Find left: skip dark columns
-  while (left < width && colMeans[left] < brightnessThreshold) left++;
-  // Find right
-  while (right > left && colMeans[right] < brightnessThreshold) right--;
+  while (bTop < bBottom && rowHighCount[bTop] < 0.3) bTop++;
+  while (bBottom > bTop && rowHighCount[bBottom] < 0.3) bBottom--;
 
-  // Safety: ensure minimum crop size (at least 25% of original)
-  const minW = Math.floor(width * 0.25);
-  const minH = Math.floor(height * 0.25);
+  // Convert block coordinates to pixel coordinates
+  let cropX = bLeft * blockSize;
+  let cropY = safeTop + bTop * blockSize;
+  let cropW = (bRight - bLeft + 1) * blockSize;
+  let cropH = (bBottom - bTop + 1) * blockSize;
 
-  if (right - left + 1 < minW || bottom - top + 1 < minH) {
-    // Fallback: use full frame with small margin
-    const margin = Math.floor(Math.min(width, height) * 0.02);
+  // Clamp to image bounds
+  cropX = Math.max(0, cropX);
+  cropY = Math.max(0, cropY);
+  cropW = Math.min(width - cropX, cropW);
+  cropH = Math.min(height - cropY, cropH);
+
+  // Safety: ensure minimum crop size (at least 30% of original)
+  const minW = Math.floor(width * 0.3);
+  const minH = Math.floor(height * 0.3);
+
+  if (cropW < minW || cropH < minH) {
+    // Fallback: use full frame minus status bar
     return {
-      x: margin,
-      y: margin,
-      width: width - margin * 2,
-      height: height - margin * 2,
+      x: 0,
+      y: statusBarH,
+      width,
+      height: safeBottom - statusBarH,
     };
   }
 
-  // Small inward margin to exclude border artifacts
-  const margin = 2;
-  top = Math.min(top + margin, bottom);
-  bottom = Math.max(bottom - margin, top);
-  left = Math.min(left + margin, right);
-  right = Math.max(right - margin, left);
+  return { x: cropX, y: cropY, width: cropW, height: cropH };
+}
 
-  return {
-    x: left,
-    y: top,
-    width: right - left + 1,
-    height: bottom - top + 1,
-  };
+/**
+ * Try to auto-detect the max depth from a sonar display frame.
+ * Looks for depth scale markings along the left/right edges of the sonar image.
+ * Returns estimated depth in meters, or null if detection fails.
+ */
+export function autoDetectDepthMax(
+  imageData: ImageData,
+  cropRegion: { x: number; y: number; width: number; height: number },
+): number | null {
+  const { data, width } = imageData;
+  const { x: cx, y: cy, width: cw, height: ch } = cropRegion;
+
+  // Strategy: sample the left and right edges of the crop region
+  // Looking for depth scale patterns (dark background with bright text/lines)
+  // The depth scale typically has horizontal ruler lines at regular intervals
+
+  // Check both left and right margin zones (10% of crop width)
+  const marginW = Math.max(10, Math.floor(cw * 0.1));
+
+  // Count horizontal line features in left and right margins
+  // (ruler lines appear as rows with sudden brightness change)
+  const edgeTransitions: number[] = [];
+
+  for (let side = 0; side < 2; side++) {
+    const startX = side === 0 ? cx : cx + cw - marginW;
+
+    for (let row = cy; row < cy + ch - 1; row++) {
+      let rowMean = 0;
+      let nextRowMean = 0;
+
+      for (let col = startX; col < startX + marginW; col++) {
+        const i1 = (row * width + col) * 4;
+        const i2 = ((row + 1) * width + col) * 4;
+        rowMean += (data[i1] + data[i1 + 1] + data[i1 + 2]) / 3;
+        nextRowMean += (data[i2] + data[i2 + 1] + data[i2 + 2]) / 3;
+      }
+
+      rowMean /= marginW;
+      nextRowMean /= marginW;
+
+      // Sharp brightness transition = potential ruler line
+      if (Math.abs(nextRowMean - rowMean) > 30) {
+        edgeTransitions.push(row - cy);
+      }
+    }
+  }
+
+  // If we found regular ruler line intervals, estimate depth
+  if (edgeTransitions.length >= 3) {
+    // Find the most common interval between transitions
+    const intervals: number[] = [];
+    const sorted = [...new Set(edgeTransitions)].sort((a, b) => a - b);
+
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = sorted[i] - sorted[i - 1];
+      if (gap > ch * 0.05) { // minimum 5% of height between lines
+        intervals.push(gap);
+      }
+    }
+
+    if (intervals.length >= 2) {
+      // Median interval
+      intervals.sort((a, b) => a - b);
+      const medianInterval = intervals[Math.floor(intervals.length / 2)];
+      const numDivisions = Math.round(ch / medianInterval);
+
+      // Common sonar depth settings: 5, 10, 15, 20, 30, 50, 100m
+      // Typically the ruler shows divisions at round numbers
+      const commonDepths = [5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100];
+
+      // Estimate: numDivisions ruler lines typically span the full depth
+      // Try to match to common depth values
+      for (const depth of commonDepths) {
+        const divSize = depth / numDivisions;
+        // Check if divisions are round numbers (1, 2, 5, 10, etc.)
+        if (divSize >= 1 && (divSize === Math.round(divSize)) &&
+            [1, 2, 5, 10, 15, 20, 25].includes(Math.round(divSize))) {
+          return depth;
+        }
+      }
+
+      // Fallback: use numDivisions × 5m as rough estimate
+      return Math.min(100, Math.max(5, numDivisions * 5));
+    }
+  }
+
+  return null; // Detection failed
 }
 
 // ─── Main preprocessing pipeline ────────────────────────────────────────────
