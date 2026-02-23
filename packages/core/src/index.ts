@@ -75,6 +75,7 @@ export {
   preprocessFrame,
   preprocessFrames,
   autoDetectCropRegion,
+  autoDetectDepthMax,
 } from './preprocessing.js';
 
 // ─── V2 Conic Projection ───────────────────────────────────────────────────

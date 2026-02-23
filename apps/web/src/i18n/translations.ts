@@ -199,6 +199,19 @@ export const translations = {
     'v2.scan.title': 'Nouveau scan volumétrique',
     'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
     'v2.scan.configure': 'Analyser & Configurer',
+    'v2.scan.next': 'Suivant : Recadrage',
+    'v2.scan.nextSettings': 'Suivant : Réglages',
+
+    // V2 Settings
+    'v2.settings.title': 'Réglages',
+    'v2.settings.desc': 'Choisissez le mode de visualisation et la profondeur max. Les autres paramètres sont pré-configurés automatiquement.',
+    'v2.settings.depth': 'Profondeur maximale',
+    'v2.settings.autoDepth': 'Profondeur auto',
+    'v2.settings.detectedDepth': 'Profondeur détectée',
+    'v2.settings.depthNotDetected': 'Impossible de détecter automatiquement la profondeur. Réglez-la manuellement ci-dessous.',
+    'v2.settings.depthHint': 'Réglez la profondeur max affichée sur votre sonar (vérifiez vos réglages sonar).',
+    'v2.settings.summary': 'Résumé',
+    'v2.settings.cropSize': 'Zone crop',
 
     // V2 Preview
     'v2.preview.title': 'Aperçu & Configuration',
@@ -476,6 +489,19 @@ export const translations = {
     'v2.scan.title': 'New Volumetric Scan',
     'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX). Preprocessing and conic projection will run automatically.',
     'v2.scan.configure': 'Analyze & Configure',
+    'v2.scan.next': 'Next: Crop',
+    'v2.scan.nextSettings': 'Next: Settings',
+
+    // V2 Settings
+    'v2.settings.title': 'Settings',
+    'v2.settings.desc': 'Choose the visualization mode and max depth. Other parameters are auto-configured.',
+    'v2.settings.depth': 'Maximum Depth',
+    'v2.settings.autoDepth': 'Auto depth',
+    'v2.settings.detectedDepth': 'Detected depth',
+    'v2.settings.depthNotDetected': 'Could not auto-detect depth. Set it manually below.',
+    'v2.settings.depthHint': 'Set the max depth shown on your sonar screen (check your sonar settings).',
+    'v2.settings.summary': 'Summary',
+    'v2.settings.cropSize': 'Crop area',
 
     // V2 Preview
     'v2.preview.title': 'Preview & Configuration',
