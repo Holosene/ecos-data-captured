@@ -20,7 +20,7 @@ import type { RendererSettings, ChromaticMode } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
 import { generateLUT } from './transfer-function.js';
 
-export type CameraPreset = 'horizontal' | 'vertical' | 'free';
+export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
 export class VolumeRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -40,7 +40,7 @@ export class VolumeRenderer {
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
-  private currentPreset: CameraPreset = 'horizontal';
+  private currentPreset: CameraPreset = 'frontal';
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
   constructor(container: HTMLElement, initialSettings?: Partial<RendererSettings>) {
@@ -109,8 +109,8 @@ export class VolumeRenderer {
     (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
-    // Default camera: horizontal view with ~25° downward tilt
-    this.setCameraPreset('horizontal');
+    // Default camera: frontal 2D view (surface top, ground bottom)
+    this.setCameraPreset('frontal');
 
     // Start render loop
     this.animate();
@@ -128,6 +128,15 @@ export class VolumeRenderer {
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
 
     switch (preset) {
+      case 'frontal': {
+        // Frontal 2D view — looking straight at the volume from the front
+        // Surface at top, ground at bottom (depth = -Y in world)
+        const dist = maxDim * 2.5;
+        this.camera.position.set(0, 0, dist);
+        this.camera.up.set(0, 1, 0);
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
       case 'horizontal': {
         // Horizontal (terrain-like), ~25° down tilt
         const dist = maxDim * 2.2;
@@ -248,6 +257,11 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
+
+    // Rotate volume so depth (data Z) maps to -Y in world space:
+    // Surface at top, ground (deep water) at bottom
+    this.volumeMesh.rotation.x = -Math.PI / 2;
+
     this.scene.add(this.volumeMesh);
 
     // Re-apply current camera preset with new volume scale
