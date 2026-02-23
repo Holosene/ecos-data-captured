@@ -68,23 +68,27 @@ export function ScanPage() {
     async (files: File[]) => {
       const file = files[0];
       if (!file) return;
-      const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.src = URL.createObjectURL(file);
-      await new Promise<void>((resolve) => {
-        video.onloadedmetadata = () => {
-          dispatch({
-            type: 'SET_VIDEO',
-            file,
-            durationS: video.duration,
-            width: video.videoWidth,
-            height: video.videoHeight,
-          });
-          setCrop({ x: 0, y: 0, width: video.videoWidth, height: video.videoHeight });
-          URL.revokeObjectURL(video.src);
-          resolve();
-        };
-      });
+      try {
+        const url = URL.createObjectURL(file);
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error('Failed to read video metadata'));
+          video.src = url;
+        });
+        dispatch({
+          type: 'SET_VIDEO',
+          file,
+          durationS: video.duration,
+          width: video.videoWidth,
+          height: video.videoHeight,
+        });
+        setCrop({ x: 0, y: 0, width: video.videoWidth, height: video.videoHeight });
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        dispatch({ type: 'SET_ERROR', error: `Could not read video: ${(e as Error).message}` });
+      }
     },
     [dispatch],
   );
@@ -93,9 +97,13 @@ export function ScanPage() {
     async (files: File[]) => {
       const file = files[0];
       if (!file) return;
-      const text = await file.text();
-      const track = parseGpx(text);
-      dispatch({ type: 'SET_GPX', file, track });
+      try {
+        const text = await file.text();
+        const track = parseGpx(text);
+        dispatch({ type: 'SET_GPX', file, track });
+      } catch (e) {
+        dispatch({ type: 'SET_ERROR', error: `Could not parse GPX: ${(e as Error).message}` });
+      }
     },
     [dispatch],
   );
@@ -304,15 +312,16 @@ export function ScanPage() {
               {t('v2.scan.desc')}
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               <GlassPanel style={{ padding: '24px' }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropVideo')}
                 </h3>
                 <FileDropZone
                   accept="video/mp4,video/*"
-                  onDrop={handleVideoFile}
+                  onFile={(file: File) => handleVideoFile([file])}
                   label={state.videoFile ? state.videoFile.name : t('import.videoHint')}
+                  hint={state.videoFile ? `${state.videoWidth}×${state.videoHeight} — ${state.videoDurationS.toFixed(1)}s` : t('import.videoHint')}
                 />
               </GlassPanel>
 
@@ -322,11 +331,28 @@ export function ScanPage() {
                 </h3>
                 <FileDropZone
                   accept=".gpx"
-                  onDrop={handleGpxFile}
+                  onFile={(file: File) => handleGpxFile([file])}
                   label={state.gpxFile ? state.gpxFile.name : t('import.gpxHint')}
+                  hint={state.gpxTrack ? `${state.gpxTrack.points.length} pts — ${state.gpxTrack.totalDistanceM.toFixed(0)}m` : t('import.gpxHint')}
                 />
               </GlassPanel>
             </div>
+
+            {state.error && (
+              <div
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${colors.error}`,
+                  borderRadius: '12px',
+                  padding: '14px 18px',
+                  color: colors.error,
+                  fontSize: '15px',
+                  marginBottom: '16px',
+                }}
+              >
+                {state.error}
+              </div>
+            )}
 
             {canConfigure && (
               <div style={{ textAlign: 'center' }}>
@@ -345,7 +371,7 @@ export function ScanPage() {
               {t('v2.config.title')}
             </h1>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               {/* Preprocessing */}
               <GlassPanel style={{ padding: '20px' }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>
@@ -396,7 +422,7 @@ export function ScanPage() {
               <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
                 {t('v2.config.viewMode')}
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <button
                   onClick={() => setViewMode('instrument')}
                   style={{
