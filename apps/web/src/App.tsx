@@ -5,6 +5,7 @@ import { useTranslation } from './i18n/index.js';
 import { useTheme } from './theme/index.js';
 import { IconGlobe, IconSun, IconMoon } from './components/Icons.js';
 import { AppContext, appReducer, INITIAL_STATE } from './store/app-state.js';
+import { getBrandingForTheme } from './branding.js';
 import { HomePage } from './pages/HomePage.js';
 import { ScanPage } from './pages/ScanPage.js';
 import { MapPage } from './pages/MapPage.js';
@@ -18,6 +19,14 @@ function Topbar() {
   const { t, lang, setLang } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const [activeSection, setActiveSection] = useState<string | null>(null);
+
+  // Dynamic favicon based on theme
+  useEffect(() => {
+    const faviconEl = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    if (faviconEl) {
+      faviconEl.href = getBrandingForTheme(theme as 'dark' | 'light').favicon;
+    }
+  }, [theme]);
 
   // Multi-section scroll-spy for homepage sections
   useEffect(() => {
@@ -48,25 +57,37 @@ function Topbar() {
     return () => observers.forEach((o) => o.disconnect());
   }, [location.pathname]);
 
-  // Nav items: Scan is a route, others scroll on homepage
+  // Nav items in order: Accueil, Carte, Documentation, Manifeste, Scanner
+  // All except Scanner are scroll sections on homepage
   const navItems = [
-    { label: t('nav.scan'), path: '/scan' },
+    { label: t('nav.home'), path: '/' },
     { label: t('nav.map'), path: '/map', scrollTarget: 'map-section' },
     { label: t('nav.docs'), path: '/docs', scrollTarget: 'docs-section' },
     { label: t('nav.manifesto'), path: '/manifesto', scrollTarget: 'manifesto-section' },
+    { label: t('nav.scan'), path: '/scan' },
   ];
 
   const isNavActive = (item: typeof navItems[0]) => {
+    // Home link: active when on / and no section is in view
+    if (item.path === '/') {
+      return location.pathname === '/' && !activeSection;
+    }
     if (location.pathname === '/' && item.scrollTarget) {
       return activeSection === item.scrollTarget;
     }
-    if (item.path === '/docs') return location.pathname === '/docs';
-    if (item.path === '/manifesto') return location.pathname === '/manifesto';
-    if (item.path === '/map') return location.pathname === '/map';
     return location.pathname === item.path;
   };
 
   const handleNavClick = (item: typeof navItems[0]) => {
+    // Home: scroll to top or navigate to /
+    if (item.path === '/') {
+      if (location.pathname === '/') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        navigate('/');
+      }
+      return;
+    }
     if (item.scrollTarget && location.pathname === '/') {
       const el = document.getElementById(item.scrollTarget);
       if (el) { el.scrollIntoView({ behavior: 'smooth' }); return; }
@@ -82,9 +103,9 @@ function Topbar() {
     navigate(item.path);
   };
 
-  const darkLogoSrc = `${import.meta.env.BASE_URL}logotype-02-dark.png`;
-  const lightLogoSrc = `${import.meta.env.BASE_URL}logotype-02-white.png`;
-  const logoSrc = theme === 'dark' ? darkLogoSrc : lightLogoSrc;
+  // Theme-aware branding
+  const branding = getBrandingForTheme(theme as 'dark' | 'light');
+  const logoSrc = branding.logotype;
 
   return (
     <header className="echos-topbar">
@@ -172,22 +193,6 @@ function Topbar() {
         {lang === 'fr' ? 'EN' : 'FR'}
       </button>
 
-      {!location.pathname.startsWith('/scan') && (
-        <button
-          className="topbar-cta"
-          onClick={() => navigate('/scan')}
-          style={{
-            padding: '10px 24px', borderRadius: '9999px', border: 'none',
-            background: colors.accent, color: '#FFFFFF', fontSize: '14px',
-            fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-            transition: 'background 150ms ease',
-          }}
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = colors.accentHover; }}
-          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = colors.accent; }}
-        >
-          {t('nav.newScan')}
-        </button>
-      )}
       </div>
     </header>
   );

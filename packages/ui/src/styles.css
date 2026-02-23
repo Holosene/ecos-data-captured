@@ -4,27 +4,27 @@
 
 :root {
   --c-black: #111111;
-  --c-white: #F2F2F2;
-  --c-accent: #4221CE;
-  --c-accent-hover: #5835E4;
-  --c-accent-muted: rgba(66, 33, 206, 0.15);
+  --c-white: #EAEAEA;
+  --c-accent: #8A7CFF;
+  --c-accent-hover: #9D91FF;
+  --c-accent-muted: rgba(138, 124, 255, 0.15);
   --c-surface: #1A1A1E;
   --c-surface-hover: #222228;
   --c-surface-raised: #252530;
   --c-border: rgba(255, 255, 255, 0.08);
   --c-border-hover: rgba(255, 255, 255, 0.15);
   --c-border-active: rgba(255, 255, 255, 0.25);
-  --c-text-1: #F2F2F2;
-  --c-text-2: rgba(242, 242, 242, 0.55);
-  --c-text-3: rgba(242, 242, 242, 0.3);
+  --c-text-1: #EAEAEA;
+  --c-text-2: #969696;
+  --c-text-3: rgba(234, 234, 234, 0.3);
   --c-success: #34D399;
   --c-warning: #FBBF24;
   --c-error: #F87171;
   --c-on-accent: #FFFFFF;
 
-  --color-primary: #4221CE;
+  --color-primary: #8A7CFF;
   --color-black: #111111;
-  --color-white: #F2F2F2;
+  --color-white: #EAEAEA;
   --color-surface: #1A1A1E;
 
   --radius-sm: 8px;
@@ -49,7 +49,7 @@
 
   /* Topbar gradient — subtle Adobe Fonts-inspired */
   --topbar-bg:
-    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(66, 33, 206, 0.045), transparent 70%),
+    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(138, 124, 255, 0.04), transparent 70%),
     linear-gradient(90deg, rgba(17, 17, 17, 0.93) 0%, rgba(17, 17, 17, 0.88) 45%, rgba(17, 17, 17, 0.85) 100%);
   --topbar-border: rgba(255, 255, 255, 0.06);
 }
@@ -58,6 +58,9 @@
 [data-theme="light"] {
   --c-black: #FAFAFA;
   --c-white: #111111;
+  --c-accent: #4221CE;
+  --c-accent-hover: #5835E4;
+  --c-accent-muted: rgba(66, 33, 206, 0.15);
   --c-surface: #FFFFFF;
   --c-surface-hover: #F0F0F5;
   --c-surface-raised: #E8E8F0;
@@ -67,6 +70,7 @@
   --c-text-1: #111111;
   --c-text-2: rgba(17, 17, 17, 0.6);
   --c-text-3: rgba(17, 17, 17, 0.5);
+  --color-primary: #4221CE;
   --color-black: #FAFAFA;
   --color-white: #111111;
   --color-surface: #FFFFFF;

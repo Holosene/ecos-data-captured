@@ -66,7 +66,7 @@ export function HomePage() {
       >
         <div style={{ marginBottom: '32px' }}>
           <img
-            src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'logotype.png' : 'logotype-dark.png'}`}
+            src={`${import.meta.env.BASE_URL}assets/branding/texte-titre.svg`}
             alt="echos - donnees capturees"
             style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
           />
