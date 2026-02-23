@@ -77,9 +77,19 @@ export function ScanPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [frameReady, setFrameReady] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [scale, setScale] = useState(1);
+
+  // Cached frame bitmap — loaded once, reused for all overlay draws
+  const frameBitmapRef = useRef<ImageBitmap | null>(null);
+
+  // Drag state in refs to avoid re-renders during mouse movement
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const cropRef = useRef(crop);
+  const scaleRef = useRef(scale);
+  const rafIdRef = useRef(0);
+  cropRef.current = crop;
+  scaleRef.current = scale;
 
   // Processing state
   const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
@@ -140,6 +150,9 @@ export function ScanPage() {
   const canConfigure = !!state.videoFile && !!state.gpxTrack;
 
   // ─── Crop tool: auto-detect + visual canvas ───────────────────────────
+  //
+  // Fix: load video frame ONCE as ImageBitmap, cache it, draw overlay
+  // purely from the cached bitmap. Zero blob URLs during drag interaction.
 
   useEffect(() => {
     if (phase !== 'crop' || !state.videoFile) return;
@@ -149,12 +162,14 @@ export function ScanPage() {
     const video = document.createElement('video');
     video.preload = 'auto';
     video.muted = true;
+    let disposed = false;
 
     video.onloadeddata = () => {
       video.currentTime = Math.min(video.duration / 3, 10);
     };
 
-    video.onseeked = () => {
+    video.onseeked = async () => {
+      if (disposed) return;
       const canvas = canvasRef.current;
       if (!canvas) { URL.revokeObjectURL(url); return; }
 
@@ -163,12 +178,24 @@ export function ScanPage() {
       const maxH = container ? container.clientHeight - 10 : 600;
       const s = Math.min(1, maxW / video.videoWidth, maxH / video.videoHeight);
       setScale(s);
+      scaleRef.current = s;
 
       canvas.width = video.videoWidth * s;
       canvas.height = video.videoHeight * s;
 
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Render to offscreen canvas, then cache as ImageBitmap
+      const offscreen = document.createElement('canvas');
+      offscreen.width = canvas.width;
+      offscreen.height = canvas.height;
+      const offCtx = offscreen.getContext('2d');
+      if (offCtx) {
+        offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+          frameBitmapRef.current = await createImageBitmap(offscreen);
+        } catch {
+          frameBitmapRef.current = null;
+        }
+      }
 
       // Auto-detect crop on first load
       const fullCanvas = new OffscreenCanvas(video.videoWidth, video.videoHeight);
@@ -177,6 +204,7 @@ export function ScanPage() {
       const fullImageData = fullCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);
       const detected = autoDetectCropRegion(fullImageData);
       setCrop(detected);
+      cropRef.current = detected;
 
       // Try auto-detect depth
       const depthResult = autoDetectDepthMax(fullImageData, detected);
@@ -186,115 +214,130 @@ export function ScanPage() {
         setAutoDepth(true);
       }
 
-      setFrameReady(true);
+      // Revoke blob URL — video element is no longer needed
       URL.revokeObjectURL(url);
+      if (!disposed) setFrameReady(true);
     };
 
     video.src = url;
-    return () => URL.revokeObjectURL(url);
+    return () => { disposed = true; URL.revokeObjectURL(url); };
   }, [phase, state.videoFile]);
 
-  // Redraw crop overlay when crop changes
-  useEffect(() => {
-    if (!frameReady || phase !== 'crop' || !state.videoFile) return;
+  // ─── Draw crop overlay from cached bitmap — zero blob URLs ──────────
+  const drawCropOverlay = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const bitmap = frameBitmapRef.current;
+    if (!canvas || !bitmap) return;
 
-    const url = URL.createObjectURL(state.videoFile);
-    const video = document.createElement('video');
-    video.preload = 'auto';
-    video.muted = true;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(video.duration / 3, 10);
-    };
+    const c = cropRef.current;
+    const s = scaleRef.current;
 
-    video.onseeked = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { URL.revokeObjectURL(url); return; }
+    // Draw full frame
+    ctx.drawImage(bitmap, 0, 0);
 
-      // Draw full frame dimmed
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw bright crop area
-      const cx = crop.x * scale;
-      const cy = crop.y * scale;
-      const cw = crop.width * scale;
-      const ch = crop.height * scale;
-      ctx.clearRect(cx, cy, cw, ch);
-      ctx.drawImage(
-        video,
-        crop.x, crop.y, crop.width, crop.height,
-        cx, cy, cw, ch,
-      );
+    // Bright crop region
+    const cx = c.x * s;
+    const cy = c.y * s;
+    const cw = c.width * s;
+    const ch = c.height * s;
 
-      // Dashed border
-      ctx.strokeStyle = '#4488ff';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(cx, cy, cw, ch);
-      ctx.setLineDash([]);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx, cy, cw, ch);
+    ctx.clip();
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.restore();
 
-      // Corner handles
-      const hs = 8;
-      ctx.fillStyle = '#4488ff';
-      for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
-        ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
-      }
+    // Dashed border
+    ctx.strokeStyle = '#8A7CFF';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(cx, cy, cw, ch);
+    ctx.setLineDash([]);
 
-      URL.revokeObjectURL(url);
-    };
+    // Corner handles
+    const hs = 8;
+    ctx.fillStyle = '#8A7CFF';
+    for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
+      ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    }
+  }, []);
 
-    video.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [frameReady, crop, scale, state.videoFile, phase]);
+  // Redraw on crop change (but NOT during drag — rAF handles that)
+  useEffect(() => {
+    if (frameReady) drawCropOverlay();
+  }, [frameReady, crop, scale, drawCropOverlay]);
 
+  // ─── Mouse events with rAF throttle for 60fps drag ─────────────────
   const getCanvasCoords = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
       return {
-        x: Math.round((e.clientX - rect.left) / scale),
-        y: Math.round((e.clientY - rect.top) / scale),
+        x: Math.round((e.clientX - rect.left) / scaleRef.current),
+        y: Math.round((e.clientY - rect.top) / scaleRef.current),
       };
     },
-    [scale],
+    [],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const coords = getCanvasCoords(e);
-      setDragStart(coords);
-      setDragging(true);
+      dragStartRef.current = getCanvasCoords(e);
+      draggingRef.current = true;
     },
     [getCanvasCoords],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragging || !dragStart) return;
+      if (!draggingRef.current || !dragStartRef.current) return;
+
       const coords = getCanvasCoords(e);
-      const x = Math.max(0, Math.min(dragStart.x, coords.x));
-      const y = Math.max(0, Math.min(dragStart.y, coords.y));
-      const w = Math.abs(coords.x - dragStart.x);
-      const h = Math.abs(coords.y - dragStart.y);
-      setCrop({
+      const start = dragStartRef.current;
+      const x = Math.max(0, Math.min(start.x, coords.x));
+      const y = Math.max(0, Math.min(start.y, coords.y));
+      const w = Math.abs(coords.x - start.x);
+      const h = Math.abs(coords.y - start.y);
+      const newCrop = {
         x,
         y,
         width: Math.max(20, Math.min(w, state.videoWidth - x)),
         height: Math.max(20, Math.min(h, state.videoHeight - y)),
-      });
+      };
+
+      cropRef.current = newCrop;
+
+      // rAF throttle: draw + batched state update
+      if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = 0;
+          drawCropOverlay();
+          setCrop(cropRef.current);
+        });
+      }
     },
-    [dragging, dragStart, getCanvasCoords, state.videoWidth, state.videoHeight],
+    [getCanvasCoords, drawCropOverlay, state.videoWidth, state.videoHeight],
   );
 
   const handleMouseUp = useCallback(() => {
-    setDragging(false);
-    setDragStart(null);
-  }, []);
+    draggingRef.current = false;
+    dragStartRef.current = null;
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = 0;
+    }
+    setCrop(cropRef.current);
+    drawCropOverlay();
+  }, [drawCropOverlay]);
 
   // ─── V2 Processing pipeline ───────────────────────────────────────────
 
