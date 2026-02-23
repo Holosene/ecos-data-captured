@@ -56,7 +56,7 @@ export function ScanPage() {
   const [beam, setBeam] = useState<BeamSettings>({ ...DEFAULT_BEAM });
   const [grid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 640, height: 480 });
-  const [fpsExtraction] = useState(1);
+  const [fpsExtraction] = useState(4);
 
   // Auto-depth
   const [autoDepth, setAutoDepth] = useState(false);
