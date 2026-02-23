@@ -3,6 +3,7 @@ export type Lang = 'fr' | 'en';
 export const translations = {
   fr: {
     // Nav
+    'nav.home': 'Accueil',
     'nav.scan': 'Scanner',
     'nav.manifesto': 'Manifeste',
     'nav.docs': 'Documentation',
@@ -303,6 +304,7 @@ export const translations = {
 
   en: {
     // Nav
+    'nav.home': 'Home',
     'nav.scan': 'Scan',
     'nav.manifesto': 'Manifesto',
     'nav.docs': 'Docs',
