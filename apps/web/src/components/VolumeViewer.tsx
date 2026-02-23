@@ -79,7 +79,7 @@ export function VolumeViewer({
   const chromaticModes = getChromaticModes();
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: '600px', gap: '16px' }}>
+    <div style={{ display: 'flex', height: '100%', flex: 1, gap: '12px', overflow: 'hidden' }}>
       {/* 3D viewport */}
       <div
         ref={containerRef}
@@ -90,7 +90,7 @@ export function VolumeViewer({
           border: `1px solid ${colors.border}`,
           background: '#0a0a0f',
           position: 'relative',
-          minHeight: '500px',
+          minHeight: 0,
         }}
       >
         {/* Mode badge */}
@@ -156,7 +156,7 @@ export function VolumeViewer({
         </button>
 
         {controlsOpen && (
-          <GlassPanel style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
+          <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: 'calc(100vh - 160px)', overflowY: 'auto' }}>
             <h3 style={{ margin: 0, fontSize: '14px', color: colors.text1, fontWeight: 600 }}>
               {t('v2.controls.title')}
             </h3>

@@ -145,8 +145,9 @@ export function ScanPage() {
       if (!canvas) { URL.revokeObjectURL(url); return; }
 
       const container = containerRef.current;
-      const maxW = container ? container.clientWidth - 40 : 800;
-      const s = Math.min(1, maxW / video.videoWidth);
+      const maxW = container ? container.clientWidth - 20 : 800;
+      const maxH = container ? container.clientHeight - 10 : 600;
+      const s = Math.min(1, maxW / video.videoWidth, maxH / video.videoHeight);
       setScale(s);
 
       canvas.width = video.videoWidth * s;
@@ -431,12 +432,12 @@ export function ScanPage() {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)' }}>
-      <div style={{ padding: 'clamp(24px, 3vw, 48px) var(--content-gutter)' }}>
+    <div style={{ background: colors.black, height: 'calc(100vh - 72px)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 'clamp(12px, 2vw, 24px) var(--content-gutter)', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', flex: 1, overflow: 'auto' }}>
             <h1 style={{ color: colors.text1, fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.scan.title')}
             </h1>
@@ -496,22 +497,25 @@ export function ScanPage() {
 
         {/* ── Crop Phase (V1-style visual crop) ─────────────────────── */}
         {phase === 'crop' && (
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
+          <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px', flexShrink: 0 }}>
               {t('crop.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6, maxWidth: '640px' }}>
+            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.4, maxWidth: '640px', flexShrink: 0 }}>
               {t('crop.desc')}
             </p>
 
-            <GlassPanel style={{ padding: '20px', marginBottom: '20px' }}>
+            <GlassPanel style={{ padding: '12px', marginBottom: '12px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div
                 ref={containerRef}
                 style={{
                   position: 'relative',
                   display: 'flex',
                   justifyContent: 'center',
+                  alignItems: 'center',
                   cursor: 'crosshair',
+                  flex: 1,
+                  overflow: 'hidden',
                 }}
               >
                 <canvas
@@ -520,7 +524,7 @@ export function ScanPage() {
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  style={{ borderRadius: '8px', maxWidth: '100%' }}
+                  style={{ borderRadius: '8px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                 />
                 {!frameReady && (
                   <div style={{
@@ -539,10 +543,11 @@ export function ScanPage() {
 
               {/* Crop coordinates */}
               <div style={{
-                marginTop: '16px',
+                marginTop: '8px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '12px',
+                gap: '8px',
+                flexShrink: 0,
               }}>
                 {[
                   { label: 'X', value: crop.x },
@@ -551,8 +556,8 @@ export function ScanPage() {
                   { label: 'H', value: crop.height },
                 ].map(({ label, value }) => (
                   <div key={label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '4px' }}>{label}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
                       {value}px
                     </div>
                   </div>
@@ -560,7 +565,7 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
               <Button variant="ghost" size="lg" onClick={() => setPhase('import')}>
                 {t('common.back')}
               </Button>
@@ -578,7 +583,7 @@ export function ScanPage() {
 
         {/* ── Settings Phase (simple: mode + depth) ─────────────────── */}
         {phase === 'settings' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', flex: 1, overflow: 'auto' }}>
             <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.settings.title')}
             </h2>
@@ -780,9 +785,9 @@ export function ScanPage() {
 
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h1 style={{ color: colors.text1, fontSize: '20px', fontWeight: 600, margin: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
+              <h1 style={{ color: colors.text1, fontSize: '18px', fontWeight: 600, margin: 0 }}>
                 {t('v2.viewer.title')}
               </h1>
               <div style={{ display: 'flex', gap: '8px' }}>
