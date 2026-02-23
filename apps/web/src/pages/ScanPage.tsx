@@ -10,7 +10,7 @@
  */
 
 import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, colors } from '@echos/ui';
+import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, StepIndicator, colors } from '@echos/ui';
 import {
   parseGpx,
   createSyncContext,
@@ -18,7 +18,6 @@ import {
   extractFrameImageData,
   preprocessFrame,
   projectFramesSpatial,
-  buildInstrumentVolume,
   createEmptyVolume,
   normalizeVolume,
   estimateVolumeMemoryMB,
@@ -44,6 +43,18 @@ import { VolumeViewer } from '../components/VolumeViewer.js';
 
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
 
+const PIPELINE_STEPS: { label: string; key: ScanPhase }[] = [
+  { label: 'Importer', key: 'import' },
+  { label: 'Recadrer', key: 'crop' },
+  { label: 'Configurer', key: 'settings' },
+  { label: 'Traitement', key: 'processing' },
+  { label: 'Visualiser', key: 'viewer' },
+];
+
+function phaseToIndex(phase: ScanPhase): number {
+  return PIPELINE_STEPS.findIndex((s) => s.key === phase);
+}
+
 export function ScanPage() {
   const { state, dispatch } = useAppState();
   const { t } = useTranslation();
@@ -56,7 +67,7 @@ export function ScanPage() {
   const [beam, setBeam] = useState<BeamSettings>({ ...DEFAULT_BEAM });
   const [grid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 640, height: 480 });
-  const [fpsExtraction] = useState(1);
+  const [fpsExtraction] = useState(4);
 
   // Auto-depth
   const [autoDepth, setAutoDepth] = useState(false);
@@ -75,6 +86,9 @@ export function ScanPage() {
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
+  const [instrumentFrames, setInstrumentFrames] = useState<Array<{
+    index: number; timeS: number; intensity: Float32Array; width: number; height: number;
+  }> | null>(null);
   const abortRef = useRef(false);
 
   // ─── File handlers ────────────────────────────────────────────────────
@@ -145,8 +159,9 @@ export function ScanPage() {
       if (!canvas) { URL.revokeObjectURL(url); return; }
 
       const container = containerRef.current;
-      const maxW = container ? container.clientWidth - 40 : 800;
-      const s = Math.min(1, maxW / video.videoWidth);
+      const maxW = container ? container.clientWidth - 20 : 800;
+      const maxH = container ? container.clientHeight - 10 : 600;
+      const s = Math.min(1, maxW / video.videoWidth, maxH / video.videoHeight);
       setScale(s);
 
       canvas.width = video.videoWidth * s;
@@ -343,29 +358,23 @@ export function ScanPage() {
     URL.revokeObjectURL(video.src);
     if (abortRef.current) return;
 
-    setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
-
     let normalizedData: Float32Array;
     let dims: [number, number, number];
     let extent: [number, number, number];
 
     if (viewMode === 'instrument') {
-      const result = buildInstrumentVolume(
-        preprocessedFrames, beam, grid,
-        (current, total) => {
-          setProgress({
-            stage: 'projecting',
-            progress: current / total,
-            message: `${t('v2.pipeline.projecting')} ${current}/${total}`,
-            currentFrame: current,
-            totalFrames: total,
-          });
-        },
-      );
-      normalizedData = result.normalized;
-      dims = result.dimensions;
-      extent = result.extent;
+      // Mode A: store preprocessed frames for live temporal playback
+      // No static volume baking — the viewer will project frames in real-time
+      setInstrumentFrames(preprocessedFrames);
+      normalizedData = new Float32Array(0);
+      dims = [grid.resX, grid.resY, grid.resZ];
+      extent = [1, 1, 1];
+
+      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     } else {
+      setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+      setInstrumentFrames(null);
+
       const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
       const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
       const volume = createEmptyVolume(grid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
@@ -386,9 +395,10 @@ export function ScanPage() {
       normalizedData = normalizeVolume(volume);
       dims = volume.dimensions;
       extent = volume.extent;
+
+      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     }
 
-    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     setVolumeData(normalizedData);
     setVolumeDims(dims);
     setVolumeExtent(extent);
@@ -431,12 +441,28 @@ export function ScanPage() {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)' }}>
-      <div style={{ padding: 'clamp(24px, 3vw, 48px) var(--content-gutter)' }}>
+    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)', display: 'flex', flexDirection: 'column' }}>
+      {/* Pipeline Step Indicator */}
+      <div style={{ padding: '12px var(--content-gutter) 0', flexShrink: 0 }}>
+        <StepIndicator
+          steps={PIPELINE_STEPS.map((s) => ({ label: s.label, key: s.key }))}
+          currentStep={phaseToIndex(phase)}
+          onStepClick={(idx: number) => {
+            const target = PIPELINE_STEPS[idx];
+            if (!target) return;
+            // Allow navigating back to completed steps
+            if (idx < phaseToIndex(phase)) {
+              setPhase(target.key);
+            }
+          }}
+        />
+      </div>
+
+      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', flex: 1, overflow: 'auto' }}>
             <h1 style={{ color: colors.text1, fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.scan.title')}
             </h1>
@@ -496,22 +522,25 @@ export function ScanPage() {
 
         {/* ── Crop Phase (V1-style visual crop) ─────────────────────── */}
         {phase === 'crop' && (
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
+          <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px', flexShrink: 0 }}>
               {t('crop.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6, maxWidth: '640px' }}>
+            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.4, maxWidth: '640px', flexShrink: 0 }}>
               {t('crop.desc')}
             </p>
 
-            <GlassPanel style={{ padding: '20px', marginBottom: '20px' }}>
+            <GlassPanel style={{ padding: '12px', marginBottom: '12px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div
                 ref={containerRef}
                 style={{
                   position: 'relative',
                   display: 'flex',
                   justifyContent: 'center',
+                  alignItems: 'center',
                   cursor: 'crosshair',
+                  flex: 1,
+                  overflow: 'hidden',
                 }}
               >
                 <canvas
@@ -520,7 +549,7 @@ export function ScanPage() {
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  style={{ borderRadius: '8px', maxWidth: '100%' }}
+                  style={{ borderRadius: '8px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                 />
                 {!frameReady && (
                   <div style={{
@@ -539,10 +568,11 @@ export function ScanPage() {
 
               {/* Crop coordinates */}
               <div style={{
-                marginTop: '16px',
+                marginTop: '8px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '12px',
+                gap: '8px',
+                flexShrink: 0,
               }}>
                 {[
                   { label: 'X', value: crop.x },
@@ -551,8 +581,8 @@ export function ScanPage() {
                   { label: 'H', value: crop.height },
                 ].map(({ label, value }) => (
                   <div key={label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '4px' }}>{label}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
                       {value}px
                     </div>
                   </div>
@@ -560,7 +590,7 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
               <Button variant="ghost" size="lg" onClick={() => setPhase('import')}>
                 {t('common.back')}
               </Button>
@@ -578,7 +608,7 @@ export function ScanPage() {
 
         {/* ── Settings Phase (simple: mode + depth) ─────────────────── */}
         {phase === 'settings' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', flex: 1, overflow: 'auto' }}>
             <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.settings.title')}
             </h2>
@@ -780,9 +810,9 @@ export function ScanPage() {
 
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h1 style={{ color: colors.text1, fontSize: '20px', fontWeight: 600, margin: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
+              <h1 style={{ color: colors.text1, fontSize: '18px', fontWeight: 600, margin: 0 }}>
                 {t('v2.viewer.title')}
               </h1>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -804,6 +834,9 @@ export function ScanPage() {
               dimensions={volumeDims}
               extent={volumeExtent}
               mode={viewMode}
+              frames={instrumentFrames ?? undefined}
+              beam={beam}
+              grid={grid}
             />
           </div>
         )}

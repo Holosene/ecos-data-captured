@@ -6,19 +6,21 @@
  *
  * Supports:
  *   - 3D Float32/Half-float texture upload
- *   - Single-pass front-to-back ray accumulation
+ *   - Single-pass front-to-back ray accumulation with gradient lighting
  *   - Transfer function LUT
  *   - Real-time interactive controls
  *   - Beam wireframe overlay
- *   - Dynamic resolution scaling
+ *   - Camera presets (horizontal, vertical section, free)
+ *   - Depth-based fog and falloff
  */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { RendererSettings, ChromaticMode } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
-import { volumeVertexShader, volumeFragmentShader } from './shaders.js';
 import { generateLUT } from './transfer-function.js';
+
+export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
 export class VolumeRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -31,12 +33,15 @@ export class VolumeRenderer {
   private volumeMesh: THREE.Mesh | null = null;
   private material: THREE.RawShaderMaterial | null = null;
   private beamGroup: THREE.Group;
+  private gridHelper: THREE.GridHelper;
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
+  private currentPreset: CameraPreset = 'frontal';
+  private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
   constructor(container: HTMLElement, initialSettings?: Partial<RendererSettings>) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
@@ -49,11 +54,14 @@ export class VolumeRenderer {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x0a0a0f, 1);
+    this.renderer.setClearColor(0x080810, 1);
     container.appendChild(this.renderer.domElement);
 
     // Scene
     this.scene = new THREE.Scene();
+
+    // Fog (distance-based)
+    this.scene.fog = new THREE.FogExp2(0x080810, 0.25);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(
@@ -62,8 +70,6 @@ export class VolumeRenderer {
       0.01,
       100,
     );
-    this.camera.position.set(2, 1.5, 2);
-    this.camera.lookAt(0, 0, 0);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -71,7 +77,7 @@ export class VolumeRenderer {
     this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.8;
 
-    // Transfer function texture (1D: 256×1 RGBA)
+    // Transfer function texture (1D: 256x1 RGBA)
     const lutData = generateLUT(this.settings.chromaticMode);
     this.tfTexture = new THREE.DataTexture(
       lutData,
@@ -90,14 +96,21 @@ export class VolumeRenderer {
     this.scene.add(this.beamGroup);
 
     // Axes helper (subtle)
-    const axes = new THREE.AxesHelper(0.3);
+    const axes = new THREE.AxesHelper(0.2);
     axes.position.set(-0.6, -0.6, -0.6);
+    (axes.material as THREE.Material).opacity = 0.4;
+    (axes.material as THREE.Material).transparent = true;
     this.scene.add(axes);
 
-    // Grid helper
-    const grid = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
-    grid.position.y = -0.5;
-    this.scene.add(grid);
+    // Grid helper — reduced opacity, thinner visual
+    this.gridHelper = new THREE.GridHelper(2, 10, 0x181830, 0x0e0e22);
+    this.gridHelper.position.y = -0.5;
+    (this.gridHelper.material as THREE.Material).opacity = 0.35;
+    (this.gridHelper.material as THREE.Material).transparent = true;
+    this.scene.add(this.gridHelper);
+
+    // Default camera: frontal 2D view (surface top, ground bottom)
+    this.setCameraPreset('frontal');
 
     // Start render loop
     this.animate();
@@ -107,11 +120,60 @@ export class VolumeRenderer {
     ro.observe(container);
   }
 
+  // ─── Camera Presets ─────────────────────────────────────────────────────
+
+  setCameraPreset(preset: CameraPreset): void {
+    this.currentPreset = preset;
+    const s = this.volumeScale;
+    const maxDim = Math.max(s.x, s.y, s.z) || 1;
+
+    switch (preset) {
+      case 'frontal': {
+        // Frontal 2D view — looking straight at the volume from the front
+        // Surface at top, ground at bottom (depth = -Y in world)
+        const dist = maxDim * 2.5;
+        this.camera.position.set(0, 0, dist);
+        this.camera.up.set(0, 1, 0);
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
+      case 'horizontal': {
+        // Horizontal (terrain-like), ~25° down tilt
+        const dist = maxDim * 2.2;
+        const angle25 = (25 * Math.PI) / 180;
+        this.camera.position.set(
+          dist * 0.3,
+          dist * Math.sin(angle25),
+          dist * Math.cos(angle25),
+        );
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
+      case 'vertical': {
+        // Vertical cross-section (looking from the side)
+        const dist = maxDim * 2.5;
+        this.camera.position.set(dist, 0, 0);
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
+      case 'free': {
+        // 3/4 view (classic)
+        const dist = maxDim * 2.0;
+        this.camera.position.set(dist, dist * 0.7, dist);
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
+    }
+
+    this.controls.update();
+  }
+
+  getCameraPreset(): CameraPreset {
+    return this.currentPreset;
+  }
+
   // ─── Volume data upload ─────────────────────────────────────────────────
 
-  /**
-   * Upload a normalized Float32Array volume to GPU as a 3D texture.
-   */
   uploadVolume(
     data: Float32Array,
     dimensions: [number, number, number],
@@ -121,7 +183,6 @@ export class VolumeRenderer {
     this.extent = extent;
     const [dimX, dimY, dimZ] = dimensions;
 
-    // Create 3D texture
     if (this.volumeTexture) {
       this.volumeTexture.dispose();
     }
@@ -136,8 +197,18 @@ export class VolumeRenderer {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
-    // Create/update volume mesh
     this.createVolumeMesh();
+  }
+
+  /**
+   * Get the current volume data dimensions for slice extraction.
+   */
+  getVolumeDimensions(): [number, number, number] {
+    return [...this.dimensions];
+  }
+
+  getVolumeExtent(): [number, number, number] {
+    return [...this.extent];
   }
 
   private createVolumeMesh(): void {
@@ -146,17 +217,16 @@ export class VolumeRenderer {
       this.volumeMesh.geometry.dispose();
     }
 
-    // Normalized scale
     const maxExtent = Math.max(...this.extent);
     const scale = new THREE.Vector3(
       this.extent[0] / maxExtent,
       this.extent[1] / maxExtent,
       this.extent[2] / maxExtent,
     );
+    this.volumeScale = scale;
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 
-    // Unit cube geometry [-1, 1]³
     const geometry = new THREE.BoxGeometry(2, 2, 2);
 
     this.material = new THREE.RawShaderMaterial({
@@ -178,7 +248,7 @@ export class VolumeRenderer {
         uStepCount: { value: this.settings.stepCount },
         uGhostEnhancement: { value: this.settings.ghostEnhancement },
         uShowBeam: { value: this.settings.showBeam },
-        uBeamAngle: { value: 0.175 }, // ~10 degrees
+        uBeamAngle: { value: 0.175 },
         uTimeSlice: { value: 0.5 },
       },
       side: THREE.BackSide,
@@ -187,20 +257,18 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
+
+    // Rotate volume so depth (data Z) maps to -Y in world space:
+    // Surface at top, ground (deep water) at bottom
+    this.volumeMesh.rotation.x = -Math.PI / 2;
+
     this.scene.add(this.volumeMesh);
 
-    // Auto-fit camera
-    this.camera.position.set(
-      scale.x * 2,
-      scale.y * 1.2,
-      scale.z * 2,
-    );
-    this.controls.target.set(0, 0, 0);
-    this.controls.update();
+    // Re-apply current camera preset with new volume scale
+    this.setCameraPreset(this.currentPreset);
   }
 
   private buildVertexShader(): string {
-    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
     return `precision highp float;
 
 uniform mat4 modelViewMatrix;
@@ -221,7 +289,6 @@ void main() {
   }
 
   private buildFragmentShader(): string {
-    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
     return `precision highp float;
 precision highp sampler3D;
 
@@ -247,6 +314,8 @@ in vec3 vLocalPos;
 
 out vec4 fragColor;
 
+// ─── Ray-box intersection ───────────────────────────────────────────────
+
 vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   vec3 invDir = 1.0 / dir;
   vec3 t0 = (bmin - origin) * invDir;
@@ -257,6 +326,8 @@ vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   float tFar = min(min(tmax.x, tmax.y), tmax.z);
   return vec2(tNear, tFar);
 }
+
+// ─── Volume sampling with smoothing ─────────────────────────────────────
 
 float sampleVolume(vec3 pos) {
   float val = texture(uVolume, pos).r;
@@ -274,6 +345,18 @@ float sampleVolume(vec3 pos) {
   return val;
 }
 
+// ─── Gradient estimation (central differences) ──────────────────────────
+
+vec3 computeGradient(vec3 pos) {
+  vec3 ts = 1.0 / uVolumeSize;
+  float dx = sampleVolume(pos + vec3(ts.x, 0, 0)) - sampleVolume(pos - vec3(ts.x, 0, 0));
+  float dy = sampleVolume(pos + vec3(0, ts.y, 0)) - sampleVolume(pos - vec3(0, ts.y, 0));
+  float dz = sampleVolume(pos + vec3(0, 0, ts.z)) - sampleVolume(pos - vec3(0, 0, ts.z));
+  return vec3(dx, dy, dz) / (2.0 * ts);
+}
+
+// ─── Main ray march with gradient lighting & depth effects ──────────────
+
 void main() {
   vec3 rayOrigin = uCameraPos;
   vec3 rayDir = normalize(vWorldPos - uCameraPos);
@@ -285,8 +368,15 @@ void main() {
   if (tNear >= tFar) discard;
 
   float stepSize = (tFar - tNear) / float(uStepCount);
+  float rayLength = tFar - tNear;
   vec4 accum = vec4(0.0);
   float t = tNear;
+
+  // Light direction (slightly above and to the side for 3D feel)
+  vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
+
+  // Accumulation shadow: light transmission through volume
+  float shadowAccum = 0.0;
 
   for (int i = 0; i < 512; i++) {
     if (i >= uStepCount) break;
@@ -301,10 +391,42 @@ void main() {
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 
       if (density > uThreshold) {
-        float lookupVal = clamp(density, 0.0, 1.0);
+        // ── Gradient-based lighting ──
+        vec3 gradient = computeGradient(uvw);
+        float gradLen = length(gradient);
+        float lighting = 1.0;
+
+        if (gradLen > 0.001) {
+          vec3 normal = normalize(gradient);
+          // Diffuse (Lambertian)
+          float diffuse = max(dot(normal, lightDir), 0.0);
+          // Ambient + diffuse mix
+          lighting = 0.35 + 0.65 * diffuse;
+        }
+
+        // ── Accumulation shadow (light is progressively absorbed) ──
+        shadowAccum += density * stepSize * 2.0;
+        float shadow = exp(-shadowAccum * 0.5);
+        lighting *= mix(1.0, shadow, 0.6);
+
+        // ── Depth-based falloff ──
+        float depthT = (t - tNear) / rayLength;
+        float depthFalloff = 1.0 - depthT * 0.3;
+
+        // ── Logarithmic opacity curve (non-linear) ──
+        float logDensity = log(1.0 + density * 10.0) / log(11.0);
+        float lookupVal = clamp(logDensity, 0.0, 1.0);
+
         vec4 tfColor = texture(uTransferFunction, vec2(lookupVal, 0.5));
+
+        // Apply lighting and depth
+        tfColor.rgb *= lighting * depthFalloff;
+
+        // Non-linear opacity
         tfColor.a *= uOpacityScale * stepSize * 100.0;
         tfColor.a = clamp(tfColor.a, 0.0, 1.0);
+
+        // Front-to-back compositing
         tfColor.rgb *= tfColor.a;
         accum += (1.0 - accum.a) * tfColor;
       }
@@ -355,7 +477,6 @@ void main() {
   // ─── Beam wireframe ───────────────────────────────────────────────────
 
   updateBeamGeometry(halfAngleDeg: number, depthMax: number): void {
-    // Clear existing
     this.beamGroup.clear();
 
     if (!this.settings.showBeam) return;
@@ -364,7 +485,6 @@ void main() {
     const segments = 32;
     const radius = depthMax * Math.tan(halfAngle);
 
-    // Cone wireframe
     const coneGeom = new THREE.ConeGeometry(radius, depthMax, segments, 1, true);
     const wireframeMat = new THREE.MeshBasicMaterial({
       color: 0x4488ff,
@@ -374,13 +494,20 @@ void main() {
     });
 
     const cone = new THREE.Mesh(coneGeom, wireframeMat);
-    cone.rotation.x = Math.PI; // Point downward
+    cone.rotation.x = Math.PI;
     cone.position.y = -depthMax / 2;
     this.beamGroup.add(cone);
 
     if (this.material) {
       this.material.uniforms.uBeamAngle.value = halfAngle;
     }
+  }
+
+  // ─── Snapshot for export ──────────────────────────────────────────────
+
+  captureScreenshot(): string {
+    this.renderer.render(this.scene, this.camera);
+    return this.renderer.domElement.toDataURL('image/png');
   }
 
   // ─── Render loop ──────────────────────────────────────────────────────
@@ -391,13 +518,7 @@ void main() {
 
     this.controls.update();
 
-    // Update camera position uniform
     if (this.material) {
-      // Camera position in volume local space
-      const camPos = this.camera.position.clone();
-      if (this.volumeMesh) {
-        this.volumeMesh.worldToLocal(camPos);
-      }
       this.material.uniforms.uCameraPos.value.copy(this.camera.position);
     }
 

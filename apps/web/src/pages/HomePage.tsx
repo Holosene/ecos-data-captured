@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
@@ -6,11 +6,14 @@ import { useTheme } from '../theme/index.js';
 import { IconImage, IconChevronUp } from '../components/Icons.js';
 import { ImageLightbox } from '../components/ImageLightbox.js';
 import { DocsSection } from '../components/DocsSection.js';
+import { MapView } from '../components/MapView.js';
+import { useAppState } from '../store/app-state.js';
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, tArray } = useTranslation();
   const { theme } = useTheme();
+  const { state, dispatch } = useAppState();
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
@@ -85,7 +88,10 @@ export function HomePage() {
           <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
-          <Button variant="secondary" size="lg" onClick={() => navigate('/manifesto')}>
+          <Button variant="secondary" size="lg" onClick={() => {
+            const el = document.getElementById('manifesto-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}>
             {t('home.cta2')}
           </Button>
         </div>
@@ -300,6 +306,154 @@ export function HomePage() {
         }}
       >
         <DocsSection />
+      </section>
+
+      {/* Manifesto — inline section */}
+      <section
+        id="manifesto-section"
+        style={{
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: fonts.display,
+            fontVariationSettings: "'wght' 500",
+            fontSize: 'clamp(36px, 4vw, 56px)',
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+            color: colors.text1,
+            marginBottom: '4px',
+          }}
+        >
+          {t('manifesto.title')}
+        </h2>
+        <p
+          style={{
+            fontFamily: fonts.display,
+            fontVariationSettings: "'wght' 500",
+            fontSize: 'clamp(18px, 2vw, 24px)',
+            lineHeight: 1.2,
+            color: colors.accent,
+            marginBottom: '56px',
+          }}
+        >
+          {t('manifesto.subtitle')}
+        </p>
+
+        <div
+          className="manifesto-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '28px',
+          }}
+        >
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s1.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s1.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s1.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s2.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s2.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s2.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s3.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s3.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s3.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s4.title')}
+            </h3>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gap: '8px' }}>
+              {tArray('manifesto.s4.items').map((item, i) => (
+                <li key={i} style={{ display: 'flex', gap: '12px' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0 }}>-</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </GlassPanel>
+
+          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }}>
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s5.title')}
+            </h3>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
+              {tArray('manifesto.s5.items').map((item, i) => (
+                <li key={i} style={{ display: 'flex', gap: '12px' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0 }}>+</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </GlassPanel>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '56px' }}>
+          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+            {t('manifesto.cta')}
+          </Button>
+        </div>
+      </section>
+
+      {/* Map — full-width open source scans */}
+      <section
+        id="map-section"
+        style={{
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2
+            style={{
+              fontFamily: fonts.display,
+              fontVariationSettings: "'wght' 600",
+              fontSize: 'clamp(28px, 3vw, 36px)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              color: colors.text1,
+              margin: 0,
+            }}
+          >
+            {t('v2.map.title')}
+          </h2>
+          <span style={{ color: colors.text3, fontSize: '13px' }}>
+            {state.sessions.length} {t('v2.map.sessions')}
+          </span>
+        </div>
+
+        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden' }}>
+          <MapView
+            sessions={state.sessions}
+            selectedSessionId={state.activeSessionId}
+            onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
+            gpxTracks={state.gpxTracks}
+          />
+        </div>
+
+        {state.sessions.length === 0 && (
+          <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <p style={{ color: colors.text3, fontSize: '14px', marginBottom: '12px' }}>
+              {t('v2.map.noSessions')}
+            </p>
+            <Button variant="primary" size="sm" onClick={() => navigate('/scan')}>
+              {t('v2.map.newScan')}
+            </Button>
+          </div>
+        )}
       </section>
 
       {/* Scroll to top */}
