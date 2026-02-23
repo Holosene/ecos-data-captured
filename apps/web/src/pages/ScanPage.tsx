@@ -1,13 +1,15 @@
 /**
  * ECHOS V2 — Scan Page
  *
- * Streamlined V2 workflow:
- *   Import MP4 + GPX → Auto preprocessing → Choose mode → Volumetric viewer
+ * Simplified V2 workflow:
+ *   Import MP4 + GPX → Auto-analyze & Preview → Generate → Viewer (post-gen adjustments)
  *
- * Replaces the V1 multi-step wizard with a minimal-friction flow.
+ * Auto-intelligent mode: crop, preprocessing, and grid settings are auto-detected.
+ * Minimal pre-generation settings (mode + depth max only).
+ * Fine-tuning happens post-generation with the visual under the user's eyes.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, colors } from '@echos/ui';
 import {
   parseGpx,
@@ -20,6 +22,7 @@ import {
   createEmptyVolume,
   normalizeVolume,
   estimateVolumeMemoryMB,
+  autoDetectCropRegion,
 } from '@echos/core';
 import type {
   PreprocessingSettings,
@@ -27,7 +30,6 @@ import type {
   VolumeGridSettings,
   PipelineV2Progress,
   ViewMode,
-  GpxTrack,
   CropRect,
 } from '@echos/core';
 import {
@@ -39,7 +41,7 @@ import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
 
-type ScanPhase = 'import' | 'configure' | 'processing' | 'viewer';
+type ScanPhase = 'import' | 'preview' | 'processing' | 'viewer';
 
 export function ScanPage() {
   const { state, dispatch } = useAppState();
@@ -48,12 +50,17 @@ export function ScanPage() {
   const [phase, setPhase] = useState<ScanPhase>('import');
   const [viewMode, setViewMode] = useState<ViewMode>('spatial');
 
-  // Settings
-  const [preprocessing, setPreprocessing] = useState<PreprocessingSettings>({ ...DEFAULT_PREPROCESSING });
+  // Settings (auto-intelligent defaults)
+  const [preprocessing] = useState<PreprocessingSettings>({ ...DEFAULT_PREPROCESSING });
   const [beam, setBeam] = useState<BeamSettings>({ ...DEFAULT_BEAM });
-  const [grid, setGrid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
+  const [grid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 640, height: 480 });
-  const [fpsExtraction, setFpsExtraction] = useState(2);
+  const [fpsExtraction] = useState(1);
+
+  // Auto-detection state
+  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
+  const [autoAnalyzed, setAutoAnalyzed] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Processing state
   const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
@@ -109,7 +116,75 @@ export function ScanPage() {
   );
 
   const canConfigure = !!state.videoFile && !!state.gpxTrack;
-  const memEstimate = estimateVolumeMemoryMB(grid);
+
+  // ─── Auto-analyze video ─────────────────────────────────────────────
+
+  const analyzeVideo = useCallback(async () => {
+    if (!state.videoFile) return;
+
+    const url = URL.createObjectURL(state.videoFile);
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.muted = true;
+    video.src = url;
+
+    await new Promise<void>((r) => {
+      video.oncanplaythrough = () => r();
+    });
+
+    // Seek to 1/3 of the video for a representative frame
+    const seekTime = Math.min(video.duration / 3, 10);
+    video.currentTime = seekTime;
+    await new Promise<void>((r) => {
+      video.onseeked = () => r();
+    });
+
+    // Extract full frame for analysis
+    const fullCanvas = new OffscreenCanvas(video.videoWidth, video.videoHeight);
+    const fullCtx = fullCanvas.getContext('2d')!;
+    fullCtx.drawImage(video, 0, 0);
+    const fullImageData = fullCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);
+
+    // Auto-detect crop region
+    const detectedCrop = autoDetectCropRegion(fullImageData);
+    setCrop(detectedCrop);
+
+    // Generate preview image with crop overlay
+    const previewCanvas = document.createElement('canvas');
+    previewCanvas.width = video.videoWidth;
+    previewCanvas.height = video.videoHeight;
+    const previewCtx = previewCanvas.getContext('2d')!;
+
+    // Draw dimmed full frame
+    previewCtx.drawImage(video, 0, 0);
+    previewCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    previewCtx.fillRect(0, 0, video.videoWidth, video.videoHeight);
+
+    // Draw bright crop area
+    previewCtx.drawImage(
+      video,
+      detectedCrop.x, detectedCrop.y, detectedCrop.width, detectedCrop.height,
+      detectedCrop.x, detectedCrop.y, detectedCrop.width, detectedCrop.height,
+    );
+
+    // Draw crop border
+    previewCtx.strokeStyle = '#4488ff';
+    previewCtx.lineWidth = 3;
+    previewCtx.setLineDash([8, 4]);
+    previewCtx.strokeRect(detectedCrop.x, detectedCrop.y, detectedCrop.width, detectedCrop.height);
+
+    setPreviewFrame(previewCanvas.toDataURL('image/jpeg', 0.85));
+    setAutoAnalyzed(true);
+
+    URL.revokeObjectURL(url);
+  }, [state.videoFile]);
+
+  // Auto-analyze when entering preview phase
+  useEffect(() => {
+    if (phase === 'preview' && !autoAnalyzed) {
+      analyzeVideo();
+    }
+  }, [phase, autoAnalyzed, analyzeVideo]);
 
   // ─── V2 Processing pipeline ───────────────────────────────────────────
 
@@ -296,6 +371,8 @@ export function ScanPage() {
     setPhase('viewer');
   }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
 
+  const memEstimate = estimateVolumeMemoryMB(grid);
+
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
@@ -356,7 +433,10 @@ export function ScanPage() {
 
             {canConfigure && (
               <div style={{ textAlign: 'center' }}>
-                <Button variant="primary" size="lg" onClick={() => setPhase('configure')}>
+                <Button variant="primary" size="lg" onClick={() => {
+                  setAutoAnalyzed(false);
+                  setPhase('preview');
+                }}>
                   {t('v2.scan.configure')}
                 </Button>
               </div>
@@ -364,112 +444,208 @@ export function ScanPage() {
           </div>
         )}
 
-        {/* ── Configure Phase ───────────────────────────────────────── */}
-        {phase === 'configure' && (
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h1 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '24px' }}>
-              {t('v2.config.title')}
+        {/* ── Preview & Configure Phase (simplified) ─────────────── */}
+        {phase === 'preview' && (
+          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            <h1 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
+              {t('v2.preview.title')}
             </h1>
+            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.5 }}>
+              {t('v2.preview.desc')}
+            </p>
 
-            <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              {/* Preprocessing */}
-              <GlassPanel style={{ padding: '20px' }}>
-                <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>
-                  {t('v2.config.preprocessing')}
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <Slider label={t('v2.config.upscale')} value={preprocessing.upscaleFactor} min={1} max={4} step={0.5} onChange={(v) => setPreprocessing((p) => ({ ...p, upscaleFactor: v }))} />
-                  <Slider label={t('v2.config.denoise')} value={preprocessing.denoiseStrength} min={0} max={1} step={0.1} onChange={(v) => setPreprocessing((p) => ({ ...p, denoiseStrength: v }))} />
-                  <Slider label={t('v2.config.gamma')} value={preprocessing.gamma} min={0.3} max={2.0} step={0.05} onChange={(v) => setPreprocessing((p) => ({ ...p, gamma: v }))} />
-                  <Slider label={t('v2.config.gaussianSigma')} value={preprocessing.gaussianSigma} min={0} max={3} step={0.1} onChange={(v) => setPreprocessing((p) => ({ ...p, gaussianSigma: v }))} />
-                  <Slider label={t('v2.config.deblock')} value={preprocessing.deblockStrength} min={0} max={1} step={0.1} onChange={(v) => setPreprocessing((p) => ({ ...p, deblockStrength: v }))} />
+            {/* Auto-detected preview */}
+            {!autoAnalyzed ? (
+              <GlassPanel style={{ padding: '48px', textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{ color: colors.text2, fontSize: '15px' }}>
+                  {t('v2.preview.analyzing')}
+                </div>
+                <div style={{ marginTop: '16px' }}>
+                  <ProgressBar value={-1} />
                 </div>
               </GlassPanel>
+            ) : (
+              <>
+                {/* Preview image with auto-crop */}
+                <GlassPanel style={{ padding: '16px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ color: colors.text1, fontSize: '13px', fontWeight: 600, margin: 0 }}>
+                      {t('v2.preview.autoCrop')}
+                    </h3>
+                    <span style={{ color: colors.text3, fontSize: '12px' }}>
+                      {crop.width}×{crop.height}px
+                    </span>
+                  </div>
+                  {previewFrame && (
+                    <img
+                      src={previewFrame}
+                      alt="Preview"
+                      style={{
+                        width: '100%',
+                        borderRadius: '8px',
+                        border: `1px solid ${colors.border}`,
+                      }}
+                    />
+                  )}
+                  <p style={{ color: colors.text3, fontSize: '12px', marginTop: '8px', lineHeight: 1.5 }}>
+                    {t('v2.preview.autoCropHint')}
+                  </p>
+                </GlassPanel>
 
-              {/* Beam & Grid */}
-              <GlassPanel style={{ padding: '20px' }}>
-                <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>
-                  {t('v2.config.beamGrid')}
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <Slider label={t('v2.config.beamAngle')} value={beam.beamAngleDeg} min={5} max={60} step={1} onChange={(v) => setBeam((b) => ({ ...b, beamAngleDeg: v }))} />
-                  <Slider label={t('v2.config.depthMax')} value={beam.depthMaxM} min={1} max={100} step={1} onChange={(v) => setBeam((b) => ({ ...b, depthMaxM: v }))} />
-                  <Slider label={t('v2.config.falloff')} value={beam.lateralFalloffSigma} min={0.1} max={2.0} step={0.1} onChange={(v) => setBeam((b) => ({ ...b, lateralFalloffSigma: v }))} />
-                  <Slider label={t('v2.config.resX')} value={grid.resX} min={32} max={512} step={32} onChange={(v) => setGrid((g) => ({ ...g, resX: v }))} />
-                  <Slider label={t('v2.config.resY')} value={grid.resY} min={32} max={512} step={32} onChange={(v) => setGrid((g) => ({ ...g, resY: v }))} />
-                  <Slider label={t('v2.config.resZ')} value={grid.resZ} min={32} max={512} step={32} onChange={(v) => setGrid((g) => ({ ...g, resZ: v }))} />
-                  <Slider label={t('v2.config.fps')} value={fpsExtraction} min={1} max={5} step={1} onChange={setFpsExtraction} />
+                {/* Essential settings only */}
+                <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+                  {/* Mode selection */}
+                  <GlassPanel style={{ padding: '16px' }}>
+                    <h3 style={{ color: colors.text1, fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
+                      {t('v2.config.viewMode')}
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button
+                        onClick={() => setViewMode('instrument')}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '10px',
+                          border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
+                          background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{ color: colors.text1, fontWeight: 600, fontSize: '13px' }}>
+                          Mode A — {t('v2.mode.instrument')}
+                        </div>
+                        <div style={{ color: colors.text3, fontSize: '11px', marginTop: '2px' }}>
+                          {t('v2.mode.instrumentDesc')}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => setViewMode('spatial')}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '10px',
+                          border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
+                          background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <div style={{ color: colors.text1, fontWeight: 600, fontSize: '13px' }}>
+                          Mode B — {t('v2.mode.spatial')}
+                        </div>
+                        <div style={{ color: colors.text3, fontSize: '11px', marginTop: '2px' }}>
+                          {t('v2.mode.spatialDesc')}
+                        </div>
+                      </button>
+                    </div>
+                  </GlassPanel>
+
+                  {/* Depth max — the one essential manual setting */}
+                  <GlassPanel style={{ padding: '16px' }}>
+                    <h3 style={{ color: colors.text1, fontSize: '13px', fontWeight: 600, marginBottom: '12px' }}>
+                      {t('v2.preview.depthSetting')}
+                    </h3>
+                    <Slider
+                      label={t('v2.config.depthMax')}
+                      value={beam.depthMaxM}
+                      min={1}
+                      max={100}
+                      step={1}
+                      onChange={(v) => setBeam((b) => ({ ...b, depthMaxM: v }))}
+                    />
+                    <p style={{ color: colors.text3, fontSize: '11px', marginTop: '8px', lineHeight: 1.5 }}>
+                      {t('v2.preview.depthHint')}
+                    </p>
+
+                    {/* Summary info */}
+                    <div style={{
+                      marginTop: '16px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'rgba(68,136,255,0.08)',
+                      border: '1px solid rgba(68,136,255,0.15)',
+                    }}>
+                      <div style={{ fontSize: '12px', color: colors.text2, lineHeight: 1.7 }}>
+                        <div>{t('v2.preview.fps')}: {fpsExtraction} fps</div>
+                        <div>{t('v2.preview.frames')}: ~{Math.floor(state.videoDurationS * fpsExtraction)}</div>
+                        <div>{t('v2.preview.distance')}: {state.gpxTrack?.totalDistanceM.toFixed(0)}m</div>
+                        <div>{t('v2.config.memory')}: ~{memEstimate.toFixed(0)} MB</div>
+                      </div>
+                    </div>
+                  </GlassPanel>
                 </div>
 
-                {/* Memory estimate */}
-                <div style={{
-                  marginTop: '12px',
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  background: memEstimate > 512 ? 'rgba(255,80,80,0.1)' : 'rgba(68,136,255,0.1)',
-                  border: `1px solid ${memEstimate > 512 ? 'rgba(255,80,80,0.3)' : 'rgba(68,136,255,0.2)'}`,
-                  fontSize: '12px',
-                  color: memEstimate > 512 ? colors.error : colors.text2,
-                }}>
-                  {t('v2.config.memory')}: ~{memEstimate.toFixed(0)} MB
-                  ({grid.resX}×{grid.resY}×{grid.resZ})
+                {/* Advanced settings (collapsed by default) */}
+                <div style={{ marginBottom: '24px' }}>
+                  <button
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: colors.text3,
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      padding: '4px 0',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {showAdvanced ? '▼' : '▶'} {t('v2.preview.advanced')}
+                  </button>
+
+                  {showAdvanced && (
+                    <GlassPanel style={{ padding: '16px', marginTop: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <div>
+                          <h4 style={{ color: colors.text2, fontSize: '12px', fontWeight: 600, marginBottom: '10px' }}>
+                            {t('v2.config.beamGrid')}
+                          </h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <Slider label={t('v2.config.beamAngle')} value={beam.beamAngleDeg} min={5} max={60} step={1} onChange={(v) => setBeam((b) => ({ ...b, beamAngleDeg: v }))} />
+                            <Slider label={t('v2.config.falloff')} value={beam.lateralFalloffSigma} min={0.1} max={2.0} step={0.1} onChange={(v) => setBeam((b) => ({ ...b, lateralFalloffSigma: v }))} />
+                          </div>
+                        </div>
+                        <div>
+                          <h4 style={{ color: colors.text2, fontSize: '12px', fontWeight: 600, marginBottom: '10px' }}>
+                            {t('v2.preview.cropManual')}
+                          </h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                            {(['x', 'y', 'width', 'height'] as const).map((key) => (
+                              <div key={key}>
+                                <label style={{ fontSize: '11px', color: colors.text3 }}>{key.toUpperCase()}</label>
+                                <input
+                                  type="number"
+                                  value={crop[key]}
+                                  onChange={(e) => setCrop((c) => ({ ...c, [key]: parseInt(e.target.value) || 0 }))}
+                                  style={{
+                                    width: '100%',
+                                    padding: '6px 8px',
+                                    borderRadius: '6px',
+                                    border: `1px solid ${colors.border}`,
+                                    background: colors.surface,
+                                    color: colors.text1,
+                                    fontSize: '12px',
+                                    fontFamily: 'inherit',
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </GlassPanel>
+                  )}
                 </div>
-              </GlassPanel>
-            </div>
 
-            {/* View mode selection */}
-            <GlassPanel style={{ padding: '20px', marginBottom: '24px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '12px' }}>
-                {t('v2.config.viewMode')}
-              </h3>
-              <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button
-                  onClick={() => setViewMode('instrument')}
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
-                    background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode A — {t('v2.mode.instrument')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.instrumentDesc')}
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('spatial')}
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
-                    background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode B — {t('v2.mode.spatial')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.spatialDesc')}
-                  </div>
-                </button>
-              </div>
-            </GlassPanel>
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <Button variant="ghost" onClick={() => setPhase('import')}>
-                {t('common.back')}
-              </Button>
-              <Button variant="primary" size="lg" onClick={runPipeline}>
-                {t('v2.config.generate')}
-              </Button>
-            </div>
+                {/* Generate button */}
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <Button variant="ghost" onClick={() => setPhase('import')}>
+                    {t('common.back')}
+                  </Button>
+                  <Button variant="primary" size="lg" onClick={runPipeline}>
+                    {t('v2.config.generate')}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -501,7 +677,7 @@ export function ScanPage() {
                 variant="ghost"
                 onClick={() => {
                   abortRef.current = true;
-                  setPhase('configure');
+                  setPhase('preview');
                 }}
               >
                 {t('v2.pipeline.abort')}
@@ -518,12 +694,13 @@ export function ScanPage() {
                 {t('v2.viewer.title')}
               </h1>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" size="sm" onClick={() => setPhase('configure')}>
+                <Button variant="ghost" size="sm" onClick={() => setPhase('preview')}>
                   {t('v2.viewer.reconfigure')}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => {
                   setPhase('import');
                   setVolumeData(null);
+                  setAutoAnalyzed(false);
                 }}>
                   {t('v2.viewer.newScan')}
                 </Button>

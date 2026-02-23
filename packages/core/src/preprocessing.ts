@@ -206,6 +206,102 @@ function medianFilter3x3(
   return out;
 }
 
+// ─── Auto-crop detection ────────────────────────────────────────────────────
+
+/**
+ * Auto-detect the sonar display region from a video frame.
+ * Finds the content area by detecting dark/solid borders (status bars, UI chrome).
+ * Returns an optimized CropRect.
+ */
+export function autoDetectCropRegion(
+  imageData: ImageData,
+): { x: number; y: number; width: number; height: number } {
+  const { data, width, height } = imageData;
+
+  // Calculate row and column mean brightness
+  const rowMeans = new Float32Array(height);
+  const colMeans = new Float32Array(width);
+
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+    rowMeans[y] = sum / width;
+  }
+
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    for (let y = 0; y < height; y++) {
+      const i = (y * width + x) * 4;
+      sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+    colMeans[x] = sum / height;
+  }
+
+  // Also compute row variance (sonar area has more variance than solid UI)
+  const rowVariance = new Float32Array(height);
+  for (let y = 0; y < height; y++) {
+    const mean = rowMeans[y];
+    let variance = 0;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      const diff = brightness - mean;
+      variance += diff * diff;
+    }
+    rowVariance[y] = variance / width;
+  }
+
+  // Threshold: rows/cols with very low brightness or very low variance are borders
+  const brightnessThreshold = 12;
+  const varianceThreshold = 50;
+
+  let top = 0;
+  let bottom = height - 1;
+  let left = 0;
+  let right = width - 1;
+
+  // Find top: skip dark/uniform rows
+  while (top < height && (rowMeans[top] < brightnessThreshold || rowVariance[top] < varianceThreshold)) top++;
+  // Find bottom
+  while (bottom > top && (rowMeans[bottom] < brightnessThreshold || rowVariance[bottom] < varianceThreshold)) bottom--;
+  // Find left: skip dark columns
+  while (left < width && colMeans[left] < brightnessThreshold) left++;
+  // Find right
+  while (right > left && colMeans[right] < brightnessThreshold) right--;
+
+  // Safety: ensure minimum crop size (at least 25% of original)
+  const minW = Math.floor(width * 0.25);
+  const minH = Math.floor(height * 0.25);
+
+  if (right - left + 1 < minW || bottom - top + 1 < minH) {
+    // Fallback: use full frame with small margin
+    const margin = Math.floor(Math.min(width, height) * 0.02);
+    return {
+      x: margin,
+      y: margin,
+      width: width - margin * 2,
+      height: height - margin * 2,
+    };
+  }
+
+  // Small inward margin to exclude border artifacts
+  const margin = 2;
+  top = Math.min(top + margin, bottom);
+  bottom = Math.max(bottom - margin, top);
+  left = Math.min(left + margin, right);
+  right = Math.max(right - margin, left);
+
+  return {
+    x: left,
+    y: top,
+    width: right - left + 1,
+    height: bottom - top + 1,
+  };
+}
+
 // ─── Main preprocessing pipeline ────────────────────────────────────────────
 
 /**

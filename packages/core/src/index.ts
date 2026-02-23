@@ -74,6 +74,7 @@ export {
   extractFrameImageData,
   preprocessFrame,
   preprocessFrames,
+  autoDetectCropRegion,
 } from './preprocessing.js';
 
 // ─── V2 Conic Projection ───────────────────────────────────────────────────
