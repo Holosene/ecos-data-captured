@@ -416,11 +416,17 @@ export function ScanPage() {
       setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
     } else {
       setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
-      setInstrumentFrames(null);
+      // Store raw frames so VolumeViewer can build full-resolution slices
+      setInstrumentFrames(preprocessedFrames);
 
       const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
       const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-      const volume = createEmptyVolume(grid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
+
+      // Adaptive Y resolution: ~1 voxel per meter, clamped [256, 1024]
+      const adaptiveResY = Math.max(256, Math.min(1024, Math.round(track.totalDistanceM)));
+      const spatialGrid: VolumeGridSettings = { ...grid, resY: adaptiveResY };
+
+      const volume = createEmptyVolume(spatialGrid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
 
       projectFramesSpatial(
         preprocessedFrames, mappings, volume, beam,

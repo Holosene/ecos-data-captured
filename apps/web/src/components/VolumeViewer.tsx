@@ -184,16 +184,17 @@ export function VolumeViewer({
     }
   }, [volumeData, dimensions, extent, isTemporalMode]);
 
-  // Set slice data: full-frame volume for Mode A, static data for Mode B
+  // Set slice data: use full-frame volume (v1-style stacking) when frames are
+  // available (both Mode A and Mode B), fall back to projected volume otherwise.
   useEffect(() => {
-    if (isTemporalMode && fullSliceVolume) {
+    if (fullSliceVolume) {
       setSliceVolumeData(fullSliceVolume.data);
       setSliceDimensions(fullSliceVolume.dimensions);
-    } else if (!isTemporalMode && volumeData && volumeData.length > 0) {
+    } else if (volumeData && volumeData.length > 0) {
       setSliceVolumeData(volumeData);
       setSliceDimensions(dimensions);
     }
-  }, [isTemporalMode, fullSliceVolume, volumeData, dimensions]);
+  }, [fullSliceVolume, volumeData, dimensions]);
 
   // Pre-computed frame projection cache for smooth playback
   const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
