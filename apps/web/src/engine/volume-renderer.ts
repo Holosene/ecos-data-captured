@@ -119,34 +119,39 @@ export class VolumeRenderer {
     const s = this.volumeScale;
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
 
+    // Volume axes (no rotation): X=lateral, Y=time/distance, Z=depth
+    // Wide face = XZ (lateral × depth), viewed from Y axis
     switch (preset) {
       case 'frontal': {
+        // Frontal 2D: looking at the wide face (XZ) from the Y axis
         const dist = maxDim * 1.6;
-        this.camera.position.set(0, 0, dist);
-        this.camera.up.set(0, 1, 0);
+        this.camera.position.set(0, dist, 0);
+        this.camera.up.set(0, 0, -1); // depth (Z) points down
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'horizontal': {
+        // Slight tilt for 3D perspective on the wide face
         const dist = maxDim * 1.5;
-        const angle25 = (25 * Math.PI) / 180;
-        this.camera.position.set(
-          dist * 0.3,
-          dist * Math.sin(angle25),
-          dist * Math.cos(angle25),
-        );
+        this.camera.position.set(dist * 0.3, dist * 0.85, dist * 0.5);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'vertical': {
+        // Side view: looking along X axis to see YZ face (time × depth)
         const dist = maxDim * 1.6;
         this.camera.position.set(dist, 0, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'free': {
+        // Classic 3/4 view (same as original v1 auto-fit)
         const dist = maxDim * 1.2;
-        this.camera.position.set(dist, dist * 0.7, dist);
+        this.camera.position.set(
+          s.x * dist,
+          s.y * 0.7 * dist,
+          s.z * dist,
+        );
         this.controls.target.set(0, 0, 0);
         break;
       }
@@ -258,9 +263,7 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Rotate volume so depth (data Z) maps to -Y in world space
-    this.volumeMesh.rotation.x = Math.PI / 2;
-
+    // No rotation: X=lateral, Y=time, Z=depth (natural data layout)
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
 
