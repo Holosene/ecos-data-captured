@@ -390,6 +390,10 @@ export function ScanPage() {
     });
 
     // Result promise — resolved when worker finishes projection
+    // extractionDone prevents worker 'preprocessed' messages from fighting
+    // with the main-thread extraction progress (they'd make the bar jump back).
+    let extractionDone = false;
+
     const resultPromise = new Promise<{
       normalizedData: Float32Array;
       dims: [number, number, number];
@@ -400,13 +404,17 @@ export function ScanPage() {
         const msg = e.data;
 
         if (msg.type === 'preprocessed') {
-          setProgress({
-            stage: 'preprocessing',
-            progress: msg.count / totalFrames,
-            message: `${t('v2.pipeline.preprocessing')} ${msg.count}/${totalFrames}`,
-            currentFrame: msg.count,
-            totalFrames,
-          });
+          // Only show worker preprocessing progress AFTER extraction loop ends.
+          // During extraction, the loop itself drives the progress bar.
+          if (extractionDone) {
+            setProgress({
+              stage: 'preprocessing',
+              progress: msg.count / totalFrames,
+              message: `${t('v2.pipeline.preprocessing')} ${msg.count}/${totalFrames}`,
+              currentFrame: msg.count,
+              totalFrames,
+            });
+          }
         } else if (msg.type === 'stage' && msg.stage === 'projecting') {
           setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
         } else if (msg.type === 'projection-progress') {
@@ -452,6 +460,8 @@ export function ScanPage() {
     }
 
     URL.revokeObjectURL(video.src);
+    // Extraction loop finished — let worker progress messages through now
+    extractionDone = true;
 
     if (abortRef.current) {
       worker.terminate();
