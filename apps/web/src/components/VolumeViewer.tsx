@@ -12,7 +12,7 @@
  *   - Export panel (NRRD, PNG, CSV)
  */
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
@@ -40,6 +40,36 @@ interface VolumeViewerProps {
 }
 
 const WINDOW_SIZE = 12;
+
+// ─── Build a v1-style stacked volume from raw preprocessed frames ──────────
+// This gives full pixel resolution for 2D slice views instead of the
+// low-res conic projection grid (128×12×128).
+// Layout: data[z * dimY * dimX + y * dimX + x] where X=pixel col, Y=frame idx, Z=pixel row
+
+function buildSliceVolumeFromFrames(
+  frameList: PreprocessedFrame[],
+): { data: Float32Array; dimensions: [number, number, number] } | null {
+  if (!frameList || frameList.length === 0) return null;
+
+  const dimX = frameList[0].width;
+  const dimZ = frameList[0].height;
+  const dimY = frameList.length;
+
+  if (dimX === 0 || dimZ === 0) return null;
+
+  const data = new Float32Array(dimX * dimY * dimZ);
+
+  for (let y = 0; y < dimY; y++) {
+    const frame = frameList[y];
+    for (let z = 0; z < dimZ; z++) {
+      for (let x = 0; x < dimX; x++) {
+        data[z * dimY * dimX + y * dimX + x] = frame.intensity[z * dimX + x] ?? 0;
+      }
+    }
+  }
+
+  return { data, dimensions: [dimX, dimY, dimZ] };
+}
 
 // ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
 
@@ -113,7 +143,9 @@ export function VolumeViewer({
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
-  // Volume data for slices (either static or current temporal projection)
+  // Volume data for slices:
+  // - Mode A: built from raw frames at full pixel resolution (v1-style stacking)
+  // - Mode B: uses conic-projected data
   const [sliceVolumeData, setSliceVolumeData] = useState<Float32Array | null>(null);
   const [sliceDimensions, setSliceDimensions] = useState<[number, number, number]>([1, 1, 1]);
 
@@ -187,9 +219,19 @@ export function VolumeViewer({
       cache.set(currentFrame, result);
     }
 
+    // Upload conic-projected volume for 3D ray marching
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-    setSliceVolumeData(result.normalized);
-    setSliceDimensions(result.dimensions);
+
+    // Build full-resolution stacked volume from raw frames for 2D slices
+    const halfWin = Math.floor(WINDOW_SIZE / 2);
+    const startIdx = Math.max(0, currentFrame - halfWin);
+    const endIdx = Math.min(frames!.length - 1, currentFrame + halfWin);
+    const windowFrames = frames!.slice(startIdx, endIdx + 1);
+    const sliceResult = buildSliceVolumeFromFrames(windowFrames);
+    if (sliceResult) {
+      setSliceVolumeData(sliceResult.data);
+      setSliceDimensions(sliceResult.dimensions);
+    }
   }, [isTemporalMode, currentFrame, frames, beam, grid]);
 
   // Playback animation loop
