@@ -80,7 +80,7 @@ export function HomePage() {
           padding: 'clamp(48px, 8vw, 100px) var(--content-gutter) clamp(32px, 4vw, 64px)',
         }}
       >
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <img
             src={getBrandingForTheme(theme).texteTitle}
             alt="echos - donnees capturees"
@@ -94,7 +94,7 @@ export function HomePage() {
             color: colors.text3,
             maxWidth: '560px',
             lineHeight: 1.7,
-            marginBottom: '36px',
+            marginBottom: '48px',
           }}
         >
           {t('home.description')}

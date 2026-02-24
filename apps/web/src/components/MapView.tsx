@@ -61,6 +61,15 @@ export function MapView({
       .addAttribution('&copy; <a href="https://carto.com">CARTO</a>')
       .addTo(map);
 
+    // Enable scroll-wheel zoom only after user clicks on the map
+    map.on('click', () => {
+      map.scrollWheelZoom.enable();
+    });
+    // Disable again when mouse leaves the map
+    map.on('mouseout', () => {
+      map.scrollWheelZoom.disable();
+    });
+
     leafletMap.current = map;
 
     return () => {
