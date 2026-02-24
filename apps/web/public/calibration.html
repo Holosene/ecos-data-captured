@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ECHOS — Volume Calibration Tool</title>
+<title>ECHOS — Volume Calibration Tool v2</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0f; color: #e0e0e8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; overflow: hidden; display: flex; height: 100vh; }
@@ -32,12 +32,14 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
 .btn.save:hover { background: #338855; }
 
 #info { position: absolute; bottom: 10px; left: 10px; color: #666; font-size: 11px; }
-#coords { position: absolute; top: 10px; left: 10px; color: #888; font-size: 11px; line-height: 1.6; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 4px; }
+#coords { position: absolute; top: 10px; left: 10px; color: #888; font-size: 11px; line-height: 1.6; background: rgba(0,0,0,0.6); padding: 6px 10px; border-radius: 4px; pointer-events: none; }
+
+#legend { position: absolute; top: 10px; right: 360px; color: #aaa; font-size: 11px; line-height: 1.8; background: rgba(0,0,0,0.7); padding: 8px 12px; border-radius: 4px; pointer-events: none; border: 1px solid #2a2a3a; }
+#legend .leg-color { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
 
 .axis-map { display: grid; grid-template-columns: 80px 1fr 30px 1fr; gap: 4px; align-items: center; margin-bottom: 4px; }
 .axis-map span { font-size: 11px; color: #888; }
 .axis-map .arrow { text-align: center; color: #555; }
-
 .color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 </style>
 </head>
@@ -45,44 +47,50 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
 
 <div id="viewport">
   <div id="coords"></div>
-  <div id="info">Ctrl+S = télécharger config | Molette = zoom | Clic = rotation</div>
+  <div id="legend">
+    <div><span class="leg-color" style="background:#ff4444;"></span><strong>X = Lateral</strong> (largeur sonar)</div>
+    <div><span class="leg-color" style="background:#44ff44;"></span><strong>Y = Profondeur</strong> (surface → fond)</div>
+    <div><span class="leg-color" style="background:#4488ff;"></span><strong>Z = Track</strong> (distance parcourue)</div>
+    <div style="margin-top:4px; color:#666;">Les fleches montrent la direction +</div>
+  </div>
+  <div id="info">Ctrl+S = sauver | Molette = zoom | Clic gauche = rotation | Clic droit = pan</div>
 </div>
 
 <div id="panel">
   <div style="text-align:center; padding: 4px 0 8px; border-bottom: 1px solid #2a2a3a; margin-bottom: 4px;">
-    <strong style="color:#8866ff; font-size:13px;">ECHOS Calibration</strong>
+    <strong style="color:#8866ff; font-size:13px;">ECHOS Calibration v2</strong>
   </div>
 
   <!-- Position -->
   <div class="section">
     <h3>Position Volume</h3>
     <div class="row"><label>X</label><input type="range" id="posX" min="-2" max="2" step="0.01" value="0"><span class="val" id="posX_v">0</span></div>
-    <div class="row"><label>Y</label><input type="range" id="posY" min="-2" max="2" step="0.01" value="0"><span class="val" id="posY_v">0</span></div>
+    <div class="row"><label>Y</label><input type="range" id="posY" min="-2" max="2" step="0.01" value="0.12"><span class="val" id="posY_v">0.12</span></div>
     <div class="row"><label>Z</label><input type="range" id="posZ" min="-2" max="2" step="0.01" value="0"><span class="val" id="posZ_v">0</span></div>
   </div>
 
   <!-- Rotation -->
   <div class="section">
-    <h3>Rotation Volume (°)</h3>
-    <div class="row"><label>Rx</label><input type="range" id="rotX" min="-180" max="180" step="1" value="0"><span class="val" id="rotX_v">0</span></div>
-    <div class="row"><label>Ry</label><input type="range" id="rotY" min="-180" max="180" step="1" value="0"><span class="val" id="rotY_v">0</span></div>
+    <h3>Rotation Volume (deg)</h3>
+    <div class="row"><label>Rx</label><input type="range" id="rotX" min="-180" max="180" step="1" value="180"><span class="val" id="rotX_v">180</span></div>
+    <div class="row"><label>Ry</label><input type="range" id="rotY" min="-180" max="180" step="1" value="180"><span class="val" id="rotY_v">180</span></div>
     <div class="row"><label>Rz</label><input type="range" id="rotZ" min="-180" max="180" step="1" value="0"><span class="val" id="rotZ_v">0</span></div>
   </div>
 
   <!-- Scale / Aspect Ratio -->
   <div class="section">
     <h3>Proportions Volume</h3>
-    <div class="row"><label>Sx</label><input type="range" id="scaleX" min="0.1" max="3" step="0.01" value="0.5"><span class="val" id="scaleX_v">0.5</span></div>
-    <div class="row"><label>Sy</label><input type="range" id="scaleY" min="0.1" max="3" step="0.01" value="1.0"><span class="val" id="scaleY_v">1.0</span></div>
-    <div class="row"><label>Sz</label><input type="range" id="scaleZ" min="0.1" max="3" step="0.01" value="0.5"><span class="val" id="scaleZ_v">0.5</span></div>
-    <div style="font-size:10px; color:#666; margin-top:4px;">Simule extent: Sx=latéral, Sy=profondeur, Sz=track</div>
+    <div class="row"><label>Sx</label><input type="range" id="scaleX" min="0.1" max="3" step="0.01" value="0.65"><span class="val" id="scaleX_v">0.65</span></div>
+    <div class="row"><label>Sy</label><input type="range" id="scaleY" min="0.1" max="3" step="0.01" value="1.24"><span class="val" id="scaleY_v">1.24</span></div>
+    <div class="row"><label>Sz</label><input type="range" id="scaleZ" min="0.1" max="3" step="0.01" value="1.53"><span class="val" id="scaleZ_v">1.53</span></div>
+    <div style="font-size:10px; color:#666; margin-top:4px;">Sx=lateral, Sy=profondeur, Sz=track</div>
   </div>
 
   <!-- Axis Mapping -->
   <div class="section">
-    <h3>Mapping Axes Données → 3D</h3>
+    <h3>Mapping Axes Donnees → 3D</h3>
     <div class="axis-map">
-      <span><span class="color-dot" style="background:#ff4444;"></span> Latéral</span>
+      <span><span class="color-dot" style="background:#ff4444;"></span> Lateral</span>
       <select id="mapLateral"><option value="x" selected>X</option><option value="y">Y</option><option value="z">Z</option></select>
       <span class="arrow">→</span>
       <span id="mapLateral_out" style="color:#ff8888;">axe X</span>
@@ -94,7 +102,7 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
       <span id="mapDepth_out" style="color:#88ff88;">axe Y</span>
     </div>
     <div class="axis-map">
-      <span><span class="color-dot" style="background:#4488ff;"></span> Track/Frames</span>
+      <span><span class="color-dot" style="background:#4488ff;"></span> Track</span>
       <select id="mapTrack"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option></select>
       <span class="arrow">→</span>
       <span id="mapTrack_out" style="color:#88aaff;">axe Z</span>
@@ -103,7 +111,7 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
 
   <!-- Camera -->
   <div class="section">
-    <h3>Caméra</h3>
+    <h3>Camera</h3>
     <div class="row"><label>Dist</label><input type="range" id="camDist" min="0.5" max="5" step="0.05" value="1.6"><span class="val" id="camDist_v">1.6</span></div>
     <div class="row"><label>FOV</label><input type="range" id="camFov" min="20" max="90" step="1" value="50"><span class="val" id="camFov_v">50</span></div>
     <div class="row"><label>Near</label><input type="number" id="camNear" value="0.1" step="0.01" min="0.001"></div>
@@ -117,25 +125,25 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
 
   <!-- Scene -->
   <div class="section">
-    <h3>Scène</h3>
+    <h3>Scene</h3>
     <div class="row"><label>Grid</label><input type="range" id="gridY" min="-1.5" max="0.5" step="0.01" value="-0.5"><span class="val" id="gridY_v">-0.5</span></div>
-    <div class="row"><label>Axes</label><input type="range" id="axesSize" min="0" max="1" step="0.05" value="0.3"><span class="val" id="axesSize_v">0.3</span></div>
-    <div class="row"><label style="width:50px;">BG color</label><input type="color" id="bgColor" value="#0a0a0f"></div>
+    <div class="row"><label>Axes</label><input type="range" id="axesSize" min="0" max="2" step="0.05" value="0.6"><span class="val" id="axesSize_v">0.6</span></div>
+    <div class="row"><label style="width:50px;">BG</label><input type="color" id="bgColor" value="#0a0a0f"></div>
   </div>
 
   <!-- Actions -->
   <div class="section">
     <div class="btn-row">
-      <button class="btn save" id="btnSave" style="flex:1;">💾 Sauver Config (Ctrl+S)</button>
+      <button class="btn save" id="btnSave" style="flex:1;">Sauver Config (Ctrl+S)</button>
     </div>
     <div class="btn-row" style="margin-top:6px;">
-      <button class="btn" id="btnReset" style="flex:1;">↺ Reset</button>
-      <button class="btn" id="btnLoad" style="flex:1;">📂 Charger Config</button>
+      <button class="btn" id="btnReset" style="flex:1;">Reset</button>
+      <button class="btn" id="btnLoad" style="flex:1;">Charger Config</button>
     </div>
     <input type="file" id="fileInput" accept=".json" style="display:none;">
   </div>
 
-  <div id="configPreview" style="font-size:10px; color:#555; white-space:pre-wrap; max-height:120px; overflow-y:auto; margin-top:4px; padding: 4px; background:#0a0a0f; border-radius:4px; border:1px solid #1a1a2a;"></div>
+  <div id="configPreview" style="font-size:9px; color:#555; white-space:pre-wrap; max-height:100px; overflow-y:auto; margin-top:4px; padding: 4px; background:#0a0a0f; border-radius:4px; border:1px solid #1a1a2a;"></div>
 </div>
 
 <script type="importmap">
@@ -150,19 +158,20 @@ select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 
-// ─── State ───────────────────────────────────────────────────────────────
-const state = {
-  position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
-  scale: { x: 0.5, y: 1.0, z: 0.5 },
+// ─── Default state (= calibrated values) ─────────────────────────────────
+const DEFAULTS = {
+  position: { x: 0, y: 0.12, z: 0 },
+  rotation: { x: 180, y: 180, z: 0 },
+  scale: { x: 0.65, y: 1.24, z: 1.53 },
   axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
   camera: { dist: 1.6, fov: 50, near: 0.1, preset: 'frontal' },
   grid: { y: -0.5 },
-  axes: { size: 0.3 },
+  axes: { size: 0.6 },
   bgColor: '#0a0a0f',
 };
+
+const state = JSON.parse(JSON.stringify(DEFAULTS));
 
 // ─── Three.js Setup ──────────────────────────────────────────────────────
 const viewport = document.getElementById('viewport');
@@ -178,101 +187,202 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.rotateSpeed = 0.8;
 
-// ─── Volume Box (6 colored faces) ────────────────────────────────────────
-const faceColors = [
-  0xff4444, 0xff6666,  // +X, -X  (red = lateral)
-  0x44ff44, 0x66ff66,  // +Y, -Y  (green = depth)
-  0x4488ff, 0x6699ff,  // +Z, -Z  (blue = track)
-];
+// ─── Volume Group (rotated together) ─────────────────────────────────────
+const volumeGroup = new THREE.Group();
+scene.add(volumeGroup);
 
-function createVolumeMesh() {
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mats = faceColors.map((c, i) => new THREE.MeshBasicMaterial({
-    color: c,
-    transparent: true,
-    opacity: 0.35,
-    side: THREE.DoubleSide,
-  }));
-  return new THREE.Mesh(geo, mats);
+// ─── Gradient face textures ──────────────────────────────────────────────
+function makeGradientTexture(color1, color2, horizontal = true) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  const grad = horizontal
+    ? ctx.createLinearGradient(0, 0, 128, 0)
+    : ctx.createLinearGradient(0, 0, 0, 128);
+  grad.addColorStop(0, color1);
+  grad.addColorStop(1, color2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 128, 128);
+
+  // Grid lines for spatial reference
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const p = (i / 4) * 128;
+    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, 128); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(128, p); ctx.stroke();
+  }
+
+  return new THREE.CanvasTexture(canvas);
 }
 
-const volumeMesh = createVolumeMesh();
-scene.add(volumeMesh);
+// 6 faces: +X, -X, +Y, -Y, +Z, -Z
+// Red (lateral), Green (depth), Blue (track)
+const faceMats = [
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(255,68,68,0.6)', 'rgba(255,68,68,0.1)'), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // +X
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(255,68,68,0.1)', 'rgba(255,68,68,0.6)'), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // -X
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(68,255,68,0.6)', 'rgba(68,255,68,0.1)', false), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // +Y
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(68,255,68,0.1)', 'rgba(68,255,68,0.6)', false), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // -Y
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(68,136,255,0.6)', 'rgba(68,136,255,0.1)'), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // +Z
+  new THREE.MeshBasicMaterial({ map: makeGradientTexture('rgba(68,136,255,0.1)', 'rgba(68,136,255,0.6)'), transparent: true, side: THREE.DoubleSide, depthWrite: false }), // -Z
+];
 
-// Wireframe overlay
-const wireGeo = new THREE.BoxGeometry(1, 1, 1);
-const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-const wireframe = new THREE.LineSegments(new THREE.EdgesGeometry(wireGeo), wireMat);
-scene.add(wireframe);
+const volumeGeo = new THREE.BoxGeometry(1, 1, 1);
+const volumeMesh = new THREE.Mesh(volumeGeo, faceMats);
+volumeGroup.add(volumeMesh);
 
-// ─── Face Labels ─────────────────────────────────────────────────────────
-function makeLabel(text, color) {
+// Wireframe (bright edges)
+const wireframe = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+  new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 })
+);
+volumeGroup.add(wireframe);
+
+// ─── Internal cross-section planes ───────────────────────────────────────
+function makeInternalPlane(axis, color) {
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const mat = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.06,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  if (axis === 'x') mesh.rotation.y = Math.PI / 2;
+  if (axis === 'z') mesh.rotation.x = Math.PI / 2;
+  return mesh;
+}
+
+const midPlaneX = makeInternalPlane('x', 0xff4444);
+const midPlaneY = makeInternalPlane('y', 0x44ff44);
+const midPlaneZ = makeInternalPlane('z', 0x4488ff);
+volumeGroup.add(midPlaneX, midPlaneY, midPlaneZ);
+
+// ─── 3D Arrows (ArrowHelper) ────────────────────────────────────────────
+// These show direction INSIDE the volume
+const arrowLen = 0.4;
+const arrowHead = 0.08;
+const arrowThick = 0.02;
+const arrowX = new THREE.ArrowHelper(
+  new THREE.Vector3(1, 0, 0), new THREE.Vector3(-0.2, 0, 0),
+  arrowLen, 0xff4444, arrowHead, arrowThick * 2
+);
+const arrowY = new THREE.ArrowHelper(
+  new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -0.2, 0),
+  arrowLen, 0x44ff44, arrowHead, arrowThick * 2
+);
+const arrowZ = new THREE.ArrowHelper(
+  new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -0.2),
+  arrowLen, 0x4488ff, arrowHead, arrowThick * 2
+);
+volumeGroup.add(arrowX, arrowY, arrowZ);
+
+// ─── Sprite labels (HD, readable) ───────────────────────────────────────
+function makeSprite(text, color, fontSize = 28, bgAlpha = 0.7) {
   const canvas = document.createElement('canvas');
-  canvas.width = 128; canvas.height = 48;
+  canvas.width = 256; canvas.height = 64;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(0, 0, 128, 48);
-  ctx.font = 'bold 20px monospace';
+  ctx.fillStyle = `rgba(0,0,0,${bgAlpha})`;
+  const r = 8;
+  ctx.beginPath();
+  ctx.roundRect(2, 2, 252, 60, r);
+  ctx.fill();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = `bold ${fontSize}px monospace`;
   ctx.fillStyle = color;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(text, 64, 24);
+  ctx.fillText(text, 128, 34);
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.4, 0.15, 1);
+  sprite.scale.set(0.45, 0.12, 1);
   return sprite;
 }
 
-const labels = {
-  xp: makeLabel('+X lat', '#ff4444'),
-  xn: makeLabel('-X lat', '#ff6666'),
-  yp: makeLabel('+Y dep', '#44ff44'),
-  yn: makeLabel('-Y dep', '#66ff66'),
-  zp: makeLabel('+Z trk', '#4488ff'),
-  zn: makeLabel('-Z trk', '#6699ff'),
+// Face labels (data meaning)
+const faceLabels = {
+  xp: makeSprite('+X Lateral →', '#ff6666'),
+  xn: makeSprite('← -X Lateral', '#ff6666'),
+  yp: makeSprite('+Y Profondeur ↓', '#66ff66'),
+  yn: makeSprite('↑ -Y Surface', '#66ff66'),
+  zp: makeSprite('+Z Track →', '#6699ff'),
+  zn: makeSprite('← -Z Track', '#6699ff'),
 };
-Object.values(labels).forEach(l => scene.add(l));
+Object.values(faceLabels).forEach(l => scene.add(l));
 
-// ─── Grid & Axes ─────────────────────────────────────────────────────────
-const gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+// Arrow tip labels (axis letters, bigger)
+const arrowLabels = {
+  x: makeSprite('X', '#ff4444', 36, 0.0),
+  y: makeSprite('Y', '#44ff44', 36, 0.0),
+  z: makeSprite('Z', '#4488ff', 36, 0.0),
+};
+arrowLabels.x.scale.set(0.15, 0.06, 1);
+arrowLabels.y.scale.set(0.15, 0.06, 1);
+arrowLabels.z.scale.set(0.15, 0.06, 1);
+Object.values(arrowLabels).forEach(l => volumeGroup.add(l));
+
+// Corner labels (semantic)
+const cornerLabels = {
+  topFront: makeSprite('Surface', '#88ff88', 18, 0.5),
+  botFront: makeSprite('Fond', '#88ff88', 18, 0.5),
+  startLabel: makeSprite('Debut', '#88aaff', 18, 0.5),
+  endLabel: makeSprite('Fin', '#88aaff', 18, 0.5),
+  leftLabel: makeSprite('Gauche', '#ff8888', 18, 0.5),
+  rightLabel: makeSprite('Droite', '#ff8888', 18, 0.5),
+};
+Object.values(cornerLabels).forEach(l => { l.scale.set(0.3, 0.08, 1); scene.add(l); });
+
+// ─── Simulated echo dots inside volume ──────────────────────────────────
+const dotCount = 200;
+const dotPositions = new Float32Array(dotCount * 3);
+const dotColors = new Float32Array(dotCount * 3);
+for (let i = 0; i < dotCount; i++) {
+  // Cluster dots more toward center-bottom (simulating sonar echoes)
+  dotPositions[i * 3] = (Math.random() - 0.5) * 0.8;
+  dotPositions[i * 3 + 1] = (Math.random() - 0.5) * 0.8 - 0.1;
+  dotPositions[i * 3 + 2] = (Math.random() - 0.5) * 0.8;
+  // Color: depth-based (green top → yellow → red bottom)
+  const depth = (dotPositions[i * 3 + 1] + 0.5);
+  dotColors[i * 3] = 0.2 + depth * 0.6;
+  dotColors[i * 3 + 1] = 0.8 - depth * 0.5;
+  dotColors[i * 3 + 2] = 0.1;
+}
+const dotGeo = new THREE.BufferGeometry();
+dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotPositions, 3));
+dotGeo.setAttribute('color', new THREE.Float32BufferAttribute(dotColors, 3));
+const dotMat = new THREE.PointsMaterial({ size: 0.015, vertexColors: true, transparent: true, opacity: 0.5, depthWrite: false });
+const dots = new THREE.Points(dotGeo, dotMat);
+volumeGroup.add(dots);
+
+// ─── World Grid & Axes ──────────────────────────────────────────────────
+const gridHelper = new THREE.GridHelper(3, 15, 0x222244, 0x111133);
 scene.add(gridHelper);
 
-const axesHelper = new THREE.AxesHelper(0.3);
-axesHelper.position.set(-0.6, -0.6, -0.6);
-scene.add(axesHelper);
+// Big world arrows
+const worldArrowX = new THREE.ArrowHelper(new THREE.Vector3(1,0,0), new THREE.Vector3(0,0,0), 1.5, 0xff3333, 0.08, 0.04);
+const worldArrowY = new THREE.ArrowHelper(new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,0), 1.5, 0x33ff33, 0.08, 0.04);
+const worldArrowZ = new THREE.ArrowHelper(new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,0), 1.5, 0x3388ff, 0.08, 0.04);
+scene.add(worldArrowX, worldArrowY, worldArrowZ);
 
-// World axes labels
-const axisLabels = {
-  x: makeLabel('X', '#ff3333'),
-  y: makeLabel('Y', '#33ff33'),
-  z: makeLabel('Z', '#3388ff'),
+const worldLabels = {
+  x: makeSprite('World X', '#ff3333', 20, 0.6),
+  y: makeSprite('World Y', '#33ff33', 20, 0.6),
+  z: makeSprite('World Z', '#3388ff', 20, 0.6),
 };
-axisLabels.x.position.set(1.2, 0, 0); axisLabels.x.scale.set(0.2, 0.08, 1);
-axisLabels.y.position.set(0, 1.2, 0); axisLabels.y.scale.set(0.2, 0.08, 1);
-axisLabels.z.position.set(0, 0, 1.2); axisLabels.z.scale.set(0.2, 0.08, 1);
-Object.values(axisLabels).forEach(l => scene.add(l));
-
-// World axis lines
-const axisLineX = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(1.1,0,0)]),
-  new THREE.LineBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.3 })
-);
-const axisLineY = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,1.1,0)]),
-  new THREE.LineBasicMaterial({ color: 0x33ff33, transparent: true, opacity: 0.3 })
-);
-const axisLineZ = new THREE.Line(
-  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1.1)]),
-  new THREE.LineBasicMaterial({ color: 0x3388ff, transparent: true, opacity: 0.3 })
-);
-scene.add(axisLineX, axisLineY, axisLineZ);
+worldLabels.x.scale.set(0.3, 0.08, 1); worldLabels.x.position.set(1.7, 0, 0);
+worldLabels.y.scale.set(0.3, 0.08, 1); worldLabels.y.position.set(0, 1.7, 0);
+worldLabels.z.scale.set(0.3, 0.08, 1); worldLabels.z.position.set(0, 0, 1.7);
+Object.values(worldLabels).forEach(l => scene.add(l));
 
 // ─── Apply State ─────────────────────────────────────────────────────────
 function applyState() {
-  // Volume transform
-  volumeMesh.position.set(state.position.x, state.position.y, state.position.z);
-  volumeMesh.rotation.set(
+  // Volume group transform
+  volumeGroup.position.set(state.position.x, state.position.y, state.position.z);
+  volumeGroup.rotation.set(
     state.rotation.x * Math.PI / 180,
     state.rotation.y * Math.PI / 180,
     state.rotation.z * Math.PI / 180,
@@ -284,41 +394,59 @@ function applyState() {
   s[map.lateral] = state.scale.x;
   s[map.depth] = state.scale.y;
   s[map.track] = state.scale.z;
-  volumeMesh.scale.set(s.x, s.y, s.z);
+  volumeGroup.scale.set(s.x, s.y, s.z);
 
-  // Wireframe follows volume
-  wireframe.position.copy(volumeMesh.position);
-  wireframe.rotation.copy(volumeMesh.rotation);
-  wireframe.scale.copy(volumeMesh.scale);
+  // Update face labels positions (in world space, outside the volume)
+  volumeGroup.updateMatrixWorld(true);
+  const hs = new THREE.Vector3(s.x, s.y, s.z).multiplyScalar(0.5);
 
-  // Labels on faces
-  const hs = volumeMesh.scale.clone().multiplyScalar(0.5);
-  const p = volumeMesh.position;
-  labels.xp.position.set(p.x + hs.x + 0.05, p.y, p.z);
-  labels.xn.position.set(p.x - hs.x - 0.05, p.y, p.z);
-  labels.yp.position.set(p.x, p.y + hs.y + 0.05, p.z);
-  labels.yn.position.set(p.x, p.y - hs.y - 0.05, p.z);
-  labels.zp.position.set(p.x, p.y, p.z + hs.z + 0.05);
-  labels.zn.position.set(p.x, p.y, p.z - hs.z - 0.05);
+  function worldPos(localX, localY, localZ) {
+    const v = new THREE.Vector3(localX, localY, localZ);
+    volumeGroup.localToWorld(v);
+    return v;
+  }
 
-  // Update label text based on mapping
-  updateLabelText(labels.xp, '+' + axisNameFor('x'), colorForAxis('x'));
-  updateLabelText(labels.xn, '-' + axisNameFor('x'), colorForAxis('x'));
-  updateLabelText(labels.yp, '+' + axisNameFor('y'), colorForAxis('y'));
-  updateLabelText(labels.yn, '-' + axisNameFor('y'), colorForAxis('y'));
-  updateLabelText(labels.zp, '+' + axisNameFor('z'), colorForAxis('z'));
-  updateLabelText(labels.zn, '-' + axisNameFor('z'), colorForAxis('z'));
+  const lp = faceLabels;
+  lp.xp.position.copy(worldPos(hs.x + 0.08, 0, 0));
+  lp.xn.position.copy(worldPos(-hs.x - 0.08, 0, 0));
+  lp.yp.position.copy(worldPos(0, hs.y + 0.06, 0));
+  lp.yn.position.copy(worldPos(0, -hs.y - 0.06, 0));
+  lp.zp.position.copy(worldPos(0, 0, hs.z + 0.08));
+  lp.zn.position.copy(worldPos(0, 0, -hs.z - 0.08));
+
+  // Arrow tip labels follow arrows inside volume
+  arrowLabels.x.position.set(0.25, 0, 0);
+  arrowLabels.y.position.set(0, 0.25, 0);
+  arrowLabels.z.position.set(0, 0, 0.25);
+
+  // Corner semantic labels
+  cornerLabels.topFront.position.copy(worldPos(0, -hs.y - 0.02, hs.z + 0.05));
+  cornerLabels.botFront.position.copy(worldPos(0, hs.y + 0.02, hs.z + 0.05));
+  cornerLabels.startLabel.position.copy(worldPos(0, 0, -hs.z - 0.12));
+  cornerLabels.endLabel.position.copy(worldPos(0, 0, hs.z + 0.12));
+  cornerLabels.leftLabel.position.copy(worldPos(-hs.x - 0.12, 0, 0));
+  cornerLabels.rightLabel.position.copy(worldPos(hs.x + 0.12, 0, 0));
 
   // Grid
   gridHelper.position.y = state.grid.y;
 
-  // Axes
-  axesHelper.scale.setScalar(state.axes.size / 0.3 || 0.001);
-  axesHelper.visible = state.axes.size > 0;
+  // World axes scale
+  const as = state.axes.size;
+  worldArrowX.visible = as > 0;
+  worldArrowY.visible = as > 0;
+  worldArrowZ.visible = as > 0;
+  worldArrowX.setLength(as, as * 0.12, as * 0.06);
+  worldArrowY.setLength(as, as * 0.12, as * 0.06);
+  worldArrowZ.setLength(as, as * 0.12, as * 0.06);
+  worldLabels.x.position.set(as + 0.15, 0, 0);
+  worldLabels.y.position.set(0, as + 0.15, 0);
+  worldLabels.z.position.set(0, 0, as + 0.15);
+  worldLabels.x.visible = as > 0;
+  worldLabels.y.visible = as > 0;
+  worldLabels.z.visible = as > 0;
 
   // Background
-  const bg = parseInt(state.bgColor.replace('#', ''), 16);
-  renderer.setClearColor(bg, 1);
+  renderer.setClearColor(parseInt(state.bgColor.replace('#', ''), 16), 1);
 
   // Camera
   camera.fov = state.camera.fov;
@@ -326,44 +454,14 @@ function applyState() {
   camera.updateProjectionMatrix();
 
   updateConfigPreview();
-  updateCoordsDisplay();
-}
-
-function axisNameFor(worldAxis) {
-  const m = state.axisMapping;
-  if (m.lateral === worldAxis) return 'Lat';
-  if (m.depth === worldAxis) return 'Dep';
-  if (m.track === worldAxis) return 'Trk';
-  return '?';
-}
-
-function colorForAxis(worldAxis) {
-  const m = state.axisMapping;
-  if (m.lateral === worldAxis) return '#ff4444';
-  if (m.depth === worldAxis) return '#44ff44';
-  if (m.track === worldAxis) return '#4488ff';
-  return '#888888';
-}
-
-function updateLabelText(sprite, text, color) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128; canvas.height = 48;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillRect(0, 0, 128, 48);
-  ctx.font = 'bold 20px monospace';
-  ctx.fillStyle = color;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, 64, 24);
-  sprite.material.map.image = canvas;
-  sprite.material.map.needsUpdate = true;
 }
 
 // ─── Camera Presets ──────────────────────────────────────────────────────
 function setCameraPreset(preset) {
   state.camera.preset = preset;
-  const maxDim = Math.max(volumeMesh.scale.x, volumeMesh.scale.y, volumeMesh.scale.z) || 1;
+  const maxDim = Math.max(
+    volumeGroup.scale.x, volumeGroup.scale.y, volumeGroup.scale.z
+  ) || 1;
   const d = state.camera.dist * maxDim;
 
   switch (preset) {
@@ -388,12 +486,8 @@ function setCameraPreset(preset) {
       break;
   }
   controls.update();
-  updatePresetButtons();
-}
-
-function updatePresetButtons() {
   document.querySelectorAll('[data-preset]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.preset === state.camera.preset);
+    btn.classList.toggle('active', btn.dataset.preset === preset);
   });
 }
 
@@ -414,25 +508,23 @@ function bindSlider(id, getter, setter) {
 function bindNumber(id, getter, setter) {
   const el = document.getElementById(id);
   el.value = getter();
-  el.addEventListener('input', () => {
-    setter(parseFloat(el.value) || 0);
-    applyState();
-  });
+  el.addEventListener('input', () => { setter(parseFloat(el.value) || 0); applyState(); });
 }
 
 function bindSelect(id, getter, setter) {
   const el = document.getElementById(id);
   el.value = getter();
-  el.addEventListener('change', () => {
-    setter(el.value);
-    updateMappingLabels();
-    applyState();
-  });
+  el.addEventListener('change', () => { setter(el.value); updateMappingLabels(); applyState(); });
 }
 
 function updateMappingLabels() {
   const names = { x: 'axe X', y: 'axe Y', z: 'axe Z' };
   const colors = { x: '#ff8888', y: '#88ff88', z: '#88aaff' };
+  ['Lateral', 'Depth', 'Track'].forEach(key => {
+    const k = key.toLowerCase() === 'lateral' ? 'lateral' : key.toLowerCase() === 'depth' ? 'depth' : 'track';
+    const outEl = document.getElementById('map' + key.charAt(0).toUpperCase() + key.slice(1) + '_out')
+      || document.getElementById(`map${key}_out`);
+  });
   document.getElementById('mapLateral_out').textContent = names[state.axisMapping.lateral];
   document.getElementById('mapLateral_out').style.color = colors[state.axisMapping.lateral];
   document.getElementById('mapDepth_out').textContent = names[state.axisMapping.depth];
@@ -464,11 +556,7 @@ bindNumber('camNear', () => state.camera.near, v => state.camera.near = v);
 // Scene
 bindSlider('gridY', () => state.grid.y, v => state.grid.y = v);
 bindSlider('axesSize', () => state.axes.size, v => state.axes.size = v);
-
-document.getElementById('bgColor').addEventListener('input', (e) => {
-  state.bgColor = e.target.value;
-  applyState();
-});
+document.getElementById('bgColor').addEventListener('input', (e) => { state.bgColor = e.target.value; applyState(); });
 
 // Axis mapping
 bindSelect('mapLateral', () => state.axisMapping.lateral, v => state.axisMapping.lateral = v);
@@ -483,7 +571,7 @@ document.querySelectorAll('[data-preset]').forEach(btn => {
 // ─── Config Export/Import ────────────────────────────────────────────────
 function getConfig() {
   return {
-    _version: 'echos-calibration-v1',
+    _version: 'echos-calibration-v2',
     _timestamp: new Date().toISOString(),
     position: { ...state.position },
     rotation: { ...state.rotation },
@@ -510,15 +598,12 @@ function getConfig() {
 }
 
 function saveConfig() {
-  const config = getConfig();
-  const json = JSON.stringify(config, null, 2);
+  const json = JSON.stringify(getConfig(), null, 2);
   const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
+  a.href = URL.createObjectURL(blob);
   a.download = `echos-calibration-${Date.now()}.json`;
   a.click();
-  URL.revokeObjectURL(url);
 }
 
 function loadConfig(config) {
@@ -535,8 +620,6 @@ function loadConfig(config) {
   if (config.grid) Object.assign(state.grid, config.grid);
   if (config.axes) Object.assign(state.axes, config.axes);
   if (config.bgColor) state.bgColor = config.bgColor;
-
-  // Re-bind all UI elements
   refreshUI();
   updateMappingLabels();
   applyState();
@@ -565,34 +648,21 @@ function refreshUI() {
 }
 
 function updateConfigPreview() {
-  const config = getConfig();
-  document.getElementById('configPreview').textContent = JSON.stringify(config, null, 1);
+  document.getElementById('configPreview').textContent = JSON.stringify(getConfig(), null, 1);
 }
 
 function updateCoordsDisplay() {
-  const el = document.getElementById('coords');
-  el.innerHTML = [
+  document.getElementById('coords').innerHTML = [
     `cam: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`,
     `target: (${controls.target.x.toFixed(2)}, ${controls.target.y.toFixed(2)}, ${controls.target.z.toFixed(2)})`,
-    `vol: pos(${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}, ${state.position.z.toFixed(2)}) rot(${state.rotation.x}°, ${state.rotation.y}°, ${state.rotation.z}°)`,
-    `scale: (${volumeMesh.scale.x.toFixed(2)}, ${volumeMesh.scale.y.toFixed(2)}, ${volumeMesh.scale.z.toFixed(2)})`,
+    `vol: pos(${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}, ${state.position.z.toFixed(2)}) rot(${state.rotation.x}, ${state.rotation.y}, ${state.rotation.z})`,
+    `scale: (${volumeGroup.scale.x.toFixed(2)}, ${volumeGroup.scale.y.toFixed(2)}, ${volumeGroup.scale.z.toFixed(2)})`,
   ].join('<br>');
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────
 document.getElementById('btnSave').addEventListener('click', saveConfig);
-document.getElementById('btnReset').addEventListener('click', () => {
-  loadConfig({
-    position: { x: 0, y: 0, z: 0 },
-    rotation: { x: 0, y: 0, z: 0 },
-    scale: { x: 0.5, y: 1.0, z: 0.5 },
-    axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
-    camera: { dist: 1.6, fov: 50, near: 0.1, preset: 'frontal' },
-    grid: { y: -0.5 },
-    axes: { size: 0.3 },
-    bgColor: '#0a0a0f',
-  });
-});
+document.getElementById('btnReset').addEventListener('click', () => loadConfig(JSON.parse(JSON.stringify(DEFAULTS))));
 document.getElementById('btnLoad').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', (e) => {
   const file = e.target.files[0];
@@ -607,16 +677,12 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-    e.preventDefault();
-    saveConfig();
-  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveConfig(); }
 });
 
 // ─── Render Loop ─────────────────────────────────────────────────────────
 function resize() {
-  const w = viewport.clientWidth;
-  const h = viewport.clientHeight;
+  const w = viewport.clientWidth, h = viewport.clientHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);

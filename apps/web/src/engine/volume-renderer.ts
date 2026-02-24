@@ -258,7 +258,11 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // No rotation: natural data layout
+    // Calibrated orientation: flip X and Y so sonar data faces viewer correctly
+    // (Rx=180° mirrors depth/track, Ry=180° mirrors lateral — net: left-right + along-track inverted)
+    this.volumeMesh.rotation.set(Math.PI, Math.PI, 0);
+    this.volumeMesh.position.set(0, 0.12, 0);
+
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
 
