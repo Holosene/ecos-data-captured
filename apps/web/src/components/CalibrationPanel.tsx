@@ -248,6 +248,12 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
+      {/* Data Rotation — rotates the data inside the volume independently */}
+      <Section title="Data Rotation" />
+      <Row label="Dx" value={config.dataRotation?.x ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.x', v)} />
+      <Row label="Dy" value={config.dataRotation?.y ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.y', v)} />
+      <Row label="Dz" value={config.dataRotation?.z ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.z', v)} />
+
       {/* Camera */}
       <Section title="Camera" />
       <Row label="Dist" value={config.camera.dist} min={0.5} max={5} step={0.1} onChange={(v) => update('camera.dist', v)} />
