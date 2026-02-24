@@ -131,6 +131,9 @@ html {
   zoom: 0.9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Overlay scrollbar: no gutter reserved, scrollbar floats over content.
+     Prevents the dark scrollbar track from appearing next to the topbar. */
+  overflow-y: overlay;
 }
 
 body {
@@ -149,7 +152,16 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.7); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
-::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-button:start:decrement,
+::-webkit-scrollbar-button:end:increment,
+::-webkit-scrollbar-button:vertical:start:decrement,
+::-webkit-scrollbar-button:vertical:end:increment {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  appearance: none !important;
+}
 
 :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 ::selection { background: var(--c-accent); color: var(--c-white); }
