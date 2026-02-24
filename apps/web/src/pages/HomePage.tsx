@@ -485,7 +485,7 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Floating scan CTA — glass effect, appears when hero CTA scrolls out */}
+      {/* Floating scan CTA — accent bg + glass backdrop, appears when hero CTA scrolls out */}
       <button
         onClick={() => navigate('/scan')}
         className="floating-scan-cta"
@@ -494,30 +494,31 @@ export function HomePage() {
           bottom: '32px',
           right: '32px',
           zIndex: 90,
-          padding: '16px 32px',
-          fontSize: '16px',
+          padding: '20px 48px',
+          fontSize: '20px',
           fontWeight: 600,
+          letterSpacing: '-0.01em',
           fontFamily: 'inherit',
-          color: 'var(--c-accent)',
-          background: 'var(--topbar-bg)',
-          backdropFilter: 'blur(8px) saturate(1.4)',
-          WebkitBackdropFilter: 'blur(8px) saturate(1.4)',
-          border: '1px solid var(--topbar-border)',
+          color: '#FFFFFF',
+          background: 'var(--c-accent)',
+          backdropFilter: 'blur(12px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(12px) saturate(1.4)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
           borderRadius: 'var(--radius-lg)',
           cursor: 'pointer',
-          boxShadow: '0 1px 0 0 var(--topbar-glass-highlight), 0 8px 32px -4px rgba(0, 0, 0, 0.3)',
-          transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 200ms ease',
+          boxShadow: '0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4)',
+          transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 200ms ease, background 200ms ease',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.boxShadow = '0 1px 0 0 var(--topbar-glass-highlight), 0 12px 40px -4px rgba(0, 0, 0, 0.4)';
-          e.currentTarget.style.borderColor = 'var(--c-accent-muted)';
+          e.currentTarget.style.background = 'var(--c-accent-hover)';
+          e.currentTarget.style.boxShadow = '0 0 50px rgba(138, 124, 255, 0.4), 0 12px 40px -4px rgba(0, 0, 0, 0.5)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.boxShadow = '0 1px 0 0 var(--topbar-glass-highlight), 0 8px 32px -4px rgba(0, 0, 0, 0.3)';
-          e.currentTarget.style.borderColor = 'var(--topbar-border)';
+          e.currentTarget.style.background = 'var(--c-accent)';
+          e.currentTarget.style.boxShadow = '0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4)';
         }}
       >
         {t('home.cta')}

@@ -8,15 +8,15 @@
   --c-accent: #8A7CFF;
   --c-accent-hover: #9D91FF;
   --c-accent-muted: rgba(138, 124, 255, 0.15);
-  --c-surface: #1A1A1E;
-  --c-surface-hover: #222228;
-  --c-surface-raised: #252530;
-  --c-border: rgba(255, 255, 255, 0.08);
-  --c-border-hover: rgba(255, 255, 255, 0.15);
-  --c-border-active: rgba(255, 255, 255, 0.25);
+  --c-surface: #1A1A20;
+  --c-surface-hover: #23232C;
+  --c-surface-raised: #2A2A36;
+  --c-border: rgba(255, 255, 255, 0.10);
+  --c-border-hover: rgba(255, 255, 255, 0.18);
+  --c-border-active: rgba(255, 255, 255, 0.28);
   --c-text-1: #EAEAEA;
-  --c-text-2: #969696;
-  --c-text-3: rgba(234, 234, 234, 0.55);
+  --c-text-2: #A8A8B4;
+  --c-text-3: rgba(234, 234, 234, 0.62);
   --c-success: #34D399;
   --c-warning: #FBBF24;
   --c-error: #F87171;
@@ -49,11 +49,11 @@
 
   /* Topbar gradient — liquid glass */
   --topbar-bg:
-    radial-gradient(ellipse 260px 80px at 24px 100%, rgba(138, 124, 255, 0.07), transparent 70%),
-    radial-gradient(ellipse 180px 60px at 85% 0%, rgba(138, 124, 255, 0.04), transparent 70%),
-    linear-gradient(180deg, rgba(30, 30, 36, 0.82) 0%, rgba(22, 22, 28, 0.78) 100%);
-  --topbar-border: rgba(255, 255, 255, 0.08);
-  --topbar-glass-highlight: rgba(255, 255, 255, 0.04);
+    radial-gradient(ellipse 260px 80px at 24px 100%, rgba(138, 124, 255, 0.08), transparent 70%),
+    radial-gradient(ellipse 180px 60px at 85% 0%, rgba(138, 124, 255, 0.05), transparent 70%),
+    linear-gradient(180deg, rgba(28, 28, 36, 0.88) 0%, rgba(20, 20, 28, 0.84) 100%);
+  --topbar-border: rgba(255, 255, 255, 0.10);
+  --topbar-glass-highlight: rgba(255, 255, 255, 0.06);
 }
 
 /* Light mode overrides */
@@ -64,14 +64,14 @@
   --c-accent-hover: #5835E4;
   --c-accent-muted: rgba(66, 33, 206, 0.15);
   --c-surface: #FFFFFF;
-  --c-surface-hover: #F0F0F5;
-  --c-surface-raised: #E8E8F0;
-  --c-border: rgba(0, 0, 0, 0.08);
-  --c-border-hover: rgba(0, 0, 0, 0.15);
-  --c-border-active: rgba(0, 0, 0, 0.25);
+  --c-surface-hover: #F2F2F8;
+  --c-surface-raised: #EAEAF2;
+  --c-border: rgba(0, 0, 0, 0.10);
+  --c-border-hover: rgba(0, 0, 0, 0.18);
+  --c-border-active: rgba(0, 0, 0, 0.28);
   --c-text-1: #111111;
-  --c-text-2: rgba(17, 17, 17, 0.6);
-  --c-text-3: rgba(17, 17, 17, 0.65);
+  --c-text-2: rgba(17, 17, 17, 0.65);
+  --c-text-3: rgba(17, 17, 17, 0.52);
   --color-primary: #4221CE;
   --color-black: #FAFAFA;
   --color-white: #111111;
