@@ -9,6 +9,7 @@
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
 import type { CalibrationConfig } from '../engine/volume-renderer.js';
+import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
 
@@ -310,12 +311,23 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
   );
 }
 
-/** Load calibration from localStorage */
+/** Load calibration from localStorage, merging with defaults for new fields */
 export function loadCalibration(): CalibrationConfig | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as CalibrationConfig;
+    const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
+    // Deep-merge with defaults so new fields (e.g. dataRotation) are always present
+    return {
+      ...DEFAULT_CALIBRATION,
+      ...saved,
+      position: { ...DEFAULT_CALIBRATION.position, ...saved.position },
+      rotation: { ...DEFAULT_CALIBRATION.rotation, ...saved.rotation },
+      scale: { ...DEFAULT_CALIBRATION.scale, ...saved.scale },
+      axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...saved.axisMapping },
+      dataRotation: { ...DEFAULT_CALIBRATION.dataRotation, ...saved.dataRotation },
+      camera: { ...DEFAULT_CALIBRATION.camera, ...saved.camera },
+    };
   } catch {
     return null;
   }
