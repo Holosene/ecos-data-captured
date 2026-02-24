@@ -133,12 +133,14 @@ function SliceView({
   axis,
   label,
   preset,
+  height = 300,
 }: {
   volumeData: Float32Array;
   dimensions: [number, number, number];
   axis: 'x' | 'y' | 'z';
   label: string;
   preset: PresetName;
+  height?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimX, dimY, dimZ] = dimensions;
@@ -163,17 +165,19 @@ function SliceView({
           {AXIS_LABELS[axis].h} / {AXIS_LABELS[axis].v}
         </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: '100%',
-          height: 'auto',
-          borderRadius: '6px',
-          imageRendering: 'pixelated',
-          background: colors.black,
-          display: 'block',
-        }}
-      />
+      <div style={{ width: '100%', height: `${height}px`, background: colors.black, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            maxWidth: '100%',
+            maxHeight: '100%',
+            borderRadius: '6px',
+            imageRendering: 'pixelated',
+            objectFit: 'contain',
+            display: 'block',
+          }}
+        />
+      </div>
       <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <span style={{ fontSize: '12px', color: colors.text3, minWidth: '28px', fontVariantNumeric: 'tabular-nums' }}>
           {sliceIdx}
@@ -271,6 +275,7 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         axis="x"
         label="Longitudinale (YZ)"
         preset={preset}
+        height={400}
       />
     </div>
   );
