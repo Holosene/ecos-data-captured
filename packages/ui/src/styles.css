@@ -58,6 +58,7 @@
   /* CTA glow triplet (r, g, b) for box-shadow rgba() */
   --cta-glow: 138, 124, 255;
   --cta-bg: rgba(138, 124, 255, 0.75);
+  --cta-bg-soft: rgba(138, 124, 255, 0.55);
 }
 
 /* Light mode overrides */
@@ -93,6 +94,7 @@
 
   --cta-glow: 66, 33, 206;
   --cta-bg: rgba(66, 33, 206, 0.75);
+  --cta-bg-soft: rgba(66, 33, 206, 0.55);
 }
 [data-theme="light"] body {
   background: #FAFAFA;
