@@ -15,11 +15,6 @@ import {
   parseGpx,
   createSyncContext,
   mapAllFrames,
-  extractFrameImageData,
-  preprocessFrame,
-  projectFramesSpatial,
-  createEmptyVolume,
-  normalizeVolume,
   estimateVolumeMemoryMB,
   autoDetectCropRegion,
   autoDetectDepthMax,
@@ -341,6 +336,13 @@ export function ScanPage() {
 
   // ─── V2 Processing pipeline ───────────────────────────────────────────
 
+  // ─── Worker-based pipeline ─────────────────────────────────────────────────
+  // Preprocessing + projection run in a Web Worker, keeping the UI responsive.
+  // Main thread only does video seeking + ImageBitmap extraction (DOM-bound).
+  // Worker does: preprocessFrame × N + projectFramesSpatial + normalizeVolume.
+
+  const workerRef = useRef<Worker | null>(null);
+
   const runPipeline = useCallback(async () => {
     if (!state.videoFile || !state.gpxTrack) return;
     abortRef.current = false;
@@ -370,14 +372,62 @@ export function ScanPage() {
       totalFrames,
     });
 
-    const preprocessedFrames: Array<{
-      index: number;
-      timeS: number;
-      intensity: Float32Array;
-      width: number;
-      height: number;
-    }> = [];
+    // ── Launch pipeline worker ──
+    const worker = new Worker(
+      new URL('../workers/pipeline-worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+    workerRef.current = worker;
 
+    worker.postMessage({
+      type: 'init',
+      preprocessing,
+      beam,
+      grid,
+      viewMode,
+      trackTotalDistanceM: track.totalDistanceM,
+      mappings,
+    });
+
+    // Result promise — resolved when worker finishes projection
+    const resultPromise = new Promise<{
+      normalizedData: Float32Array;
+      dims: [number, number, number];
+      extent: [number, number, number];
+      frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
+    }>((resolve, reject) => {
+      worker.onmessage = (e: MessageEvent) => {
+        const msg = e.data;
+
+        if (msg.type === 'preprocessed') {
+          setProgress({
+            stage: 'preprocessing',
+            progress: msg.count / totalFrames,
+            message: `${t('v2.pipeline.preprocessing')} ${msg.count}/${totalFrames}`,
+            currentFrame: msg.count,
+            totalFrames,
+          });
+        } else if (msg.type === 'stage' && msg.stage === 'projecting') {
+          setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+        } else if (msg.type === 'projection-progress') {
+          setProgress({
+            stage: 'projecting',
+            progress: msg.current / msg.total,
+            message: `${t('v2.pipeline.accumulating')} ${msg.current}/${msg.total}`,
+            currentFrame: msg.current,
+            totalFrames: msg.total,
+          });
+        } else if (msg.type === 'complete') {
+          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
+        } else if (msg.type === 'error') {
+          reject(new Error(msg.message));
+        }
+      };
+
+      worker.onerror = (err) => reject(new Error(err.message));
+    });
+
+    // ── Extract frames on main thread, send to worker as Transferable bitmaps ──
     for (let i = 0; i < totalFrames; i++) {
       if (abortRef.current) break;
 
@@ -385,74 +435,49 @@ export function ScanPage() {
       video.currentTime = timeS;
       await new Promise<void>((r) => { video.onseeked = () => r(); });
 
-      const imageData = extractFrameImageData(video, crop.x, crop.y, crop.width, crop.height);
-      const result = preprocessFrame(imageData, preprocessing);
-      preprocessedFrames.push({ index: i, timeS, ...result });
+      const bitmap = await createImageBitmap(
+        video, crop.x, crop.y, crop.width, crop.height,
+      );
+
+      // Transfer bitmap (zero-copy) — worker will decode + preprocess
+      worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
 
       setProgress({
         stage: 'preprocessing',
         progress: (i + 1) / totalFrames,
-        message: `${t('v2.pipeline.preprocessing')} ${i + 1}/${totalFrames}`,
+        message: `${t('v2.pipeline.extracting')} ${i + 1}/${totalFrames}`,
         currentFrame: i + 1,
         totalFrames,
       });
     }
 
     URL.revokeObjectURL(video.src);
-    if (abortRef.current) return;
 
-    let normalizedData: Float32Array;
-    let dims: [number, number, number];
-    let extent: [number, number, number];
-
-    if (viewMode === 'instrument') {
-      // Mode A: store preprocessed frames for live temporal playback
-      // No static volume baking — the viewer will project frames in real-time
-      setInstrumentFrames(preprocessedFrames);
-      normalizedData = new Float32Array(0);
-      dims = [grid.resX, grid.resY, grid.resZ];
-      extent = [1, 1, 1];
-
-      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
-    } else {
-      setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
-      // Store raw frames so VolumeViewer can build full-resolution slices
-      setInstrumentFrames(preprocessedFrames);
-
-      const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
-      const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-
-      // Adaptive Y resolution: ~1 voxel per meter, clamped [256, 1024]
-      const adaptiveResY = Math.max(256, Math.min(1024, Math.round(track.totalDistanceM)));
-      const spatialGrid: VolumeGridSettings = { ...grid, resY: adaptiveResY };
-
-      const volume = createEmptyVolume(spatialGrid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
-
-      projectFramesSpatial(
-        preprocessedFrames, mappings, volume, beam,
-        (current, total) => {
-          setProgress({
-            stage: 'projecting',
-            progress: current / total,
-            message: `${t('v2.pipeline.accumulating')} ${current}/${total}`,
-            currentFrame: current,
-            totalFrames: total,
-          });
-        },
-      );
-
-      normalizedData = normalizeVolume(volume);
-      dims = volume.dimensions;
-      extent = volume.extent;
-
-      setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
+    if (abortRef.current) {
+      worker.terminate();
+      workerRef.current = null;
+      return;
     }
 
+    // Tell worker all frames are sent — start projection
+    worker.postMessage({ type: 'done' });
+
+    // Wait for worker result
+    const result = await resultPromise;
+    worker.terminate();
+    workerRef.current = null;
+
+    if (abortRef.current) return;
+
+    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
+
+    setInstrumentFrames(preprocessedFrames);
     setVolumeData(normalizedData);
     setVolumeDims(dims);
     setVolumeExtent(extent);
 
     dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
+    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
 
     const sessionId = crypto.randomUUID();
     const gpxPoints = track.points.map((p) => ({ lat: p.lat, lon: p.lon }));
