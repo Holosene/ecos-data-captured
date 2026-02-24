@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECHOS — Volume Calibration Tool</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #e0e0e8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; overflow: hidden; display: flex; height: 100vh; }
+#viewport { flex: 1; position: relative; }
+canvas { display: block; }
+
+#panel {
+  width: 340px; min-width: 340px; background: #111118; border-left: 1px solid #222; overflow-y: auto;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.section { background: #181820; border: 1px solid #2a2a3a; border-radius: 6px; padding: 10px; }
+.section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8888cc; margin-bottom: 8px; }
+.row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.row label { width: 28px; text-align: right; color: #888; font-size: 11px; flex-shrink: 0; }
+.row input[type=range] { flex: 1; accent-color: #6644dd; height: 14px; }
+.row .val { width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: #aaa; font-size: 11px; }
+.row input[type=number] { width: 60px; background: #222; border: 1px solid #333; color: #ddd; border-radius: 3px; padding: 2px 4px; font-size: 11px; font-family: inherit; }
+
+select { background: #222; border: 1px solid #333; color: #ddd; border-radius: 3px; padding: 3px 6px; font-size: 11px; font-family: inherit; flex: 1; }
+
+.btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
+.btn { padding: 5px 10px; border-radius: 4px; border: 1px solid #333; background: #222; color: #ccc; font-size: 11px; cursor: pointer; font-family: inherit; }
+.btn:hover { background: #333; color: #fff; }
+.btn.active { background: #6644dd; border-color: #8866ff; color: #fff; }
+.btn.save { background: #226644; border-color: #33aa66; }
+.btn.save:hover { background: #338855; }
+
+#info { position: absolute; bottom: 10px; left: 10px; color: #666; font-size: 11px; }
+#coords { position: absolute; top: 10px; left: 10px; color: #888; font-size: 11px; line-height: 1.6; background: rgba(0,0,0,0.5); padding: 6px 10px; border-radius: 4px; }
+
+.axis-map { display: grid; grid-template-columns: 80px 1fr 30px 1fr; gap: 4px; align-items: center; margin-bottom: 4px; }
+.axis-map span { font-size: 11px; color: #888; }
+.axis-map .arrow { text-align: center; color: #555; }
+
+.color-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <div id="coords"></div>
+  <div id="info">Ctrl+S = télécharger config | Molette = zoom | Clic = rotation</div>
+</div>
+
+<div id="panel">
+  <div style="text-align:center; padding: 4px 0 8px; border-bottom: 1px solid #2a2a3a; margin-bottom: 4px;">
+    <strong style="color:#8866ff; font-size:13px;">ECHOS Calibration</strong>
+  </div>
+
+  <!-- Position -->
+  <div class="section">
+    <h3>Position Volume</h3>
+    <div class="row"><label>X</label><input type="range" id="posX" min="-2" max="2" step="0.01" value="0"><span class="val" id="posX_v">0</span></div>
+    <div class="row"><label>Y</label><input type="range" id="posY" min="-2" max="2" step="0.01" value="0"><span class="val" id="posY_v">0</span></div>
+    <div class="row"><label>Z</label><input type="range" id="posZ" min="-2" max="2" step="0.01" value="0"><span class="val" id="posZ_v">0</span></div>
+  </div>
+
+  <!-- Rotation -->
+  <div class="section">
+    <h3>Rotation Volume (°)</h3>
+    <div class="row"><label>Rx</label><input type="range" id="rotX" min="-180" max="180" step="1" value="0"><span class="val" id="rotX_v">0</span></div>
+    <div class="row"><label>Ry</label><input type="range" id="rotY" min="-180" max="180" step="1" value="0"><span class="val" id="rotY_v">0</span></div>
+    <div class="row"><label>Rz</label><input type="range" id="rotZ" min="-180" max="180" step="1" value="0"><span class="val" id="rotZ_v">0</span></div>
+  </div>
+
+  <!-- Scale / Aspect Ratio -->
+  <div class="section">
+    <h3>Proportions Volume</h3>
+    <div class="row"><label>Sx</label><input type="range" id="scaleX" min="0.1" max="3" step="0.01" value="0.5"><span class="val" id="scaleX_v">0.5</span></div>
+    <div class="row"><label>Sy</label><input type="range" id="scaleY" min="0.1" max="3" step="0.01" value="1.0"><span class="val" id="scaleY_v">1.0</span></div>
+    <div class="row"><label>Sz</label><input type="range" id="scaleZ" min="0.1" max="3" step="0.01" value="0.5"><span class="val" id="scaleZ_v">0.5</span></div>
+    <div style="font-size:10px; color:#666; margin-top:4px;">Simule extent: Sx=latéral, Sy=profondeur, Sz=track</div>
+  </div>
+
+  <!-- Axis Mapping -->
+  <div class="section">
+    <h3>Mapping Axes Données → 3D</h3>
+    <div class="axis-map">
+      <span><span class="color-dot" style="background:#ff4444;"></span> Latéral</span>
+      <select id="mapLateral"><option value="x" selected>X</option><option value="y">Y</option><option value="z">Z</option></select>
+      <span class="arrow">→</span>
+      <span id="mapLateral_out" style="color:#ff8888;">axe X</span>
+    </div>
+    <div class="axis-map">
+      <span><span class="color-dot" style="background:#44ff44;"></span> Profondeur</span>
+      <select id="mapDepth"><option value="x">X</option><option value="y" selected>Y</option><option value="z">Z</option></select>
+      <span class="arrow">→</span>
+      <span id="mapDepth_out" style="color:#88ff88;">axe Y</span>
+    </div>
+    <div class="axis-map">
+      <span><span class="color-dot" style="background:#4488ff;"></span> Track/Frames</span>
+      <select id="mapTrack"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option></select>
+      <span class="arrow">→</span>
+      <span id="mapTrack_out" style="color:#88aaff;">axe Z</span>
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div class="section">
+    <h3>Caméra</h3>
+    <div class="row"><label>Dist</label><input type="range" id="camDist" min="0.5" max="5" step="0.05" value="1.6"><span class="val" id="camDist_v">1.6</span></div>
+    <div class="row"><label>FOV</label><input type="range" id="camFov" min="20" max="90" step="1" value="50"><span class="val" id="camFov_v">50</span></div>
+    <div class="row"><label>Near</label><input type="number" id="camNear" value="0.1" step="0.01" min="0.001"></div>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn active" data-preset="frontal">Frontal</button>
+      <button class="btn" data-preset="horizontal">Horizontal</button>
+      <button class="btn" data-preset="vertical">Vertical</button>
+      <button class="btn" data-preset="free">Free</button>
+    </div>
+  </div>
+
+  <!-- Scene -->
+  <div class="section">
+    <h3>Scène</h3>
+    <div class="row"><label>Grid</label><input type="range" id="gridY" min="-1.5" max="0.5" step="0.01" value="-0.5"><span class="val" id="gridY_v">-0.5</span></div>
+    <div class="row"><label>Axes</label><input type="range" id="axesSize" min="0" max="1" step="0.05" value="0.3"><span class="val" id="axesSize_v">0.3</span></div>
+    <div class="row"><label style="width:50px;">BG color</label><input type="color" id="bgColor" value="#0a0a0f"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="section">
+    <div class="btn-row">
+      <button class="btn save" id="btnSave" style="flex:1;">💾 Sauver Config (Ctrl+S)</button>
+    </div>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn" id="btnReset" style="flex:1;">↺ Reset</button>
+      <button class="btn" id="btnLoad" style="flex:1;">📂 Charger Config</button>
+    </div>
+    <input type="file" id="fileInput" accept=".json" style="display:none;">
+  </div>
+
+  <div id="configPreview" style="font-size:10px; color:#555; white-space:pre-wrap; max-height:120px; overflow-y:auto; margin-top:4px; padding: 4px; background:#0a0a0f; border-radius:4px; border:1px solid #1a1a2a;"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+
+// ─── State ───────────────────────────────────────────────────────────────
+const state = {
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 0.5, y: 1.0, z: 0.5 },
+  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
+  camera: { dist: 1.6, fov: 50, near: 0.1, preset: 'frontal' },
+  grid: { y: -0.5 },
+  axes: { size: 0.3 },
+  bgColor: '#0a0a0f',
+};
+
+// ─── Three.js Setup ──────────────────────────────────────────────────────
+const viewport = document.getElementById('viewport');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x0a0a0f, 1);
+viewport.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.rotateSpeed = 0.8;
+
+// ─── Volume Box (6 colored faces) ────────────────────────────────────────
+const faceColors = [
+  0xff4444, 0xff6666,  // +X, -X  (red = lateral)
+  0x44ff44, 0x66ff66,  // +Y, -Y  (green = depth)
+  0x4488ff, 0x6699ff,  // +Z, -Z  (blue = track)
+];
+
+function createVolumeMesh() {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mats = faceColors.map((c, i) => new THREE.MeshBasicMaterial({
+    color: c,
+    transparent: true,
+    opacity: 0.35,
+    side: THREE.DoubleSide,
+  }));
+  return new THREE.Mesh(geo, mats);
+}
+
+const volumeMesh = createVolumeMesh();
+scene.add(volumeMesh);
+
+// Wireframe overlay
+const wireGeo = new THREE.BoxGeometry(1, 1, 1);
+const wireMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+const wireframe = new THREE.LineSegments(new THREE.EdgesGeometry(wireGeo), wireMat);
+scene.add(wireframe);
+
+// ─── Face Labels ─────────────────────────────────────────────────────────
+function makeLabel(text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 48;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, 128, 48);
+  ctx.font = 'bold 20px monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 64, 24);
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.4, 0.15, 1);
+  return sprite;
+}
+
+const labels = {
+  xp: makeLabel('+X lat', '#ff4444'),
+  xn: makeLabel('-X lat', '#ff6666'),
+  yp: makeLabel('+Y dep', '#44ff44'),
+  yn: makeLabel('-Y dep', '#66ff66'),
+  zp: makeLabel('+Z trk', '#4488ff'),
+  zn: makeLabel('-Z trk', '#6699ff'),
+};
+Object.values(labels).forEach(l => scene.add(l));
+
+// ─── Grid & Axes ─────────────────────────────────────────────────────────
+const gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+scene.add(gridHelper);
+
+const axesHelper = new THREE.AxesHelper(0.3);
+axesHelper.position.set(-0.6, -0.6, -0.6);
+scene.add(axesHelper);
+
+// World axes labels
+const axisLabels = {
+  x: makeLabel('X', '#ff3333'),
+  y: makeLabel('Y', '#33ff33'),
+  z: makeLabel('Z', '#3388ff'),
+};
+axisLabels.x.position.set(1.2, 0, 0); axisLabels.x.scale.set(0.2, 0.08, 1);
+axisLabels.y.position.set(0, 1.2, 0); axisLabels.y.scale.set(0.2, 0.08, 1);
+axisLabels.z.position.set(0, 0, 1.2); axisLabels.z.scale.set(0.2, 0.08, 1);
+Object.values(axisLabels).forEach(l => scene.add(l));
+
+// World axis lines
+const axisLineX = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(1.1,0,0)]),
+  new THREE.LineBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.3 })
+);
+const axisLineY = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,1.1,0)]),
+  new THREE.LineBasicMaterial({ color: 0x33ff33, transparent: true, opacity: 0.3 })
+);
+const axisLineZ = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,1.1)]),
+  new THREE.LineBasicMaterial({ color: 0x3388ff, transparent: true, opacity: 0.3 })
+);
+scene.add(axisLineX, axisLineY, axisLineZ);
+
+// ─── Apply State ─────────────────────────────────────────────────────────
+function applyState() {
+  // Volume transform
+  volumeMesh.position.set(state.position.x, state.position.y, state.position.z);
+  volumeMesh.rotation.set(
+    state.rotation.x * Math.PI / 180,
+    state.rotation.y * Math.PI / 180,
+    state.rotation.z * Math.PI / 180,
+  );
+
+  // Scale based on axis mapping
+  const s = { x: 1, y: 1, z: 1 };
+  const map = state.axisMapping;
+  s[map.lateral] = state.scale.x;
+  s[map.depth] = state.scale.y;
+  s[map.track] = state.scale.z;
+  volumeMesh.scale.set(s.x, s.y, s.z);
+
+  // Wireframe follows volume
+  wireframe.position.copy(volumeMesh.position);
+  wireframe.rotation.copy(volumeMesh.rotation);
+  wireframe.scale.copy(volumeMesh.scale);
+
+  // Labels on faces
+  const hs = volumeMesh.scale.clone().multiplyScalar(0.5);
+  const p = volumeMesh.position;
+  labels.xp.position.set(p.x + hs.x + 0.05, p.y, p.z);
+  labels.xn.position.set(p.x - hs.x - 0.05, p.y, p.z);
+  labels.yp.position.set(p.x, p.y + hs.y + 0.05, p.z);
+  labels.yn.position.set(p.x, p.y - hs.y - 0.05, p.z);
+  labels.zp.position.set(p.x, p.y, p.z + hs.z + 0.05);
+  labels.zn.position.set(p.x, p.y, p.z - hs.z - 0.05);
+
+  // Update label text based on mapping
+  updateLabelText(labels.xp, '+' + axisNameFor('x'), colorForAxis('x'));
+  updateLabelText(labels.xn, '-' + axisNameFor('x'), colorForAxis('x'));
+  updateLabelText(labels.yp, '+' + axisNameFor('y'), colorForAxis('y'));
+  updateLabelText(labels.yn, '-' + axisNameFor('y'), colorForAxis('y'));
+  updateLabelText(labels.zp, '+' + axisNameFor('z'), colorForAxis('z'));
+  updateLabelText(labels.zn, '-' + axisNameFor('z'), colorForAxis('z'));
+
+  // Grid
+  gridHelper.position.y = state.grid.y;
+
+  // Axes
+  axesHelper.scale.setScalar(state.axes.size / 0.3 || 0.001);
+  axesHelper.visible = state.axes.size > 0;
+
+  // Background
+  const bg = parseInt(state.bgColor.replace('#', ''), 16);
+  renderer.setClearColor(bg, 1);
+
+  // Camera
+  camera.fov = state.camera.fov;
+  camera.near = state.camera.near;
+  camera.updateProjectionMatrix();
+
+  updateConfigPreview();
+  updateCoordsDisplay();
+}
+
+function axisNameFor(worldAxis) {
+  const m = state.axisMapping;
+  if (m.lateral === worldAxis) return 'Lat';
+  if (m.depth === worldAxis) return 'Dep';
+  if (m.track === worldAxis) return 'Trk';
+  return '?';
+}
+
+function colorForAxis(worldAxis) {
+  const m = state.axisMapping;
+  if (m.lateral === worldAxis) return '#ff4444';
+  if (m.depth === worldAxis) return '#44ff44';
+  if (m.track === worldAxis) return '#4488ff';
+  return '#888888';
+}
+
+function updateLabelText(sprite, text, color) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128; canvas.height = 48;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0, 0, 128, 48);
+  ctx.font = 'bold 20px monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 64, 24);
+  sprite.material.map.image = canvas;
+  sprite.material.map.needsUpdate = true;
+}
+
+// ─── Camera Presets ──────────────────────────────────────────────────────
+function setCameraPreset(preset) {
+  state.camera.preset = preset;
+  const maxDim = Math.max(volumeMesh.scale.x, volumeMesh.scale.y, volumeMesh.scale.z) || 1;
+  const d = state.camera.dist * maxDim;
+
+  switch (preset) {
+    case 'frontal':
+      camera.position.set(0, 0, d);
+      camera.up.set(0, 1, 0);
+      controls.target.set(0, 0, 0);
+      break;
+    case 'horizontal': {
+      const a = 25 * Math.PI / 180;
+      camera.position.set(d * 0.3, d * Math.sin(a), d * Math.cos(a));
+      controls.target.set(0, 0, 0);
+      break;
+    }
+    case 'vertical':
+      camera.position.set(d, 0, 0);
+      controls.target.set(0, 0, 0);
+      break;
+    case 'free':
+      camera.position.set(d * 0.75, d * 0.5, d * 0.75);
+      controls.target.set(0, 0, 0);
+      break;
+  }
+  controls.update();
+  updatePresetButtons();
+}
+
+function updatePresetButtons() {
+  document.querySelectorAll('[data-preset]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === state.camera.preset);
+  });
+}
+
+// ─── UI Binding ──────────────────────────────────────────────────────────
+function bindSlider(id, getter, setter) {
+  const el = document.getElementById(id);
+  const valEl = document.getElementById(id + '_v');
+  el.value = getter();
+  if (valEl) valEl.textContent = Number(getter()).toFixed(2);
+  el.addEventListener('input', () => {
+    const v = parseFloat(el.value);
+    setter(v);
+    if (valEl) valEl.textContent = v.toFixed(2);
+    applyState();
+  });
+}
+
+function bindNumber(id, getter, setter) {
+  const el = document.getElementById(id);
+  el.value = getter();
+  el.addEventListener('input', () => {
+    setter(parseFloat(el.value) || 0);
+    applyState();
+  });
+}
+
+function bindSelect(id, getter, setter) {
+  const el = document.getElementById(id);
+  el.value = getter();
+  el.addEventListener('change', () => {
+    setter(el.value);
+    updateMappingLabels();
+    applyState();
+  });
+}
+
+function updateMappingLabels() {
+  const names = { x: 'axe X', y: 'axe Y', z: 'axe Z' };
+  const colors = { x: '#ff8888', y: '#88ff88', z: '#88aaff' };
+  document.getElementById('mapLateral_out').textContent = names[state.axisMapping.lateral];
+  document.getElementById('mapLateral_out').style.color = colors[state.axisMapping.lateral];
+  document.getElementById('mapDepth_out').textContent = names[state.axisMapping.depth];
+  document.getElementById('mapDepth_out').style.color = colors[state.axisMapping.depth];
+  document.getElementById('mapTrack_out').textContent = names[state.axisMapping.track];
+  document.getElementById('mapTrack_out').style.color = colors[state.axisMapping.track];
+}
+
+// Position
+bindSlider('posX', () => state.position.x, v => state.position.x = v);
+bindSlider('posY', () => state.position.y, v => state.position.y = v);
+bindSlider('posZ', () => state.position.z, v => state.position.z = v);
+
+// Rotation
+bindSlider('rotX', () => state.rotation.x, v => state.rotation.x = v);
+bindSlider('rotY', () => state.rotation.y, v => state.rotation.y = v);
+bindSlider('rotZ', () => state.rotation.z, v => state.rotation.z = v);
+
+// Scale
+bindSlider('scaleX', () => state.scale.x, v => state.scale.x = v);
+bindSlider('scaleY', () => state.scale.y, v => state.scale.y = v);
+bindSlider('scaleZ', () => state.scale.z, v => state.scale.z = v);
+
+// Camera
+bindSlider('camDist', () => state.camera.dist, v => { state.camera.dist = v; setCameraPreset(state.camera.preset); });
+bindSlider('camFov', () => state.camera.fov, v => state.camera.fov = v);
+bindNumber('camNear', () => state.camera.near, v => state.camera.near = v);
+
+// Scene
+bindSlider('gridY', () => state.grid.y, v => state.grid.y = v);
+bindSlider('axesSize', () => state.axes.size, v => state.axes.size = v);
+
+document.getElementById('bgColor').addEventListener('input', (e) => {
+  state.bgColor = e.target.value;
+  applyState();
+});
+
+// Axis mapping
+bindSelect('mapLateral', () => state.axisMapping.lateral, v => state.axisMapping.lateral = v);
+bindSelect('mapDepth', () => state.axisMapping.depth, v => state.axisMapping.depth = v);
+bindSelect('mapTrack', () => state.axisMapping.track, v => state.axisMapping.track = v);
+
+// Camera preset buttons
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => setCameraPreset(btn.dataset.preset));
+});
+
+// ─── Config Export/Import ────────────────────────────────────────────────
+function getConfig() {
+  return {
+    _version: 'echos-calibration-v1',
+    _timestamp: new Date().toISOString(),
+    position: { ...state.position },
+    rotation: { ...state.rotation },
+    scale: { ...state.scale },
+    axisMapping: { ...state.axisMapping },
+    camera: {
+      ...state.camera,
+      currentPosition: {
+        x: +camera.position.x.toFixed(4),
+        y: +camera.position.y.toFixed(4),
+        z: +camera.position.z.toFixed(4),
+      },
+      currentTarget: {
+        x: +controls.target.x.toFixed(4),
+        y: +controls.target.y.toFixed(4),
+        z: +controls.target.z.toFixed(4),
+      },
+      up: { x: +camera.up.x.toFixed(4), y: +camera.up.y.toFixed(4), z: +camera.up.z.toFixed(4) },
+    },
+    grid: { ...state.grid },
+    axes: { ...state.axes },
+    bgColor: state.bgColor,
+  };
+}
+
+function saveConfig() {
+  const config = getConfig();
+  const json = JSON.stringify(config, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `echos-calibration-${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadConfig(config) {
+  if (config.position) Object.assign(state.position, config.position);
+  if (config.rotation) Object.assign(state.rotation, config.rotation);
+  if (config.scale) Object.assign(state.scale, config.scale);
+  if (config.axisMapping) Object.assign(state.axisMapping, config.axisMapping);
+  if (config.camera) {
+    state.camera.dist = config.camera.dist ?? state.camera.dist;
+    state.camera.fov = config.camera.fov ?? state.camera.fov;
+    state.camera.near = config.camera.near ?? state.camera.near;
+    state.camera.preset = config.camera.preset ?? state.camera.preset;
+  }
+  if (config.grid) Object.assign(state.grid, config.grid);
+  if (config.axes) Object.assign(state.axes, config.axes);
+  if (config.bgColor) state.bgColor = config.bgColor;
+
+  // Re-bind all UI elements
+  refreshUI();
+  updateMappingLabels();
+  applyState();
+  setCameraPreset(state.camera.preset);
+}
+
+function refreshUI() {
+  const sets = [
+    ['posX', state.position.x], ['posY', state.position.y], ['posZ', state.position.z],
+    ['rotX', state.rotation.x], ['rotY', state.rotation.y], ['rotZ', state.rotation.z],
+    ['scaleX', state.scale.x], ['scaleY', state.scale.y], ['scaleZ', state.scale.z],
+    ['camDist', state.camera.dist], ['camFov', state.camera.fov],
+    ['gridY', state.grid.y], ['axesSize', state.axes.size],
+  ];
+  sets.forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    const valEl = document.getElementById(id + '_v');
+    if (el) el.value = val;
+    if (valEl) valEl.textContent = Number(val).toFixed(2);
+  });
+  document.getElementById('camNear').value = state.camera.near;
+  document.getElementById('bgColor').value = state.bgColor;
+  document.getElementById('mapLateral').value = state.axisMapping.lateral;
+  document.getElementById('mapDepth').value = state.axisMapping.depth;
+  document.getElementById('mapTrack').value = state.axisMapping.track;
+}
+
+function updateConfigPreview() {
+  const config = getConfig();
+  document.getElementById('configPreview').textContent = JSON.stringify(config, null, 1);
+}
+
+function updateCoordsDisplay() {
+  const el = document.getElementById('coords');
+  el.innerHTML = [
+    `cam: (${camera.position.x.toFixed(2)}, ${camera.position.y.toFixed(2)}, ${camera.position.z.toFixed(2)})`,
+    `target: (${controls.target.x.toFixed(2)}, ${controls.target.y.toFixed(2)}, ${controls.target.z.toFixed(2)})`,
+    `vol: pos(${state.position.x.toFixed(2)}, ${state.position.y.toFixed(2)}, ${state.position.z.toFixed(2)}) rot(${state.rotation.x}°, ${state.rotation.y}°, ${state.rotation.z}°)`,
+    `scale: (${volumeMesh.scale.x.toFixed(2)}, ${volumeMesh.scale.y.toFixed(2)}, ${volumeMesh.scale.z.toFixed(2)})`,
+  ].join('<br>');
+}
+
+// ─── Events ──────────────────────────────────────────────────────────────
+document.getElementById('btnSave').addEventListener('click', saveConfig);
+document.getElementById('btnReset').addEventListener('click', () => {
+  loadConfig({
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.5, y: 1.0, z: 0.5 },
+    axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
+    camera: { dist: 1.6, fov: 50, near: 0.1, preset: 'frontal' },
+    grid: { y: -0.5 },
+    axes: { size: 0.3 },
+    bgColor: '#0a0a0f',
+  });
+});
+document.getElementById('btnLoad').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try { loadConfig(JSON.parse(reader.result)); }
+    catch (err) { alert('Config invalide: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    saveConfig();
+  }
+});
+
+// ─── Render Loop ─────────────────────────────────────────────────────────
+function resize() {
+  const w = viewport.clientWidth;
+  const h = viewport.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  updateCoordsDisplay();
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', resize);
+resize();
+setCameraPreset('frontal');
+updateMappingLabels();
+applyState();
+animate();
+</script>
+</body>
+</html>
