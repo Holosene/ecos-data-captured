@@ -23,6 +23,7 @@ import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
+import type { TranslationKey } from '../i18n/translations.js';
 
 interface VolumeViewerProps {
   /** Static volume data (Mode B spatial, or fallback) */
@@ -107,11 +108,11 @@ const IconFree = () => (
   </svg>
 );
 
-const CAMERA_PRESETS: { key: CameraPreset; label: string; Icon: React.FC }[] = [
-  { key: 'frontal', label: 'Frontale 2D', Icon: IconFrontal },
-  { key: 'horizontal', label: 'Horizontale', Icon: IconHorizontal },
-  { key: 'vertical', label: 'Coupe verticale', Icon: IconVertical },
-  { key: 'free', label: 'Libre', Icon: IconFree },
+const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] = [
+  { key: 'frontal', labelKey: 'v2.camera.frontal', Icon: IconFrontal },
+  { key: 'horizontal', labelKey: 'v2.camera.horizontal', Icon: IconHorizontal },
+  { key: 'vertical', labelKey: 'v2.camera.vertical', Icon: IconVertical },
+  { key: 'free', labelKey: 'v2.camera.free', Icon: IconFree },
 ];
 
 export function VolumeViewer({
@@ -391,7 +392,7 @@ export function VolumeViewer({
               pointerEvents: 'none',
             }}
           >
-            {mode === 'instrument' ? 'Mode A — Instrument' : 'Mode B — Spatial'}
+            {mode === 'instrument' ? `Mode A — ${t('v2.mode.instrument')}` : `Mode B — ${t('v2.mode.spatial')}`}
           </div>
 
           {/* Camera preset buttons */}
@@ -409,7 +410,7 @@ export function VolumeViewer({
               <button
                 key={p.key}
                 onClick={() => handleCameraPreset(p.key)}
-                title={p.label}
+                title={t(p.labelKey as TranslationKey)}
                 style={{
                   width: '30px',
                   height: '30px',
@@ -449,6 +450,7 @@ export function VolumeViewer({
 
         {/* Controls / Calibration panel */}
         <div
+          className="echos-controls-panel"
           style={{
             width: '240px',
             flexShrink: 0,
@@ -456,6 +458,7 @@ export function VolumeViewer({
             flexDirection: 'column',
             gap: '8px',
             overflowY: 'auto',
+            scrollbarWidth: 'thin',
           }}
         >
           {calibrationOpen ? (
@@ -514,7 +517,7 @@ export function VolumeViewer({
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
                         style={{ width: '12px', height: '12px' }}
                       />
-                      Auto
+                      {t('v2.controls.auto')}
                     </label>
                   </div>
                   <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
