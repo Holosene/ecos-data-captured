@@ -391,6 +391,43 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
 }
 
+/* Floating scan CTA — dynamic hover & click animations */
+.floating-scan-cta {
+  transition:
+    opacity 300ms ease,
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 250ms ease,
+    background 200ms ease,
+    border-color 200ms ease,
+    filter 200ms ease;
+}
+.floating-scan-cta:hover {
+  transform: translateY(-4px) scale(1.04) !important;
+  background: var(--c-accent-hover) !important;
+  box-shadow:
+    0 0 60px rgba(138, 124, 255, 0.45),
+    0 14px 44px -6px rgba(0, 0, 0, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  filter: brightness(1.08);
+}
+.floating-scan-cta:active {
+  transform: translateY(1px) scale(0.96) !important;
+  box-shadow:
+    0 0 20px rgba(138, 124, 255, 0.5),
+    0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  filter: brightness(0.95);
+  transition-duration: 80ms !important;
+}
+
+/* Pulse glow keyframe for floating CTA */
+@keyframes cta-pulse {
+  0%, 100% { box-shadow: 0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4); }
+  50%      { box-shadow: 0 0 52px rgba(138, 124, 255, 0.42), 0 10px 36px -4px rgba(0, 0, 0, 0.45); }
+}
+.floating-scan-cta:not(:hover):not(:active) {
+  animation: cta-pulse 3s ease-in-out infinite;
+}
+
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;

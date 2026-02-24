@@ -507,18 +507,9 @@ export function HomePage() {
           borderRadius: 'var(--radius-lg)',
           cursor: 'pointer',
           boxShadow: '0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4)',
-          transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 200ms ease, background 200ms ease',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--c-accent-hover)';
-          e.currentTarget.style.boxShadow = '0 0 50px rgba(138, 124, 255, 0.4), 0 12px 40px -4px rgba(0, 0, 0, 0.5)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'var(--c-accent)';
-          e.currentTarget.style.boxShadow = '0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4)';
         }}
       >
         {t('home.cta')}
