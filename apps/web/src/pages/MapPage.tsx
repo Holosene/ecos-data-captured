@@ -10,12 +10,14 @@ import React, { useCallback, useState } from 'react';
 import { GlassPanel, Button, colors } from '@echos/ui';
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
+import { useTheme } from '../theme/index.js';
 import { MapView } from '../components/MapView.js';
 import type { RecordingSession } from '@echos/core';
 
 export function MapPage() {
   const { state, dispatch } = useAppState();
   const { t } = useTranslation();
+  const { theme } = useTheme();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleSessionSelect = useCallback((id: string) => {
@@ -44,6 +46,7 @@ export function MapPage() {
             selectedSessionId={selectedId}
             onSessionSelect={handleSessionSelect}
             gpxTracks={state.gpxTracks}
+            theme={theme}
           />
 
           {/* Session list */}

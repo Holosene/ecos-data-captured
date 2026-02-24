@@ -146,7 +146,7 @@ function Topbar() {
                 padding: '24px 20px',
                 background: 'none',
                 border: 'none',
-                color: active ? 'var(--c-text-1)' : 'rgba(255, 255, 255, 0.75)',
+                color: active ? 'var(--c-text-1)' : 'var(--c-text-2)',
                 fontSize: '16px',
                 fontWeight: active ? 600 : 450,
                 cursor: 'pointer',
@@ -169,7 +169,7 @@ function Topbar() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: '36px', height: '36px', borderRadius: '9999px',
           border: '1px solid var(--c-border)', background: 'transparent',
-          color: 'rgba(255, 255, 255, 0.85)', cursor: 'pointer', transition: 'all 150ms ease',
+          color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
           marginRight: '8px',
         }}
         title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
@@ -183,7 +183,7 @@ function Topbar() {
           display: 'flex', alignItems: 'center', gap: '6px',
           padding: '7px 14px', borderRadius: '9999px',
           border: '1px solid var(--c-border)', background: 'transparent',
-          color: 'rgba(255, 255, 255, 0.85)', fontSize: '14px', fontWeight: 500,
+          color: 'var(--c-text-2)', fontSize: '14px', fontWeight: 500,
           cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms ease',
           marginRight: '12px',
         }}

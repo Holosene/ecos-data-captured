@@ -346,6 +346,7 @@ export function HomePage() {
             selectedSessionId={state.activeSessionId}
             onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
             gpxTracks={state.gpxTracks}
+            theme={theme}
           />
         </div>
 
@@ -485,7 +486,7 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Floating scan CTA — accent bg + glass backdrop, appears when hero CTA scrolls out */}
+      {/* Floating scan CTA — glass backdrop matching topbar, appears when hero CTA scrolls out */}
       <button
         onClick={() => navigate('/scan')}
         className="floating-scan-cta"
@@ -496,17 +497,17 @@ export function HomePage() {
           zIndex: 90,
           padding: '20px 48px',
           fontSize: '20px',
-          fontWeight: 600,
+          fontFamily: fonts.display,
+          fontVariationSettings: "'wght' 600",
           letterSpacing: '-0.01em',
-          fontFamily: 'inherit',
-          color: '#FFFFFF',
-          background: 'var(--c-accent)',
+          color: 'var(--c-text-1)',
+          background: 'var(--topbar-bg)',
           backdropFilter: 'blur(12px) saturate(1.4)',
           WebkitBackdropFilter: 'blur(12px) saturate(1.4)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
+          border: '1px solid var(--topbar-border)',
           borderRadius: 'var(--radius-lg)',
           cursor: 'pointer',
-          boxShadow: '0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4)',
+          boxShadow: '0 0 24px rgba(var(--cta-glow), 0.2), 0 8px 32px -4px rgba(0, 0, 0, 0.3)',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',

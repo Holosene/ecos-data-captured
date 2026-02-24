@@ -54,6 +54,9 @@
     linear-gradient(180deg, rgba(28, 28, 36, 0.88) 0%, rgba(20, 20, 28, 0.84) 100%);
   --topbar-border: rgba(255, 255, 255, 0.10);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.06);
+
+  /* CTA glow triplet (r, g, b) for box-shadow rgba() */
+  --cta-glow: 138, 124, 255;
 }
 
 /* Light mode overrides */
@@ -86,6 +89,8 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 248, 252, 0.82) 100%);
   --topbar-border: rgba(0, 0, 0, 0.07);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.6);
+
+  --cta-glow: 66, 33, 206;
 }
 [data-theme="light"] body {
   background: #FAFAFA;
@@ -135,11 +140,11 @@ body {
 
 #root { min-height: 100vh; }
 
-/* Scrollbar — accent blue */
+/* Scrollbar — accent, full opacity */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--c-accent-muted); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+::-webkit-scrollbar-thumb { background: var(--c-accent); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-accent-hover); }
 
 :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 ::selection { background: var(--c-accent); color: var(--c-white); }
@@ -353,31 +358,39 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   font-family: var(--font-body);
 }
 
-/* Leaflet zoom controls — redesigned to match site style */
-.leaflet-control-zoom {
-  border: none !important;
+/* Leaflet zoom controls — redesigned to match site style, 1.5× size, centered vertically */
+.leaflet-top.leaflet-right {
+  top: 50% !important;
+  transform: translateY(-50%);
+  right: 12px !important;
+}
+
+.leaflet-control-zoom,
+.leaflet-bar {
+  border: 1px solid var(--c-border) !important;
   border-radius: var(--radius-md) !important;
   overflow: hidden;
   box-shadow: var(--shadow-md) !important;
   background: var(--c-surface) !important;
-  border: 1px solid var(--c-border) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
 
-.leaflet-control-zoom a {
+.leaflet-control-zoom a,
+.leaflet-bar a {
   background: var(--c-surface) !important;
   color: var(--c-accent) !important;
   border: none !important;
-  width: 36px !important;
-  height: 36px !important;
-  line-height: 36px !important;
-  font-size: 18px !important;
+  width: 54px !important;
+  height: 54px !important;
+  line-height: 54px !important;
+  font-size: 24px !important;
   font-weight: 500 !important;
   transition: background 150ms ease, color 150ms ease;
 }
 
-.leaflet-control-zoom a:hover {
+.leaflet-control-zoom a:hover,
+.leaflet-bar a:hover {
   background: var(--c-surface-hover) !important;
   color: var(--c-accent-hover) !important;
 }
@@ -403,26 +416,25 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 .floating-scan-cta:hover {
   transform: translateY(-4px) scale(1.04) !important;
-  background: var(--c-accent-hover) !important;
   box-shadow:
-    0 0 60px rgba(138, 124, 255, 0.45),
+    0 0 60px rgba(var(--cta-glow), 0.35),
     0 14px 44px -6px rgba(0, 0, 0, 0.5) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-  filter: brightness(1.08);
+  border-color: var(--c-border-hover) !important;
+  filter: brightness(1.12);
 }
 .floating-scan-cta:active {
   transform: translateY(1px) scale(0.96) !important;
   box-shadow:
-    0 0 20px rgba(138, 124, 255, 0.5),
+    0 0 20px rgba(var(--cta-glow), 0.4),
     0 2px 8px rgba(0, 0, 0, 0.4) !important;
-  filter: brightness(0.95);
+  filter: brightness(0.92);
   transition-duration: 80ms !important;
 }
 
 /* Pulse glow keyframe for floating CTA */
 @keyframes cta-pulse {
-  0%, 100% { box-shadow: 0 0 40px rgba(138, 124, 255, 0.3), 0 8px 32px -4px rgba(0, 0, 0, 0.4); }
-  50%      { box-shadow: 0 0 52px rgba(138, 124, 255, 0.42), 0 10px 36px -4px rgba(0, 0, 0, 0.45); }
+  0%, 100% { box-shadow: 0 0 24px rgba(var(--cta-glow), 0.2), 0 8px 32px -4px rgba(0, 0, 0, 0.3); }
+  50%      { box-shadow: 0 0 36px rgba(var(--cta-glow), 0.3), 0 10px 36px -4px rgba(0, 0, 0, 0.35); }
 }
 .floating-scan-cta:not(:hover):not(:active) {
   animation: cta-pulse 3s ease-in-out infinite;
@@ -431,5 +443,5 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--c-accent-muted) transparent;
+  scrollbar-color: var(--c-accent) transparent;
 }

@@ -18,6 +18,7 @@ interface MapViewProps {
   selectedSessionId: string | null;
   onSessionSelect: (id: string) => void;
   gpxTracks?: Map<string, Array<{ lat: number; lon: number }>>;
+  theme?: string;
 }
 
 export function MapView({
@@ -25,9 +26,11 @@ export function MapView({
   selectedSessionId,
   onSessionSelect,
   gpxTracks,
+  theme,
 }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const layersRef = useRef<Map<string, L.Polyline>>(new Map());
   const { t } = useTranslation();
 
@@ -46,9 +49,11 @@ export function MapView({
     // Custom zoom control positioned top-right
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-    }).addTo(map);
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+    tileLayerRef.current = tileLayer;
 
     // Attribution
     L.control
@@ -63,6 +68,15 @@ export function MapView({
       leafletMap.current = null;
     };
   }, []);
+
+  // Swap tile layer when theme changes
+  useEffect(() => {
+    if (!tileLayerRef.current) return;
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    tileLayerRef.current.setUrl(tileUrl);
+  }, [theme]);
 
   // Update session layers
   useEffect(() => {
@@ -131,6 +145,19 @@ export function MapView({
           borderRadius: '12px',
           overflow: 'hidden',
           border: `1px solid ${colors.border}`,
+        }}
+      />
+      {/* Accent tint overlay — colors water zones toward site accent */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'var(--c-accent)',
+          opacity: 0.12,
+          mixBlendMode: 'color',
+          pointerEvents: 'none',
+          zIndex: 2,
+          borderRadius: '12px',
         }}
       />
 
