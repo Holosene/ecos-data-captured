@@ -41,7 +41,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
-  axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
+  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
