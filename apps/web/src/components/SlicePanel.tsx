@@ -1,19 +1,20 @@
 /**
- * ECHOS — Orthogonal Slice View (v1-style)
+ * ECHOS — Orthogonal Slice View
  *
  * Renders 2D slices of a 3D Float32Array volume along X, Y, and Z axes.
- * Inline color presets (Water Off, Structures, High Contrast, Grayscale)
- * with 2+1 column layout matching the original v1 viewer.
+ * Inline color presets with adaptive canvas sizing to match content aspect ratio.
  */
 
 import React, { useRef, useEffect, useState } from 'react';
 import { GlassPanel, colors } from '@echos/ui';
+import { useTranslation } from '../i18n/index.js';
+import type { TranslationKey } from '../i18n/translations.js';
 
-// ─── Color map presets (inline, no external LUT) ────────────────────────────
+// ─── Color map presets ────────────────────────────────────────────────────
 
 const PRESETS = {
   'Water Off': {
-    description: 'Suppress water column, show strong echoes',
+    labelKey: 'v2.slices.presetWaterOff',
     colorMap: [
       [0.0, 0, 0, 0, 0],
       [0.15, 0, 0, 0, 0],
@@ -24,7 +25,7 @@ const PRESETS = {
     ] as number[][],
   },
   Structures: {
-    description: 'Highlight bottom structures and vegetation',
+    labelKey: 'v2.slices.presetStructures',
     colorMap: [
       [0.0, 0, 0, 0, 0],
       [0.1, 0, 0, 0, 0],
@@ -36,7 +37,7 @@ const PRESETS = {
     ] as number[][],
   },
   'High Contrast': {
-    description: 'Maximum contrast for detail analysis',
+    labelKey: 'v2.slices.presetHighContrast',
     colorMap: [
       [0.0, 0, 0, 0, 0],
       [0.05, 0, 0, 0, 0],
@@ -48,7 +49,7 @@ const PRESETS = {
     ] as number[][],
   },
   Grayscale: {
-    description: 'Simple grayscale mapping',
+    labelKey: 'v2.slices.presetGrayscale',
     colorMap: [
       [0.0, 0, 0, 0, 0],
       [0.1, 0, 0, 0, 0],
@@ -119,13 +120,15 @@ function renderSlice(
   ctx.putImageData(imageData, 0, 0);
 }
 
-// ─── Single axis slice view ─────────────────────────────────────────────
+// ─── Axis label mapping ──────────────────────────────────────────────
 
-const AXIS_LABELS: Record<string, { h: string; v: string }> = {
-  x: { h: 'Depth (Y)', v: 'Distance (Z)' },
-  y: { h: 'Width (X)', v: 'Distance (Z)' },
-  z: { h: 'Width (X)', v: 'Depth (Y)' },
+const AXIS_LABEL_KEYS: Record<string, { h: TranslationKey; v: TranslationKey }> = {
+  x: { h: 'v2.slices.axisDepth', v: 'v2.slices.axisDistance' },
+  y: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDistance' },
+  z: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDepth' },
 };
+
+// ─── Single axis slice view ─────────────────────────────────────────────
 
 function SliceView({
   volumeData,
@@ -133,19 +136,27 @@ function SliceView({
   axis,
   label,
   preset,
-  height = 300,
 }: {
   volumeData: Float32Array;
   dimensions: [number, number, number];
   axis: 'x' | 'y' | 'z';
   label: string;
   preset: PresetName;
-  height?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { t } = useTranslation();
   const [dimX, dimY, dimZ] = dimensions;
   const maxSlice = axis === 'x' ? dimX - 1 : axis === 'y' ? dimY - 1 : dimZ - 1;
   const [sliceIdx, setSliceIdx] = useState(Math.floor(maxSlice / 2));
+
+  // Compute actual content aspect ratio for this axis
+  let contentW: number, contentH: number;
+  if (axis === 'z') { contentW = dimX; contentH = dimY; }
+  else if (axis === 'y') { contentW = dimX; contentH = dimZ; }
+  else { contentW = dimY; contentH = dimZ; }
+
+  const aspectRatio = contentW / contentH;
+  const isPortrait = aspectRatio < 1;
 
   useEffect(() => {
     if (canvasRef.current && volumeData.length > 0) {
@@ -157,20 +168,32 @@ function SliceView({
     if (sliceIdx > maxSlice) setSliceIdx(Math.floor(maxSlice / 2));
   }, [maxSlice, sliceIdx]);
 
+  const labelKeys = AXIS_LABEL_KEYS[axis];
+
   return (
     <GlassPanel padding="16px">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
         <div style={{ fontSize: '14px', fontWeight: 600, color: colors.accent }}>{label}</div>
         <div style={{ fontSize: '12px', color: colors.text3 }}>
-          {AXIS_LABELS[axis].h} / {AXIS_LABELS[axis].v}
+          {t(labelKeys.h)} / {t(labelKeys.v)}
         </div>
       </div>
-      <div style={{ width: '100%', height: `${height}px`, background: colors.black, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{
+        width: '100%',
+        background: colors.black,
+        borderRadius: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        maxHeight: isPortrait ? '500px' : '300px',
+        minHeight: '120px',
+        overflow: 'hidden',
+      }}>
         <canvas
           ref={canvasRef}
           style={{
             maxWidth: '100%',
-            maxHeight: '100%',
+            maxHeight: isPortrait ? '500px' : '300px',
             borderRadius: '6px',
             imageRendering: 'pixelated',
             objectFit: 'contain',
@@ -207,15 +230,14 @@ interface SlicePanelProps {
 
 export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
   const [preset, setPreset] = useState<PresetName>('Water Off');
-
-  const [dimX, dimY, dimZ] = dimensions;
+  const { t } = useTranslation();
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
       {/* Header: title + preset selector */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, margin: 0 }}>
-          Coupes orthogonales
+          {t('v2.slices.title')}
         </h3>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {(Object.keys(PRESETS) as PresetName[]).map((name) => (
@@ -235,20 +257,11 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
                 fontFamily: 'inherit',
               }}
             >
-              {name}
+              {t(PRESETS[name].labelKey as TranslationKey)}
             </button>
           ))}
         </div>
       </div>
-
-      {/* Volume info */}
-      <GlassPanel padding="16px">
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', flexWrap: 'wrap', gap: '8px' }}>
-          <span style={{ color: colors.text3 }}>
-            Volume: {dimX} x {dimY} x {dimZ}
-          </span>
-        </div>
-      </GlassPanel>
 
       {/* 2-column layout: cross-section + plan view */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -256,14 +269,14 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
           volumeData={volumeData}
           dimensions={dimensions}
           axis="y"
-          label="Transversale (XZ)"
+          label={t('v2.slices.crossSection')}
           preset={preset}
         />
         <SliceView
           volumeData={volumeData}
           dimensions={dimensions}
           axis="z"
-          label="Vue en plan (XY)"
+          label={t('v2.slices.planView')}
           preset={preset}
         />
       </div>
@@ -273,9 +286,8 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         volumeData={volumeData}
         dimensions={dimensions}
         axis="x"
-        label="Longitudinale (YZ)"
+        label={t('v2.slices.longitudinal')}
         preset={preset}
-        height={400}
       />
     </div>
   );

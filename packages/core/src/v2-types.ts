@@ -141,7 +141,8 @@ export type ChromaticMode =
   | 'scientific-grayscale'
   | 'thermal'
   | 'density-probabilistic'
-  | 'ghost-accumulation';
+  | 'ghost-accumulation'
+  | 'water-off';
 
 // ─── Pipeline V2 ────────────────────────────────────────────────────────────
 

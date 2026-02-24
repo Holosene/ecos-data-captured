@@ -447,3 +447,13 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--cta-glow), 0.7) transparent;
 }
+
+/* Controls panel — half-size scrollbar */
+.echos-controls-panel::-webkit-scrollbar { width: 3px; height: 3px; background: transparent; }
+.echos-controls-panel::-webkit-scrollbar-track { background: transparent; }
+.echos-controls-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
+.echos-controls-panel::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+.echos-controls-panel {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
