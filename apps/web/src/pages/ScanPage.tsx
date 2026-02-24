@@ -382,6 +382,10 @@ export function ScanPage() {
 
     const mappings = mapAllFrames(syncCtx, frameTimes);
 
+    // Unified progress: extraction = 0-70%, projection = 70-100%
+    const EXTRACT_WEIGHT = 0.7;
+    const PROJECT_WEIGHT = 0.3;
+
     setProgress({
       stage: 'preprocessing',
       progress: 0,
@@ -419,24 +423,14 @@ export function ScanPage() {
 
         if (msg.type === 'preprocessed') {
           if (extractionDone) {
-            setProgress({
-              stage: 'preprocessing',
-              progress: msg.count / totalFrames,
-              message: `${t('v2.pipeline.preprocessing')} ${msg.count}/${totalFrames}`,
-              currentFrame: msg.count,
-              totalFrames,
-            });
+            const p = EXTRACT_WEIGHT + (msg.count / totalFrames) * PROJECT_WEIGHT * 0.5;
+            setProgress({ stage: 'preprocessing', progress: Math.min(p, 0.95), message: t('v2.pipeline.extracting'), currentFrame: msg.count, totalFrames });
           }
         } else if (msg.type === 'stage' && msg.stage === 'projecting') {
-          setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+          setProgress({ stage: 'projecting', progress: EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5, message: t('v2.pipeline.projecting') });
         } else if (msg.type === 'projection-progress') {
-          setProgress({
-            stage: 'projecting',
-            progress: msg.current / msg.total,
-            message: `${t('v2.pipeline.accumulating')} ${msg.current}/${msg.total}`,
-            currentFrame: msg.current,
-            totalFrames: msg.total,
-          });
+          const p = EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5 + (msg.current / msg.total) * PROJECT_WEIGHT * 0.5;
+          setProgress({ stage: 'projecting', progress: Math.min(p, 0.98), message: t('v2.pipeline.projecting'), currentFrame: msg.current, totalFrames: msg.total });
         } else if (msg.type === 'complete') {
           resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
         } else if (msg.type === 'error') {
@@ -467,13 +461,8 @@ export function ScanPage() {
         worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
 
         extractedCount++;
-        setProgress({
-          stage: 'preprocessing',
-          progress: extractedCount / totalFrames,
-          message: `${t('v2.pipeline.extracting')} ${extractedCount}/${totalFrames}`,
-          currentFrame: extractedCount,
-          totalFrames,
-        });
+        const p = (extractedCount / totalFrames) * EXTRACT_WEIGHT;
+        setProgress({ stage: 'preprocessing', progress: p, message: t('v2.pipeline.extracting'), currentFrame: extractedCount, totalFrames });
       }
     };
 
@@ -524,6 +513,9 @@ export function ScanPage() {
     dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
     setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
 
+    // Show completion state briefly before transitioning
+    await new Promise((r) => setTimeout(r, 1200));
+
     const sessionId = crypto.randomUUID();
     const gpxPoints = track.points.map((p) => ({ lat: p.lat, lon: p.lon }));
     const bounds: [number, number, number, number] = [
@@ -552,14 +544,12 @@ export function ScanPage() {
       gpxTrack: gpxPoints,
     });
 
-    // Transition to viewer with animation
+    // Smooth transition to viewer
+    setPhase('viewer');
+    // Slide step bar away after a short delay
     setTimeout(() => {
-      setPhase('viewer');
-      // Slide step bar away after a short delay
-      setTimeout(() => {
-        setStepBarAnimating(true);
-        setTimeout(() => setStepBarVisible(false), 500);
-      }, 800);
+      setStepBarAnimating(true);
+      setTimeout(() => setStepBarVisible(false), 500);
     }, 600);
   }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
 
@@ -743,83 +733,96 @@ export function ScanPage() {
 
         {/* ── Settings Phase (includes sync + processing overlay) ─── */}
         {(phase === 'settings' || phase === 'processing') && (
-          <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-            {/* Processing overlay — stays on "Configurer" step */}
+          <div style={{ flex: 1, overflow: phase === 'processing' ? 'hidden' : 'auto', position: 'relative' }}>
+            {/* Processing overlay — minimal, centered */}
             {phase === 'processing' && progress && (
               <div style={{
                 position: 'absolute',
                 inset: 0,
                 zIndex: 20,
-                background: 'rgba(0, 0, 0, 0.85)',
-                backdropFilter: 'blur(8px)',
+                background: 'var(--c-black)',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: '12px',
+                transition: 'opacity 600ms ease',
               }}>
-                <div style={{ width: '100%', maxWidth: '420px' }}>
-                  {/* Gray status cell with animated dots */}
-                  <div style={{
-                    background: colors.surface,
-                    borderRadius: '10px',
-                    padding: '14px 20px',
-                    marginBottom: '24px',
-                    textAlign: 'center',
-                  }}>
-                    <span className="echos-loading-dots" style={{ color: colors.text1, fontSize: '15px', fontWeight: 500 }}>
-                      {t('v2.pipeline.generating')}
-                    </span>
-                  </div>
+                <div style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+                  {progress.stage === 'ready' ? (
+                    /* Completion state — checkmark animation */
+                    <div style={{ animation: 'echos-fade-in 400ms ease' }}>
+                      <div style={{
+                        width: '64px',
+                        height: '64px',
+                        borderRadius: '50%',
+                        background: colors.accentMuted,
+                        border: `2px solid ${colors.accent}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 20px',
+                        animation: 'echos-scale-in 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                      }}>
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={colors.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </div>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
+                        {t('v2.pipeline.ready')}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Progress state */
+                    <>
+                      <div style={{
+                        fontSize: '48px',
+                        fontWeight: 700,
+                        color: colors.text1,
+                        fontVariantNumeric: 'tabular-nums',
+                        lineHeight: 1,
+                        marginBottom: '20px',
+                        letterSpacing: '-0.02em',
+                      }}>
+                        {Math.round(progress.progress * 100)}%
+                      </div>
 
-                  {/* Big percentage */}
-                  <div style={{
-                    textAlign: 'center',
-                    fontSize: '56px',
-                    fontWeight: 700,
-                    color: colors.text1,
-                    fontVariantNumeric: 'tabular-nums',
-                    lineHeight: 1,
-                    marginBottom: '16px',
-                  }}>
-                    {Math.round(progress.progress * 100)}%
-                  </div>
+                      <ProgressBar value={progress.progress} />
 
-                  {/* Progress bar */}
-                  <ProgressBar value={progress.progress} />
-                </div>
-                <div style={{ marginTop: '24px' }}>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      abortRef.current = true;
-                      setPhase('settings');
-                    }}
-                  >
-                    {t('v2.pipeline.abort')}
-                  </Button>
+                      <div style={{ marginTop: '32px' }}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            abortRef.current = true;
+                            setPhase('settings');
+                          }}
+                        >
+                          {t('v2.pipeline.abort')}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
 
-            <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
+            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px' }}>
               {t('v2.settings.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6, maxWidth: '700px' }}>
+            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.5, maxWidth: '700px' }}>
               {t('v2.settings.desc')}
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               {/* Mode selection */}
-              <GlassPanel style={{ padding: '20px' }}>
-                <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '14px' }}>
+              <GlassPanel style={{ padding: '16px' }}>
+                <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
                   {t('v2.config.viewMode')}
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                   <button
                     onClick={() => setViewMode('instrument')}
                     style={{
-                      padding: '16px',
+                      padding: '12px',
                       borderRadius: '12px',
                       border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
                       background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
@@ -837,7 +840,7 @@ export function ScanPage() {
                   <button
                     onClick={() => setViewMode('spatial')}
                     style={{
-                      padding: '16px',
+                      padding: '12px',
                       borderRadius: '12px',
                       border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
                       background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
@@ -856,9 +859,9 @@ export function ScanPage() {
               </GlassPanel>
 
               {/* Depth setting with exponential slider */}
-              <GlassPanel style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                  <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, margin: 0 }}>
+              <GlassPanel style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, margin: 0 }}>
                     {t('v2.settings.depth')}
                   </h3>
                   <label style={{
@@ -950,12 +953,12 @@ export function ScanPage() {
             </div>
 
             {/* Synchronization section — two trim sliders */}
-            <GlassPanel style={{ padding: '16px', marginBottom: '16px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '10px' }}>
+            <GlassPanel style={{ padding: '14px', marginBottom: '10px' }}>
+              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
                 {t('v2.sync.title')}
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
                   <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.videoDuration')}</div>
                   <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>{state.videoDurationS.toFixed(1)}s</div>
@@ -980,8 +983,8 @@ export function ScanPage() {
               </div>
 
               {/* Chart with trim zones */}
-              <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '4px' }}>
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '3px' }}>
                   {t('v2.sync.distOverTime')}
                 </div>
                 <svg
@@ -1065,8 +1068,8 @@ export function ScanPage() {
             </GlassPanel>
 
             {/* Summary */}
-            <GlassPanel style={{ padding: '16px', marginBottom: '24px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
+            <GlassPanel style={{ padding: '12px', marginBottom: '12px' }}>
+              <h3 style={{ color: colors.text1, fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
                 {t('v2.settings.summary')}
               </h3>
               <div style={{
@@ -1107,7 +1110,7 @@ export function ScanPage() {
 
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, animation: 'echos-fade-in 500ms ease' }}>
             <VolumeViewer
               volumeData={volumeData}
               dimensions={volumeDims}
