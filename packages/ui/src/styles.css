@@ -142,11 +142,12 @@ body {
 
 #root { min-height: 100vh; }
 
-/* Scrollbar — accent, full opacity */
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* Scrollbar — accent 70% opacity, no arrows, transparent track */
+::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--c-accent); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--c-accent-hover); }
+::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.7); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 
 :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 ::selection { background: var(--c-accent); color: var(--c-white); }
@@ -427,5 +428,5 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--c-accent) transparent;
+  scrollbar-color: rgba(var(--cta-glow), 0.7) transparent;
 }
