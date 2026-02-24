@@ -297,6 +297,18 @@ export const translations = {
     'v2.map.noSessions': 'Aucune session enregistrée.',
     'v2.map.newScan': 'Nouveau scan',
 
+    // Scan Select
+    'scanSelect.title': 'Choisir le moteur',
+    'scanSelect.desc': 'Deux moteurs de rendu sont disponibles. Choisissez celui que vous souhaitez utiliser.',
+    'scanSelect.current': 'Actuel',
+    'scanSelect.classic': 'Classique',
+    'scanSelect.v2.title': 'Projection conique',
+    'scanSelect.v2.desc': 'Moteur V2 avec projection conique probabiliste, ray marching GPU et prétraitement automatique.',
+    'scanSelect.v2.cta': 'Lancer en V2',
+    'scanSelect.v1.title': 'Empilement cartésien',
+    'scanSelect.v1.desc': 'Moteur V1 classique avec assistant 6 étapes, calibration manuelle et coupes orthogonales.',
+    'scanSelect.v1.cta': 'Lancer en V1',
+
     // Common
     'common.back': 'Retour',
     'common.next': 'Suivant',
@@ -597,6 +609,18 @@ export const translations = {
     'v2.map.empty': 'Import a scan to see GPS traces on the map.',
     'v2.map.noSessions': 'No sessions recorded yet.',
     'v2.map.newScan': 'New Scan',
+
+    // Scan Select
+    'scanSelect.title': 'Choose engine',
+    'scanSelect.desc': 'Two rendering engines are available. Pick the one you want to use.',
+    'scanSelect.current': 'Current',
+    'scanSelect.classic': 'Classic',
+    'scanSelect.v2.title': 'Conic projection',
+    'scanSelect.v2.desc': 'V2 engine with probabilistic conic projection, GPU ray marching and automatic preprocessing.',
+    'scanSelect.v2.cta': 'Launch V2',
+    'scanSelect.v1.title': 'Cartesian stacking',
+    'scanSelect.v1.desc': 'Classic V1 engine with 6-step wizard, manual calibration and orthogonal slices.',
+    'scanSelect.v1.cta': 'Launch V1',
 
     // Common
     'common.back': 'Back',

@@ -7,6 +7,7 @@ import { IconGlobe, IconSun, IconMoon } from './components/Icons.js';
 import { AppContext, appReducer, INITIAL_STATE } from './store/app-state.js';
 import { getBrandingForTheme } from './branding.js';
 import { HomePage } from './pages/HomePage.js';
+import { ScanSelectPage } from './pages/ScanSelectPage.js';
 import { ScanPage } from './pages/ScanPage.js';
 import { MapPage } from './pages/MapPage.js';
 import { WizardPage } from './pages/WizardPage.js';
@@ -208,7 +209,8 @@ export function App() {
         <main id="main-content" style={{ flex: 1, overflowY: 'auto' }}>
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/scan" element={<ScanPage />} />
+            <Route path="/scan" element={<ScanSelectPage />} />
+            <Route path="/scan/v2" element={<ScanPage />} />
             <Route path="/scan/classic" element={<WizardPage />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/manifesto" element={<ManifestoPage />} />
