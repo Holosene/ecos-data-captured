@@ -8,8 +8,8 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# Build artifacts in test dirs
-packages/core/__tests__/**/*.js
-packages/core/__tests__/**/*.js.map
-packages/core/__tests__/**/*.d.ts
-packages/core/__tests__/**/*.d.ts.map
+# Compiled test output
+packages/core/__tests__/*.js
+packages/core/__tests__/*.js.map
+packages/core/__tests__/*.d.ts
+packages/core/__tests__/*.d.ts.map
