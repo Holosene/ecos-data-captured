@@ -8,7 +8,7 @@
 
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
-import type { CalibrationConfig } from '../engine/volume-renderer.js';
+import type { CalibrationConfig, TexAxisOrder } from '../engine/volume-renderer.js';
 import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
@@ -249,11 +249,39 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
-      {/* Data Rotation — rotates the data inside the volume independently */}
-      <Section title="Data Rotation" />
-      <Row label="Dx" value={config.dataRotation?.x ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.x', v)} />
-      <Row label="Dy" value={config.dataRotation?.y ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.y', v)} />
-      <Row label="Dz" value={config.dataRotation?.z ?? 0} min={-180} max={180} step={1} onChange={(v) => update('dataRotation.z', v)} />
+      {/* Data Axes — reorder/flip data inside the volume independently */}
+      <Section title="Data Axes" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
+        <span style={{ width: '48px', fontSize: '10px', color: colors.text3, flexShrink: 0 }}>Order</span>
+        <select
+          value={config.dataAxes?.order ?? 'UVW'}
+          onChange={(e) => update('dataAxes.order', e.target.value as TexAxisOrder)}
+          style={{
+            flex: 1, fontSize: '10px', fontFamily: 'monospace',
+            background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.border}`,
+            borderRadius: '4px', color: colors.text1, padding: '2px 4px', cursor: 'pointer',
+          }}
+        >
+          {(['UVW', 'UWV', 'VUW', 'VWU', 'WUV', 'WVU'] as TexAxisOrder[]).map((o) => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
+      </div>
+      {(['flipU', 'flipV', 'flipW'] as const).map((key) => (
+        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', fontSize: '10px', color: colors.text3, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={config.dataAxes?.[key] ?? false}
+            onChange={(e) => {
+              const next = JSON.parse(JSON.stringify(config)) as CalibrationConfig;
+              next.dataAxes = { ...DEFAULT_CALIBRATION.dataAxes, ...next.dataAxes, [key]: e.target.checked };
+              onChange(next);
+            }}
+            style={{ width: '12px', height: '12px' }}
+          />
+          {key}
+        </label>
+      ))}
 
       {/* Camera */}
       <Section title="Camera" />
@@ -317,7 +345,7 @@ export function loadCalibration(): CalibrationConfig | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
-    // Deep-merge with defaults so new fields (e.g. dataRotation) are always present
+    // Deep-merge with defaults so new fields (e.g. dataAxes) are always present
     return {
       ...DEFAULT_CALIBRATION,
       ...saved,
@@ -325,7 +353,7 @@ export function loadCalibration(): CalibrationConfig | null {
       rotation: { ...DEFAULT_CALIBRATION.rotation, ...saved.rotation },
       scale: { ...DEFAULT_CALIBRATION.scale, ...saved.scale },
       axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...saved.axisMapping },
-      dataRotation: { ...DEFAULT_CALIBRATION.dataRotation, ...saved.dataRotation },
+      dataAxes: { ...DEFAULT_CALIBRATION.dataAxes, ...saved.dataAxes },
       camera: { ...DEFAULT_CALIBRATION.camera, ...saved.camera },
     };
   } catch {

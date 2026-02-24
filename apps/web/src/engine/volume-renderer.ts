@@ -22,6 +22,8 @@ import { generateLUT } from './transfer-function.js';
 
 // ─── Calibration config ─────────────────────────────────────────────────────
 
+export type TexAxisOrder = 'UVW' | 'UWV' | 'VUW' | 'VWU' | 'WUV' | 'WVU';
+
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number }; // degrees
@@ -31,7 +33,12 @@ export interface CalibrationConfig {
     depth: 'x' | 'y' | 'z';
     track: 'x' | 'y' | 'z';
   };
-  dataRotation: { x: number; y: number; z: number }; // degrees — rotates data inside texture independently
+  dataAxes: {
+    order: TexAxisOrder;
+    flipU: boolean;
+    flipV: boolean;
+    flipW: boolean;
+  };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -43,7 +50,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
   axisMapping: { track: 'x', depth: 'y', lateral: 'z' },
-  dataRotation: { x: 0, y: 0, z: 0 },
+  dataAxes: { order: 'UVW', flipU: false, flipV: false, flipW: false },
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -53,18 +60,32 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
 const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
 const DEG2RAD = Math.PI / 180;
 
-/** Build a 3×3 rotation matrix from Euler angles (degrees, XYZ order) */
-function buildDataRotationMatrix(rot: { x: number; y: number; z: number }): THREE.Matrix3 {
-  const cx = Math.cos(rot.x * DEG2RAD), sx = Math.sin(rot.x * DEG2RAD);
-  const cy = Math.cos(rot.y * DEG2RAD), sy = Math.sin(rot.y * DEG2RAD);
-  const cz = Math.cos(rot.z * DEG2RAD), sz = Math.sin(rot.z * DEG2RAD);
-  // Rz * Ry * Rx — column-major for THREE.Matrix3.fromArray
+/** Permutation indices for each TexAxisOrder.
+ *  E.g. 'VWU' means: result.x = src[V=1], result.y = src[W=2], result.z = src[U=0] */
+const TEX_ORDER_MAP: Record<TexAxisOrder, [number, number, number]> = {
+  UVW: [0, 1, 2],
+  UWV: [0, 2, 1],
+  VUW: [1, 0, 2],
+  VWU: [1, 2, 0],
+  WUV: [2, 0, 1],
+  WVU: [2, 1, 0],
+};
+
+/** Build a 3×3 permutation+flip matrix for data axis reordering.
+ *  Operates on texture coords centered at 0.5 — the shader does:
+ *    texCoord = uDataAxes * (texCoord - 0.5) + 0.5
+ *  This guarantees coordinates stay in [0,1]³.  */
+function buildDataAxesMatrix(cfg: CalibrationConfig['dataAxes']): THREE.Matrix3 {
+  const perm = TEX_ORDER_MAP[cfg?.order ?? 'UVW'] ?? [0, 1, 2];
+  const flip = [cfg?.flipU ? -1 : 1, cfg?.flipV ? -1 : 1, cfg?.flipW ? -1 : 1];
+  // Column-major: e[col*3 + row]
+  const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  // row i reads from source component perm[i], with optional sign flip
+  for (let i = 0; i < 3; i++) {
+    e[perm[i] * 3 + i] = flip[i];
+  }
   const mat = new THREE.Matrix3();
-  mat.fromArray([
-    cy * cz,                    cy * sz,                   -sy,
-    sx * sy * cz - cx * sz,     sx * sy * sz + cx * cz,     sx * cy,
-    cx * sy * cz + sx * sz,     cx * sy * sz - sx * cz,     cx * cy,
-  ]);
+  mat.fromArray(e);
   return mat;
 }
 
@@ -227,7 +248,7 @@ export class VolumeRenderer {
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
       this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
-      this.material.uniforms.uDataRotation.value.copy(buildDataRotationMatrix(config.dataRotation ?? { x: 0, y: 0, z: 0 }));
+      this.material.uniforms.uDataAxes.value.copy(buildDataAxesMatrix(config.dataAxes));
     }
 
     // Scene helpers
@@ -373,7 +394,7 @@ export class VolumeRenderer {
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
         uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
-        uDataRotation: { value: buildDataRotationMatrix(this.calibration.dataRotation ?? { x: 0, y: 0, z: 0 }) },
+        uDataAxes: { value: buildDataAxesMatrix(this.calibration.dataAxes) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -439,7 +460,7 @@ uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
 uniform mat3 uAxisRemap;
-uniform mat3 uDataRotation;
+uniform mat3 uDataAxes;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -507,8 +528,8 @@ void main() {
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
       // Remap box space → texture space via calibrated permutation matrix
       vec3 texCoord = uAxisRemap * uvw;
-      // Rotate data independently: center → rotate → uncenter
-      texCoord = uDataRotation * (texCoord - 0.5) + 0.5;
+      // Permute/flip data axes independently (stays in [0,1]³)
+      texCoord = uDataAxes * (texCoord - 0.5) + 0.5;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
