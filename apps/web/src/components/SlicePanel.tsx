@@ -122,9 +122,9 @@ function renderSlice(
 // ─── Single axis slice view ─────────────────────────────────────────────
 
 const AXIS_LABELS: Record<string, { h: string; v: string }> = {
-  x: { h: 'Distance (Y)', v: 'Depth (Z)' },
-  y: { h: 'Width (X)', v: 'Depth (Z)' },
-  z: { h: 'Width (X)', v: 'Distance (Y)' },
+  x: { h: 'Depth (Y)', v: 'Distance (Z)' },
+  y: { h: 'Width (X)', v: 'Distance (Z)' },
+  z: { h: 'Width (X)', v: 'Depth (Y)' },
 };
 
 function SliceView({

@@ -44,26 +44,27 @@ const WINDOW_SIZE = 12;
 // ─── Build a v1-style stacked volume from raw preprocessed frames ──────────
 // This gives full pixel resolution for 2D slice views instead of the
 // low-res conic projection grid (128×12×128).
-// Layout: data[z * dimY * dimX + y * dimX + x] where X=pixel col, Y=frame idx, Z=pixel row
+// Layout: data[z * dimY * dimX + y * dimX + x]
+//   X = pixel col (lateral), Y = pixel row (depth), Z = frame index (track)
 
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
 ): { data: Float32Array; dimensions: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
 
-  const dimX = frameList[0].width;
-  const dimZ = frameList[0].height;
-  const dimY = frameList.length;
+  const dimX = frameList[0].width;   // lateral (beam columns)
+  const dimY = frameList[0].height;  // depth (sonar rows)
+  const dimZ = frameList.length;     // frames (track/time)
 
-  if (dimX === 0 || dimZ === 0) return null;
+  if (dimX === 0 || dimY === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  for (let y = 0; y < dimY; y++) {
-    const frame = frameList[y];
-    for (let z = 0; z < dimZ; z++) {
+  for (let z = 0; z < dimZ; z++) {
+    const frame = frameList[z];
+    for (let y = 0; y < dimY; y++) {
       for (let x = 0; x < dimX; x++) {
-        data[z * dimY * dimX + y * dimX + x] = frame.intensity[z * dimX + x] ?? 0;
+        data[z * dimY * dimX + y * dimX + x] = frame.intensity[y * dimX + x] ?? 0;
       }
     }
   }
