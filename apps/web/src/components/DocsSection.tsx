@@ -78,9 +78,9 @@ export function DocsSection() {
               {t('docs.coordSystem')}
             </h3>
             <ul style={{ color: colors.text2, lineHeight: '2', fontSize: '15px', paddingLeft: '20px' }}>
-              <li><strong style={{ color: colors.text1 }}>X</strong> <span style={{ color: colors.accent }}>-</span> {t('docs.coordX')}</li>
-              <li><strong style={{ color: colors.text1 }}>Y</strong> <span style={{ color: colors.accent }}>-</span> {t('docs.coordY')}</li>
-              <li><strong style={{ color: colors.text1 }}>Z</strong> <span style={{ color: colors.accent }}>-</span> {t('docs.coordZ')}</li>
+              <li><strong style={{ color: colors.text1 }}>X</strong> <span style={{ color: colors.text2 }}>-</span> {t('docs.coordX')}</li>
+              <li><strong style={{ color: colors.text1 }}>Y</strong> <span style={{ color: colors.text2 }}>-</span> {t('docs.coordY')}</li>
+              <li><strong style={{ color: colors.text1 }}>Z</strong> <span style={{ color: colors.text2 }}>-</span> {t('docs.coordZ')}</li>
             </ul>
             <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '14px', marginTop: '14px', fontFamily: 'var(--font-mono)' }}>
               {t('docs.coordNote')}

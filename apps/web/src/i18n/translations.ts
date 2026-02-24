@@ -3,6 +3,7 @@ export type Lang = 'fr' | 'en';
 export const translations = {
   fr: {
     // Nav
+    'nav.home': 'Accueil',
     'nav.scan': 'Scanner',
     'nav.manifesto': 'Manifeste',
     'nav.docs': 'Documentation',
@@ -278,6 +279,44 @@ export const translations = {
     'v2.controls.ghost': 'Renforcement fantôme',
     'v2.controls.steps': 'Pas ray march',
     'v2.controls.showBeam': 'Afficher le faisceau',
+    'v2.controls.playSpeed': 'Vitesse lecture',
+
+    // V2 Slices
+    'v2.slices.title': 'Coupes orthogonales',
+    'v2.slices.crossSection': 'Transversale (XZ)',
+    'v2.slices.planView': 'Vue en plan (XY)',
+    'v2.slices.longitudinal': 'Longitudinale (YZ)',
+    'v2.slices.axisDepth': 'Profondeur (Y)',
+    'v2.slices.axisDistance': 'Distance (Z)',
+    'v2.slices.axisWidth': 'Largeur (X)',
+    'v2.slices.presetWaterOff': 'Water Off',
+    'v2.slices.presetStructures': 'Structures',
+    'v2.slices.presetHighContrast': 'Haut contraste',
+    'v2.slices.presetGrayscale': 'Niveaux de gris',
+
+    // V2 Export
+    'v2.export.title': 'Exporter',
+
+    // V2 Camera
+    'v2.camera.frontal': 'Frontale 2D',
+    'v2.camera.horizontal': 'Horizontale',
+    'v2.camera.vertical': 'Coupe verticale',
+    'v2.camera.free': 'Libre',
+
+    // V2 Auto
+    'v2.controls.auto': 'Auto',
+    'v2.pipeline.frame': 'Frame',
+
+    // V2 Sync (inside config)
+    'v2.sync.title': 'Synchronisation vidéo / GPX',
+    'v2.sync.videoDuration': 'Durée vidéo',
+    'v2.sync.gpxDuration': 'Durée GPX',
+    'v2.sync.timeOffset': 'Décalage temporel',
+    'v2.sync.timeOffsetTooltip': 'Positif : le GPX commence après la vidéo. Négatif : le GPX commence avant la vidéo.',
+    'v2.sync.distOverTime': 'Distance dans le temps (GPX)',
+    'v2.sync.totalDist': 'Distance totale',
+    'v2.sync.avgSpeed': 'Vitesse moyenne',
+    'v2.sync.timeRatio': 'Ratio temps',
 
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
@@ -293,6 +332,7 @@ export const translations = {
 
   en: {
     // Nav
+    'nav.home': 'Home',
     'nav.scan': 'Scan',
     'nav.manifesto': 'Manifesto',
     'nav.docs': 'Docs',
@@ -568,6 +608,44 @@ export const translations = {
     'v2.controls.ghost': 'Ghost Enhancement',
     'v2.controls.steps': 'Ray March Steps',
     'v2.controls.showBeam': 'Show Beam',
+    'v2.controls.playSpeed': 'Playback Speed',
+
+    // V2 Slices
+    'v2.slices.title': 'Orthogonal Slices',
+    'v2.slices.crossSection': 'Cross-Section (XZ)',
+    'v2.slices.planView': 'Plan View (XY)',
+    'v2.slices.longitudinal': 'Longitudinal (YZ)',
+    'v2.slices.axisDepth': 'Depth (Y)',
+    'v2.slices.axisDistance': 'Distance (Z)',
+    'v2.slices.axisWidth': 'Width (X)',
+    'v2.slices.presetWaterOff': 'Water Off',
+    'v2.slices.presetStructures': 'Structures',
+    'v2.slices.presetHighContrast': 'High Contrast',
+    'v2.slices.presetGrayscale': 'Grayscale',
+
+    // V2 Export
+    'v2.export.title': 'Export',
+
+    // V2 Camera
+    'v2.camera.frontal': 'Frontal 2D',
+    'v2.camera.horizontal': 'Horizontal',
+    'v2.camera.vertical': 'Vertical Section',
+    'v2.camera.free': 'Free',
+
+    // V2 Auto
+    'v2.controls.auto': 'Auto',
+    'v2.pipeline.frame': 'Frame',
+
+    // V2 Sync (inside config)
+    'v2.sync.title': 'Video / GPX Synchronization',
+    'v2.sync.videoDuration': 'Video Duration',
+    'v2.sync.gpxDuration': 'GPX Duration',
+    'v2.sync.timeOffset': 'Time Offset',
+    'v2.sync.timeOffsetTooltip': 'Positive: GPX starts after video. Negative: GPX starts before video.',
+    'v2.sync.distOverTime': 'Distance over time (GPX)',
+    'v2.sync.totalDist': 'Total Distance',
+    'v2.sync.avgSpeed': 'Avg Speed',
+    'v2.sync.timeRatio': 'Time Ratio',
 
     // V2 Map
     'v2.map.title': 'Recording Sessions',

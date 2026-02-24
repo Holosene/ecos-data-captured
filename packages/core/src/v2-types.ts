@@ -26,10 +26,10 @@ export interface PreprocessingSettings {
 
 export const DEFAULT_PREPROCESSING: PreprocessingSettings = {
   upscaleFactor: 1,
-  denoiseStrength: 0.2,
-  gamma: 0.85,
-  gaussianSigma: 0.8,
-  deblockStrength: 0.3,
+  denoiseStrength: 0.15,
+  gamma: 0.9,
+  gaussianSigma: 0.3,
+  deblockStrength: 0.1,
 };
 
 // ─── Conic Projection ───────────────────────────────────────────────────────
@@ -64,9 +64,9 @@ export interface VolumeGridSettings {
 }
 
 export const DEFAULT_GRID: VolumeGridSettings = {
-  resX: 96,
-  resY: 128,
-  resZ: 96,
+  resX: 128,
+  resY: 256,
+  resZ: 128,
 };
 
 // ─── Probabilistic Volume ───────────────────────────────────────────────────
@@ -141,7 +141,8 @@ export type ChromaticMode =
   | 'scientific-grayscale'
   | 'thermal'
   | 'density-probabilistic'
-  | 'ghost-accumulation';
+  | 'ghost-accumulation'
+  | 'water-off';
 
 // ─── Pipeline V2 ────────────────────────────────────────────────────────────
 
@@ -185,12 +186,12 @@ export interface RendererSettings {
 
 export const DEFAULT_RENDERER: RendererSettings = {
   opacityScale: 1.0,
-  threshold: 0.05,
+  threshold: 0.02,
   densityScale: 1.0,
-  smoothing: 0.3,
+  smoothing: 0.15,
   showBeam: false,
   ghostEnhancement: 0.0,
-  stepCount: 128,
+  stepCount: 192,
   chromaticMode: 'thermal',
 };
 

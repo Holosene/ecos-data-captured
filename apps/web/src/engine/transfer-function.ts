@@ -67,6 +67,14 @@ const PALETTES: Record<ChromaticMode, ColorStop[]> = {
     { pos: 0.85, r: 200, g: 240, b: 255, a: 180 },
     { pos: 1.0, r: 240, g: 255, b: 255, a: 255 },
   ],
+  'water-off': [
+    { pos: 0.0, r: 0, g: 0, b: 0, a: 0 },
+    { pos: 0.15, r: 0, g: 0, b: 0, a: 0 },
+    { pos: 0.3, r: 10, g: 20, b: 60, a: 20 },
+    { pos: 0.5, r: 66, g: 33, b: 206, a: 120 },
+    { pos: 0.7, r: 140, g: 100, b: 255, a: 200 },
+    { pos: 1.0, r: 225, g: 224, b: 235, a: 255 },
+  ],
 };
 
 // ─── LUT generation ─────────────────────────────────────────────────────────
@@ -126,4 +134,5 @@ export const CHROMATIC_LABELS: Record<ChromaticMode, { en: string; fr: string }>
   'thermal': { en: 'Thermal', fr: 'Thermique' },
   'density-probabilistic': { en: 'Density', fr: 'Densité' },
   'ghost-accumulation': { en: 'Ghost', fr: 'Fantôme' },
+  'water-off': { en: 'Water Off', fr: 'Water Off' },
 };

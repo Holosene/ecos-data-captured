@@ -1,26 +1,20 @@
 /**
- * ECHOS V2 — Scan Page
+ * ECHOS — Scan Page (V2 only)
  *
- * Workflow inspired by V1 wizard (clear step-by-step UX) with V2 auto-intelligence:
- *   1. Import MP4 + GPX
- *   2. Crop — visual drag tool (auto-detected starting point, user can adjust)
- *   3. Settings — mode (A/B), depth max (auto or manual), generate
- *   4. Processing — progress bar
- *   5. Viewer — 3D volumetric + post-generation fine-tuning
+ * Workflow:
+ *   1. Importer — MP4 + GPX
+ *   2. Recadrer — visual drag crop tool
+ *   3. Configurer — mode, depth, sync, generate (processing happens here)
+ *   4. Visualiser — 3D volumetric viewer (step bar slides away)
  */
 
-import React, { useCallback, useRef, useState, useEffect } from 'react';
-import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, colors } from '@echos/ui';
+import React, { useCallback, useRef, useState, useEffect, useMemo } from 'react';
+import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, StepIndicator, colors } from '@echos/ui';
 import {
   parseGpx,
+  enrichTrackpoints,
   createSyncContext,
   mapAllFrames,
-  extractFrameImageData,
-  preprocessFrame,
-  projectFramesSpatial,
-  buildInstrumentVolume,
-  createEmptyVolume,
-  normalizeVolume,
   estimateVolumeMemoryMB,
   autoDetectCropRegion,
   autoDetectDepthMax,
@@ -44,38 +38,100 @@ import { VolumeViewer } from '../components/VolumeViewer.js';
 
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
 
+// Steps shown in the bar (no "Traitement")
+const PIPELINE_STEPS: { label: string; key: string }[] = [
+  { label: 'Importer', key: 'import' },
+  { label: 'Recadrer', key: 'crop' },
+  { label: 'Configurer', key: 'settings' },
+  { label: 'Visualiser', key: 'viewer' },
+];
+
+function phaseToStepIndex(phase: ScanPhase): number {
+  if (phase === 'processing') return 2; // stays on "Configurer"
+  return PIPELINE_STEPS.findIndex((s) => s.key === phase);
+}
+
+// Exponential depth steps: fine resolution at shallow depths
+const DEPTH_STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40, 50, 60, 80, 100];
+
+function depthToSliderIndex(depth: number): number {
+  let closest = 0;
+  let minDiff = Math.abs(DEPTH_STEPS[0] - depth);
+  for (let i = 1; i < DEPTH_STEPS.length; i++) {
+    const diff = Math.abs(DEPTH_STEPS[i] - depth);
+    if (diff < minDiff) { minDiff = diff; closest = i; }
+  }
+  return closest;
+}
+
 export function ScanPage() {
   const { state, dispatch } = useAppState();
   const { t } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
-  const [viewMode, setViewMode] = useState<ViewMode>('spatial');
+  const [viewMode, setViewMode] = useState<ViewMode>('instrument'); // Mode A by default
 
-  // Settings (auto-intelligent defaults)
+  // Settings
   const [preprocessing] = useState<PreprocessingSettings>({ ...DEFAULT_PREPROCESSING });
   const [beam, setBeam] = useState<BeamSettings>({ ...DEFAULT_BEAM });
   const [grid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 640, height: 480 });
-  const [fpsExtraction] = useState(1);
+  const [fpsExtraction] = useState(4);
 
   // Auto-depth
   const [autoDepth, setAutoDepth] = useState(false);
   const [detectedDepth, setDetectedDepth] = useState<number | null>(null);
 
+  // Depth slider index (exponential)
+  const [depthSliderIdx, setDepthSliderIdx] = useState(() => depthToSliderIndex(DEFAULT_BEAM.depthMaxM));
+
   // Crop tool state
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [frameReady, setFrameReady] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [scale, setScale] = useState(1);
+  const frameBitmapRef = useRef<ImageBitmap | null>(null);
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const cropRef = useRef(crop);
+  const scaleRef = useRef(scale);
+  const rafIdRef = useRef(0);
+  cropRef.current = crop;
+  scaleRef.current = scale;
 
   // Processing state
   const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
+  const [instrumentFrames, setInstrumentFrames] = useState<Array<{
+    index: number; timeS: number; intensity: Float32Array; width: number; height: number;
+  }> | null>(null);
   const abortRef = useRef(false);
+
+  // Step bar animation state
+  const [stepBarVisible, setStepBarVisible] = useState(true);
+  const [stepBarAnimating, setStepBarAnimating] = useState(false);
+
+  // Sync: distance-over-time chart
+  const enriched = useMemo(
+    () => (state.gpxTrack ? enrichTrackpoints(state.gpxTrack) : []),
+    [state.gpxTrack],
+  );
+  const maxDist = enriched.length > 0 ? enriched[enriched.length - 1].cumulativeDistanceM : 0;
+  const chartWidth = 600;
+  const chartHeight = 120;
+  const chartPoints = useMemo(() => {
+    if (enriched.length === 0) return '';
+    const maxT = enriched[enriched.length - 1].elapsedS || 1;
+    return enriched
+      .map((pt) => {
+        const x = (pt.elapsedS / maxT) * chartWidth;
+        const y = chartHeight - (pt.cumulativeDistanceM / (maxDist || 1)) * chartHeight;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }, [enriched, maxDist]);
 
   // ─── File handlers ────────────────────────────────────────────────────
 
@@ -135,153 +191,175 @@ export function ScanPage() {
     const video = document.createElement('video');
     video.preload = 'auto';
     video.muted = true;
+    let disposed = false;
 
     video.onloadeddata = () => {
       video.currentTime = Math.min(video.duration / 3, 10);
     };
 
-    video.onseeked = () => {
+    video.onseeked = async () => {
+      if (disposed) return;
       const canvas = canvasRef.current;
       if (!canvas) { URL.revokeObjectURL(url); return; }
 
       const container = containerRef.current;
-      const maxW = container ? container.clientWidth - 40 : 800;
-      const s = Math.min(1, maxW / video.videoWidth);
+      const maxW = container ? container.clientWidth - 20 : 800;
+      const maxH = container ? container.clientHeight - 10 : 600;
+      const s = Math.min(1, maxW / video.videoWidth, maxH / video.videoHeight);
       setScale(s);
+      scaleRef.current = s;
 
       canvas.width = video.videoWidth * s;
       canvas.height = video.videoHeight * s;
 
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const offscreen = document.createElement('canvas');
+      offscreen.width = canvas.width;
+      offscreen.height = canvas.height;
+      const offCtx = offscreen.getContext('2d');
+      if (offCtx) {
+        offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+          frameBitmapRef.current = await createImageBitmap(offscreen);
+        } catch {
+          frameBitmapRef.current = null;
+        }
+      }
 
-      // Auto-detect crop on first load
       const fullCanvas = new OffscreenCanvas(video.videoWidth, video.videoHeight);
       const fullCtx = fullCanvas.getContext('2d')!;
       fullCtx.drawImage(video, 0, 0);
       const fullImageData = fullCtx.getImageData(0, 0, video.videoWidth, video.videoHeight);
       const detected = autoDetectCropRegion(fullImageData);
       setCrop(detected);
+      cropRef.current = detected;
 
-      // Try auto-detect depth
       const depthResult = autoDetectDepthMax(fullImageData, detected);
       if (depthResult !== null) {
         setDetectedDepth(depthResult);
         setBeam((b) => ({ ...b, depthMaxM: depthResult }));
+        setDepthSliderIdx(depthToSliderIndex(depthResult));
         setAutoDepth(true);
       }
 
-      setFrameReady(true);
       URL.revokeObjectURL(url);
+      if (!disposed) setFrameReady(true);
     };
 
     video.src = url;
-    return () => URL.revokeObjectURL(url);
+    return () => { disposed = true; URL.revokeObjectURL(url); };
   }, [phase, state.videoFile]);
 
-  // Redraw crop overlay when crop changes
-  useEffect(() => {
-    if (!frameReady || phase !== 'crop' || !state.videoFile) return;
+  // ─── Draw crop overlay ──────────
+  const drawCropOverlay = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const bitmap = frameBitmapRef.current;
+    if (!canvas || !bitmap) return;
 
-    const url = URL.createObjectURL(state.videoFile);
-    const video = document.createElement('video');
-    video.preload = 'auto';
-    video.muted = true;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(video.duration / 3, 10);
-    };
+    const c = cropRef.current;
+    const s = scaleRef.current;
 
-    video.onseeked = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { URL.revokeObjectURL(url); return; }
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw full frame dimmed
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const cx = c.x * s;
+    const cy = c.y * s;
+    const cw = c.width * s;
+    const ch = c.height * s;
 
-      // Draw bright crop area
-      const cx = crop.x * scale;
-      const cy = crop.y * scale;
-      const cw = crop.width * scale;
-      const ch = crop.height * scale;
-      ctx.clearRect(cx, cy, cw, ch);
-      ctx.drawImage(
-        video,
-        crop.x, crop.y, crop.width, crop.height,
-        cx, cy, cw, ch,
-      );
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx, cy, cw, ch);
+    ctx.clip();
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.restore();
 
-      // Dashed border
-      ctx.strokeStyle = '#4488ff';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(cx, cy, cw, ch);
-      ctx.setLineDash([]);
+    ctx.strokeStyle = '#8A7CFF';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(cx, cy, cw, ch);
+    ctx.setLineDash([]);
 
-      // Corner handles
-      const hs = 8;
-      ctx.fillStyle = '#4488ff';
-      for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
-        ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
-      }
+    const hs = 8;
+    ctx.fillStyle = '#8A7CFF';
+    for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
+      ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    }
+  }, []);
 
-      URL.revokeObjectURL(url);
-    };
+  useEffect(() => {
+    if (frameReady) drawCropOverlay();
+  }, [frameReady, crop, scale, drawCropOverlay]);
 
-    video.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [frameReady, crop, scale, state.videoFile, phase]);
-
+  // ─── Mouse events ─────────────────
   const getCanvasCoords = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
       return {
-        x: Math.round((e.clientX - rect.left) / scale),
-        y: Math.round((e.clientY - rect.top) / scale),
+        x: Math.round((e.clientX - rect.left) / scaleRef.current),
+        y: Math.round((e.clientY - rect.top) / scaleRef.current),
       };
     },
-    [scale],
+    [],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const coords = getCanvasCoords(e);
-      setDragStart(coords);
-      setDragging(true);
+      dragStartRef.current = getCanvasCoords(e);
+      draggingRef.current = true;
     },
     [getCanvasCoords],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragging || !dragStart) return;
+      if (!draggingRef.current || !dragStartRef.current) return;
+
       const coords = getCanvasCoords(e);
-      const x = Math.max(0, Math.min(dragStart.x, coords.x));
-      const y = Math.max(0, Math.min(dragStart.y, coords.y));
-      const w = Math.abs(coords.x - dragStart.x);
-      const h = Math.abs(coords.y - dragStart.y);
-      setCrop({
+      const start = dragStartRef.current;
+      const x = Math.max(0, Math.min(start.x, coords.x));
+      const y = Math.max(0, Math.min(start.y, coords.y));
+      const w = Math.abs(coords.x - start.x);
+      const h = Math.abs(coords.y - start.y);
+      const newCrop = {
         x,
         y,
         width: Math.max(20, Math.min(w, state.videoWidth - x)),
         height: Math.max(20, Math.min(h, state.videoHeight - y)),
-      });
+      };
+
+      cropRef.current = newCrop;
+
+      if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = 0;
+          drawCropOverlay();
+          setCrop(cropRef.current);
+        });
+      }
     },
-    [dragging, dragStart, getCanvasCoords, state.videoWidth, state.videoHeight],
+    [getCanvasCoords, drawCropOverlay, state.videoWidth, state.videoHeight],
   );
 
   const handleMouseUp = useCallback(() => {
-    setDragging(false);
-    setDragStart(null);
-  }, []);
+    draggingRef.current = false;
+    dragStartRef.current = null;
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = 0;
+    }
+    setCrop(cropRef.current);
+    drawCropOverlay();
+  }, [drawCropOverlay]);
 
   // ─── V2 Processing pipeline ───────────────────────────────────────────
+
+  const workerRef = useRef<Worker | null>(null);
 
   const runPipeline = useCallback(async () => {
     if (!state.videoFile || !state.gpxTrack) return;
@@ -312,88 +390,139 @@ export function ScanPage() {
       totalFrames,
     });
 
-    const preprocessedFrames: Array<{
-      index: number;
-      timeS: number;
-      intensity: Float32Array;
-      width: number;
-      height: number;
-    }> = [];
+    const worker = new Worker(
+      new URL('../workers/pipeline-worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+    workerRef.current = worker;
 
-    for (let i = 0; i < totalFrames; i++) {
-      if (abortRef.current) break;
+    worker.postMessage({
+      type: 'init',
+      preprocessing,
+      beam,
+      grid,
+      viewMode,
+      trackTotalDistanceM: track.totalDistanceM,
+      mappings,
+    });
 
-      const timeS = i / fpsExtraction;
-      video.currentTime = timeS;
-      await new Promise<void>((r) => { video.onseeked = () => r(); });
+    let extractionDone = false;
 
-      const imageData = extractFrameImageData(video, crop.x, crop.y, crop.width, crop.height);
-      const result = preprocessFrame(imageData, preprocessing);
-      preprocessedFrames.push({ index: i, timeS, ...result });
+    const resultPromise = new Promise<{
+      normalizedData: Float32Array;
+      dims: [number, number, number];
+      extent: [number, number, number];
+      frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
+    }>((resolve, reject) => {
+      worker.onmessage = (e: MessageEvent) => {
+        const msg = e.data;
 
-      setProgress({
-        stage: 'preprocessing',
-        progress: (i + 1) / totalFrames,
-        message: `${t('v2.pipeline.preprocessing')} ${i + 1}/${totalFrames}`,
-        currentFrame: i + 1,
-        totalFrames,
-      });
+        if (msg.type === 'preprocessed') {
+          if (extractionDone) {
+            setProgress({
+              stage: 'preprocessing',
+              progress: msg.count / totalFrames,
+              message: `${t('v2.pipeline.preprocessing')} ${msg.count}/${totalFrames}`,
+              currentFrame: msg.count,
+              totalFrames,
+            });
+          }
+        } else if (msg.type === 'stage' && msg.stage === 'projecting') {
+          setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+        } else if (msg.type === 'projection-progress') {
+          setProgress({
+            stage: 'projecting',
+            progress: msg.current / msg.total,
+            message: `${t('v2.pipeline.accumulating')} ${msg.current}/${msg.total}`,
+            currentFrame: msg.current,
+            totalFrames: msg.total,
+          });
+        } else if (msg.type === 'complete') {
+          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
+        } else if (msg.type === 'error') {
+          reject(new Error(msg.message));
+        }
+      };
+
+      worker.onerror = (err) => reject(new Error(err.message));
+    });
+
+    const PARALLEL = Math.min(4, Math.max(2, Math.floor(navigator.hardwareConcurrency / 2)));
+    const blobUrl = video.src;
+    const chunkSize = Math.ceil(totalFrames / PARALLEL);
+    let extractedCount = 0;
+
+    const extractChunk = async (videoEl: HTMLVideoElement, startIdx: number, endIdx: number) => {
+      for (let i = startIdx; i < endIdx; i++) {
+        if (abortRef.current) break;
+
+        const timeS = i / fpsExtraction;
+        videoEl.currentTime = timeS;
+        await new Promise<void>((r) => { videoEl.onseeked = () => r(); });
+
+        const bitmap = await createImageBitmap(
+          videoEl, crop.x, crop.y, crop.width, crop.height,
+        );
+
+        worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
+
+        extractedCount++;
+        setProgress({
+          stage: 'preprocessing',
+          progress: extractedCount / totalFrames,
+          message: `${t('v2.pipeline.extracting')} ${extractedCount}/${totalFrames}`,
+          currentFrame: extractedCount,
+          totalFrames,
+        });
+      }
+    };
+
+    const videos: HTMLVideoElement[] = [video];
+    for (let p = 1; p < PARALLEL; p++) {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.src = blobUrl;
+      videos.push(v);
     }
 
-    URL.revokeObjectURL(video.src);
+    await Promise.all(
+      videos.slice(1).map((v) => new Promise<void>((r) => { v.oncanplaythrough = () => r(); })),
+    );
+
+    const chunkPromises = videos.map((v, p) => {
+      const start = p * chunkSize;
+      const end = Math.min(start + chunkSize, totalFrames);
+      return extractChunk(v, start, end);
+    });
+
+    await Promise.all(chunkPromises);
+
+    URL.revokeObjectURL(blobUrl);
+    extractionDone = true;
+
+    if (abortRef.current) {
+      worker.terminate();
+      workerRef.current = null;
+      return;
+    }
+
+    worker.postMessage({ type: 'done' });
+
+    const result = await resultPromise;
+    worker.terminate();
+    workerRef.current = null;
+
     if (abortRef.current) return;
 
-    setProgress({ stage: 'projecting', progress: 0, message: t('v2.pipeline.projecting') });
+    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
 
-    let normalizedData: Float32Array;
-    let dims: [number, number, number];
-    let extent: [number, number, number];
-
-    if (viewMode === 'instrument') {
-      const result = buildInstrumentVolume(
-        preprocessedFrames, beam, grid,
-        (current, total) => {
-          setProgress({
-            stage: 'projecting',
-            progress: current / total,
-            message: `${t('v2.pipeline.projecting')} ${current}/${total}`,
-            currentFrame: current,
-            totalFrames: total,
-          });
-        },
-      );
-      normalizedData = result.normalized;
-      dims = result.dimensions;
-      extent = result.extent;
-    } else {
-      const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
-      const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-      const volume = createEmptyVolume(grid, maxRadius * 2.5, track.totalDistanceM, beam.depthMaxM);
-
-      projectFramesSpatial(
-        preprocessedFrames, mappings, volume, beam,
-        (current, total) => {
-          setProgress({
-            stage: 'projecting',
-            progress: current / total,
-            message: `${t('v2.pipeline.accumulating')} ${current}/${total}`,
-            currentFrame: current,
-            totalFrames: total,
-          });
-        },
-      );
-
-      normalizedData = normalizeVolume(volume);
-      dims = volume.dimensions;
-      extent = volume.extent;
-    }
-
-    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
+    setInstrumentFrames(preprocessedFrames);
     setVolumeData(normalizedData);
     setVolumeDims(dims);
     setVolumeExtent(extent);
 
     dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
+    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
 
     const sessionId = crypto.randomUUID();
     const gpxPoints = track.points.map((p) => ({ lat: p.lat, lon: p.lon }));
@@ -423,7 +552,15 @@ export function ScanPage() {
       gpxTrack: gpxPoints,
     });
 
-    setPhase('viewer');
+    // Transition to viewer with animation
+    setTimeout(() => {
+      setPhase('viewer');
+      // Slide step bar away after a short delay
+      setTimeout(() => {
+        setStepBarAnimating(true);
+        setTimeout(() => setStepBarVisible(false), 500);
+      }, 800);
+    }, 600);
   }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
@@ -431,16 +568,41 @@ export function ScanPage() {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)' }}>
-      <div style={{ padding: 'clamp(24px, 3vw, 48px) var(--content-gutter)' }}>
+    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)', display: 'flex', flexDirection: 'column' }}>
+      {/* Pipeline Step Indicator — slides up when viewer is reached */}
+      {stepBarVisible && (
+        <div
+          style={{
+            padding: '12px var(--content-gutter) 0',
+            flexShrink: 0,
+            transition: 'transform 500ms cubic-bezier(0.4, 0, 0.2, 1), opacity 500ms ease',
+            transform: stepBarAnimating ? 'translateY(-100%)' : 'translateY(0)',
+            opacity: stepBarAnimating ? 0 : 1,
+          }}
+        >
+          <StepIndicator
+            steps={PIPELINE_STEPS.map((s) => ({ label: s.label, key: s.key }))}
+            currentStep={phaseToStepIndex(phase)}
+            onStepClick={(idx: number) => {
+              const target = PIPELINE_STEPS[idx];
+              if (!target) return;
+              if (idx < phaseToStepIndex(phase) && phase !== 'processing') {
+                setPhase(target.key as ScanPhase);
+              }
+            }}
+          />
+        </div>
+      )}
+
+      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+          <div style={{ flex: 1, overflow: 'auto' }}>
             <h1 style={{ color: colors.text1, fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.scan.title')}
             </h1>
-            <p style={{ color: colors.text2, fontSize: '15px', marginBottom: '32px', lineHeight: 1.6 }}>
+            <p style={{ color: colors.text2, fontSize: '15px', marginBottom: '32px', lineHeight: 1.6, maxWidth: '700px' }}>
               {t('v2.scan.desc')}
             </p>
 
@@ -494,24 +656,27 @@ export function ScanPage() {
           </div>
         )}
 
-        {/* ── Crop Phase (V1-style visual crop) ─────────────────────── */}
+        {/* ── Crop Phase ─────────────────────── */}
         {phase === 'crop' && (
-          <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-            <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px', flexShrink: 0 }}>
               {t('crop.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6, maxWidth: '640px' }}>
+            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.4, maxWidth: '640px', flexShrink: 0 }}>
               {t('crop.desc')}
             </p>
 
-            <GlassPanel style={{ padding: '20px', marginBottom: '20px' }}>
+            <GlassPanel style={{ padding: '12px', marginBottom: '12px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div
                 ref={containerRef}
                 style={{
                   position: 'relative',
                   display: 'flex',
                   justifyContent: 'center',
+                  alignItems: 'center',
                   cursor: 'crosshair',
+                  flex: 1,
+                  overflow: 'hidden',
                 }}
               >
                 <canvas
@@ -520,7 +685,7 @@ export function ScanPage() {
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  style={{ borderRadius: '8px', maxWidth: '100%' }}
+                  style={{ borderRadius: '8px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
                 />
                 {!frameReady && (
                   <div style={{
@@ -537,12 +702,12 @@ export function ScanPage() {
                 )}
               </div>
 
-              {/* Crop coordinates */}
               <div style={{
-                marginTop: '16px',
+                marginTop: '8px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '12px',
+                gap: '8px',
+                flexShrink: 0,
               }}>
                 {[
                   { label: 'X', value: crop.x },
@@ -551,8 +716,8 @@ export function ScanPage() {
                   { label: 'H', value: crop.height },
                 ].map(({ label, value }) => (
                   <div key={label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '4px' }}>{label}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                    <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{label}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
                       {value}px
                     </div>
                   </div>
@@ -560,7 +725,7 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
               <Button variant="ghost" size="lg" onClick={() => setPhase('import')}>
                 {t('common.back')}
               </Button>
@@ -576,128 +741,279 @@ export function ScanPage() {
           </div>
         )}
 
-        {/* ── Settings Phase (simple: mode + depth) ─────────────────── */}
-        {phase === 'settings' && (
-          <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+        {/* ── Settings Phase (includes sync + processing overlay) ─── */}
+        {(phase === 'settings' || phase === 'processing') && (
+          <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+            {/* Processing overlay — stays on "Configurer" step */}
+            {phase === 'processing' && progress && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 20,
+                background: 'rgba(0, 0, 0, 0.85)',
+                backdropFilter: 'blur(8px)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '12px',
+              }}>
+                <h2 style={{ color: colors.text1, fontSize: '24px', fontWeight: 600, marginBottom: '24px' }}>
+                  {t('v2.pipeline.title')}
+                </h2>
+                <div style={{ width: '100%', maxWidth: '500px' }}>
+                  <GlassPanel style={{ padding: '24px' }}>
+                    <div style={{ marginBottom: '16px' }}>
+                      <ProgressBar value={progress.progress} />
+                    </div>
+                    <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '8px', textAlign: 'center' }}>
+                      {progress.message}
+                    </p>
+                    {progress.currentFrame !== undefined && progress.totalFrames && (
+                      <p style={{ color: colors.text3, fontSize: '12px', textAlign: 'center' }}>
+                        {t('v2.pipeline.frame')} {progress.currentFrame} / {progress.totalFrames}
+                      </p>
+                    )}
+                  </GlassPanel>
+                </div>
+                <div style={{ marginTop: '24px' }}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      abortRef.current = true;
+                      setPhase('settings');
+                    }}
+                  >
+                    {t('v2.pipeline.abort')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <h2 style={{ color: colors.text1, fontSize: 'clamp(20px, 2.5vw, 28px)', fontWeight: 600, marginBottom: '8px' }}>
               {t('v2.settings.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6 }}>
+            <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '24px', lineHeight: 1.6, maxWidth: '700px' }}>
               {t('v2.settings.desc')}
             </p>
 
-            {/* Mode selection */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+              {/* Mode selection */}
+              <GlassPanel style={{ padding: '20px' }}>
+                <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '14px' }}>
+                  {t('v2.config.viewMode')}
+                </h3>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button
+                    onClick={() => setViewMode('instrument')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
+                      background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                      Mode A — {t('v2.mode.instrument')}
+                    </div>
+                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                      {t('v2.mode.instrumentDesc')}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('spatial')}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
+                      background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                      Mode B — {t('v2.mode.spatial')}
+                    </div>
+                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                      {t('v2.mode.spatialDesc')}
+                    </div>
+                  </button>
+                </div>
+              </GlassPanel>
+
+              {/* Depth setting with exponential slider */}
+              <GlassPanel style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                  <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, margin: 0 }}>
+                    {t('v2.settings.depth')}
+                  </h3>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '13px',
+                    color: colors.text2,
+                    cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={autoDepth}
+                      onChange={(e) => {
+                        setAutoDepth(e.target.checked);
+                        if (e.target.checked && detectedDepth !== null) {
+                          setBeam((b) => ({ ...b, depthMaxM: detectedDepth }));
+                          setDepthSliderIdx(depthToSliderIndex(detectedDepth));
+                        }
+                      }}
+                    />
+                    {t('v2.settings.autoDepth')}
+                  </label>
+                </div>
+
+                {autoDepth && detectedDepth !== null ? (
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(68,136,255,0.08)',
+                    border: '1px solid rgba(68,136,255,0.15)',
+                    fontSize: '14px',
+                    color: colors.text1,
+                  }}>
+                    {t('v2.settings.detectedDepth')}: <strong>{detectedDepth}m</strong>
+                  </div>
+                ) : autoDepth ? (
+                  <div style={{
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    background: 'rgba(255,180,0,0.08)',
+                    border: '1px solid rgba(255,180,0,0.2)',
+                    fontSize: '13px',
+                    color: colors.text2,
+                  }}>
+                    {t('v2.settings.depthNotDetected')}
+                  </div>
+                ) : null}
+
+                {!autoDepth && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <label style={{ fontSize: '13px', fontWeight: 500, color: colors.text1 }}>
+                        {t('v2.config.depthMax')}
+                      </label>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text1, fontVariantNumeric: 'tabular-nums' }}>
+                        {DEPTH_STEPS[depthSliderIdx]}m
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={DEPTH_STEPS.length - 1}
+                      step={1}
+                      value={depthSliderIdx}
+                      onChange={(e) => {
+                        const idx = parseInt(e.target.value);
+                        setDepthSliderIdx(idx);
+                        setBeam((b) => ({ ...b, depthMaxM: DEPTH_STEPS[idx] }));
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: colors.text3, marginTop: '4px' }}>
+                      <span>{DEPTH_STEPS[0]}m</span>
+                      <span>{DEPTH_STEPS[DEPTH_STEPS.length - 1]}m</span>
+                    </div>
+                    {/* Graduation marks */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: colors.text3, marginTop: '2px', padding: '0 2px' }}>
+                      {[1, 5, 10, 20, 50, 100].map((m) => (
+                        <span key={m} style={{ opacity: 0.6 }}>{m}</span>
+                      ))}
+                    </div>
+                    <p style={{ color: colors.text3, fontSize: '12px', marginTop: '6px', lineHeight: 1.5 }}>
+                      {t('v2.settings.depthHint')}
+                    </p>
+                  </div>
+                )}
+              </GlassPanel>
+            </div>
+
+            {/* Synchronization section (from V1) */}
             <GlassPanel style={{ padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '14px' }}>
-                {t('v2.config.viewMode')}
+                {t('v2.sync.title')}
               </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <button
-                  onClick={() => setViewMode('instrument')}
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
-                    background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode A — {t('v2.mode.instrument')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.instrumentDesc')}
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('spatial')}
-                  style={{
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
-                    background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode B — {t('v2.mode.spatial')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.spatialDesc')}
-                  </div>
-                </button>
-              </div>
-            </GlassPanel>
 
-            {/* Depth setting */}
-            <GlassPanel style={{ padding: '20px', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, margin: 0 }}>
-                  {t('v2.settings.depth')}
-                </h3>
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  fontSize: '13px',
-                  color: colors.text2,
-                  cursor: 'pointer',
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={autoDepth}
-                    onChange={(e) => {
-                      setAutoDepth(e.target.checked);
-                      if (e.target.checked && detectedDepth !== null) {
-                        setBeam((b) => ({ ...b, depthMaxM: detectedDepth }));
-                      }
-                    }}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div style={{ padding: '12px 16px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '4px' }}>{t('v2.sync.videoDuration')}</div>
+                  <div style={{ fontSize: '20px', fontWeight: 600, color: colors.text1 }}>{state.videoDurationS.toFixed(1)}s</div>
+                </div>
+                <div style={{ padding: '12px 16px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '4px' }}>{t('v2.sync.gpxDuration')}</div>
+                  <div style={{ fontSize: '20px', fontWeight: 600, color: colors.text1 }}>{state.gpxTrack?.durationS.toFixed(1) ?? '-'}s</div>
+                </div>
+              </div>
+
+              <Slider
+                label={t('v2.sync.timeOffset')}
+                value={state.sync.offsetS}
+                min={-30}
+                max={30}
+                step={0.5}
+                unit=" s"
+                tooltip={t('v2.sync.timeOffsetTooltip')}
+                onChange={(v) => dispatch({ type: 'SET_SYNC', sync: { offsetS: v } })}
+              />
+
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '8px' }}>
+                  {t('v2.sync.distOverTime')}
+                </div>
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  style={{ width: '100%', height: '100px', background: colors.surface, borderRadius: '8px' }}
+                >
+                  {state.sync.offsetS !== 0 && state.gpxTrack && (
+                    <line
+                      x1={(Math.abs(state.sync.offsetS) / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      y1={0}
+                      x2={(Math.abs(state.sync.offsetS) / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      y2={chartHeight}
+                      stroke={colors.warning}
+                      strokeWidth={1}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                  <polyline
+                    points={chartPoints}
+                    fill="none"
+                    stroke={colors.accent}
+                    strokeWidth={2}
                   />
-                  {t('v2.settings.autoDepth')}
-                </label>
+                </svg>
               </div>
 
-              {autoDepth && detectedDepth !== null ? (
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'rgba(68,136,255,0.08)',
-                  border: '1px solid rgba(68,136,255,0.15)',
-                  fontSize: '14px',
-                  color: colors.text1,
-                }}>
-                  {t('v2.settings.detectedDepth')}: <strong>{detectedDepth}m</strong>
-                </div>
-              ) : autoDepth ? (
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'rgba(255,180,0,0.08)',
-                  border: '1px solid rgba(255,180,0,0.2)',
-                  fontSize: '13px',
-                  color: colors.text2,
-                }}>
-                  {t('v2.settings.depthNotDetected')}
-                </div>
-              ) : null}
-
-              {!autoDepth && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginTop: '12px', textAlign: 'center' }}>
                 <div>
-                  <Slider
-                    label={t('v2.config.depthMax')}
-                    value={beam.depthMaxM}
-                    min={1}
-                    max={100}
-                    step={1}
-                    onChange={(v) => setBeam((b) => ({ ...b, depthMaxM: v }))}
-                  />
-                  <p style={{ color: colors.text3, fontSize: '12px', marginTop: '6px', lineHeight: 1.5 }}>
-                    {t('v2.settings.depthHint')}
-                  </p>
+                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.totalDist')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>{maxDist.toFixed(0)} m</div>
                 </div>
-              )}
+                <div>
+                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.avgSpeed')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>
+                    {state.gpxTrack && state.gpxTrack.durationS > 0
+                      ? (maxDist / state.gpxTrack.durationS).toFixed(1)
+                      : '-'}{' '}
+                    m/s
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.timeRatio')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>
+                    {state.gpxTrack ? (state.gpxTrack.durationS / state.videoDurationS).toFixed(2) : '-'}x
+                  </div>
+                </div>
+              </div>
             </GlassPanel>
 
             {/* Summary */}
@@ -734,45 +1050,8 @@ export function ScanPage() {
               <Button variant="ghost" size="lg" onClick={() => setPhase('crop')}>
                 {t('common.back')}
               </Button>
-              <Button variant="primary" size="lg" onClick={runPipeline}>
+              <Button variant="primary" size="lg" onClick={runPipeline} disabled={phase === 'processing'}>
                 {t('v2.config.generate')}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Processing Phase ──────────────────────────────────────── */}
-        {phase === 'processing' && (
-          <div style={{ maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
-            <h1 style={{ color: colors.text1, fontSize: '24px', fontWeight: 600, marginBottom: '24px' }}>
-              {t('v2.pipeline.title')}
-            </h1>
-
-            {progress && (
-              <GlassPanel style={{ padding: '24px' }}>
-                <div style={{ marginBottom: '16px' }}>
-                  <ProgressBar value={progress.progress} />
-                </div>
-                <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '8px' }}>
-                  {progress.message}
-                </p>
-                {progress.currentFrame !== undefined && progress.totalFrames && (
-                  <p style={{ color: colors.text3, fontSize: '12px' }}>
-                    Frame {progress.currentFrame} / {progress.totalFrames}
-                  </p>
-                )}
-              </GlassPanel>
-            )}
-
-            <div style={{ marginTop: '24px' }}>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  abortRef.current = true;
-                  setPhase('settings');
-                }}
-              >
-                {t('v2.pipeline.abort')}
               </Button>
             </div>
           </div>
@@ -780,30 +1059,27 @@ export function ScanPage() {
 
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h1 style={{ color: colors.text1, fontSize: '20px', fontWeight: 600, margin: 0 }}>
-                {t('v2.viewer.title')}
-              </h1>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" size="sm" onClick={() => setPhase('settings')}>
-                  {t('v2.viewer.reconfigure')}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setPhase('import');
-                  setVolumeData(null);
-                  setFrameReady(false);
-                }}>
-                  {t('v2.viewer.newScan')}
-                </Button>
-              </div>
-            </div>
-
+          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
             <VolumeViewer
               volumeData={volumeData}
               dimensions={volumeDims}
               extent={volumeExtent}
               mode={viewMode}
+              frames={instrumentFrames ?? undefined}
+              beam={beam}
+              grid={grid}
+              onReconfigure={() => {
+                setStepBarVisible(true);
+                setStepBarAnimating(false);
+                setPhase('settings');
+              }}
+              onNewScan={() => {
+                setStepBarVisible(true);
+                setStepBarAnimating(false);
+                setPhase('import');
+                setVolumeData(null);
+                setFrameReady(false);
+              }}
             />
           </div>
         )}

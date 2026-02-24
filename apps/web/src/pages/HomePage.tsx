@@ -1,20 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
 import { useTheme } from '../theme/index.js';
+import { getBrandingForTheme } from '../branding.js';
 import { IconImage, IconChevronUp } from '../components/Icons.js';
 import { ImageLightbox } from '../components/ImageLightbox.js';
 import { DocsSection } from '../components/DocsSection.js';
+import { MapView } from '../components/MapView.js';
+import { useAppState } from '../store/app-state.js';
 
 export function HomePage() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, tArray } = useTranslation();
   const { theme } = useTheme();
+  const { state, dispatch } = useAppState();
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
+  const [showFloatingCta, setShowFloatingCta] = useState(false);
+  const heroCtaRef = useRef<HTMLDivElement>(null);
+
+  // Show floating CTA when hero button scrolls out of view
+  useEffect(() => {
+    const el = heroCtaRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowFloatingCta(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const FEATURES = [
     { title: t('home.feat1.title'), desc: t('home.feat1.desc'), num: '01' },
     { title: t('home.feat2.title'), desc: t('home.feat2.desc'), num: '02' },
@@ -61,9 +80,9 @@ export function HomePage() {
           padding: 'clamp(48px, 8vw, 100px) var(--content-gutter) clamp(32px, 4vw, 64px)',
         }}
       >
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: '12px' }}>
           <img
-            src={`${import.meta.env.BASE_URL}${theme === 'dark' ? 'logotype.png' : 'logotype-dark.png'}`}
+            src={getBrandingForTheme(theme).texteTitle}
             alt="echos - donnees capturees"
             style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
           />
@@ -75,17 +94,20 @@ export function HomePage() {
             color: colors.text3,
             maxWidth: '560px',
             lineHeight: 1.7,
-            marginBottom: '36px',
+            marginBottom: '48px',
           }}
         >
           {t('home.description')}
         </p>
 
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div ref={heroCtaRef} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
-          <Button variant="secondary" size="lg" onClick={() => navigate('/manifesto')}>
+          <Button variant="secondary" size="lg" onClick={() => {
+            const el = document.getElementById('manifesto-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}>
             {t('home.cta2')}
           </Button>
         </div>
@@ -292,7 +314,45 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Documentation — inline continuation */}
+      {/* Map — after Accueil, matching nav order: Accueil > Carte > Docs > Manifeste */}
+      <section
+        id="map-section"
+        style={{
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2
+            style={{
+              fontFamily: fonts.display,
+              fontVariationSettings: "'wght' 600",
+              fontSize: 'clamp(28px, 3vw, 36px)',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+              color: colors.text1,
+              margin: 0,
+            }}
+          >
+            {t('v2.map.title')}
+          </h2>
+          <span style={{ color: colors.text3, fontSize: '13px' }}>
+            {state.sessions.length} {t('v2.map.sessions')}
+          </span>
+        </div>
+
+        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden' }}>
+          <MapView
+            sessions={state.sessions}
+            selectedSessionId={state.activeSessionId}
+            onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
+            gpxTracks={state.gpxTracks}
+            theme={theme}
+          />
+        </div>
+
+      </section>
+
+      {/* Documentation */}
       <section
         id="docs-section"
         style={{
@@ -302,10 +362,106 @@ export function HomePage() {
         <DocsSection />
       </section>
 
+      {/* Manifesto */}
+      <section
+        id="manifesto-section"
+        style={{
+          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+        }}
+      >
+        <h2
+          style={{
+            fontFamily: fonts.display,
+            fontVariationSettings: "'wght' 500",
+            fontSize: 'clamp(36px, 4vw, 56px)',
+            lineHeight: 1,
+            letterSpacing: '-0.02em',
+            color: colors.text1,
+            marginBottom: '4px',
+          }}
+        >
+          {t('manifesto.title')}
+        </h2>
+        <p
+          style={{
+            fontFamily: fonts.display,
+            fontVariationSettings: "'wght' 500",
+            fontSize: 'clamp(18px, 2vw, 24px)',
+            lineHeight: 1.2,
+            color: colors.accent,
+            marginBottom: '56px',
+          }}
+        >
+          {t('manifesto.subtitle')}
+        </p>
+
+        <div
+          className="manifesto-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '28px',
+          }}
+        >
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s1.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s1.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s1.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s2.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s2.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s2.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s3.title')}
+            </h3>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s3.p1')}</p>
+            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s3.p2')}</p>
+          </GlassPanel>
+
+          <GlassPanel padding="32px">
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s4.title')}
+            </h3>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gap: '8px' }}>
+              {tArray('manifesto.s4.items').map((item, i) => (
+                <li key={i} style={{ display: 'flex', gap: '12px' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0 }}>-</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </GlassPanel>
+
+          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }}>
+            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+              {t('manifesto.s5.title')}
+            </h3>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
+              {tArray('manifesto.s5.items').map((item, i) => (
+                <li key={i} style={{ display: 'flex', gap: '12px' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0 }}>+</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </GlassPanel>
+        </div>
+
+      </section>
+
       {/* Scroll to top */}
       <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 clamp(32px, 4vw, 56px)' }}>
         <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' })}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -329,6 +485,36 @@ export function HomePage() {
           <IconChevronUp size={20} />
         </button>
       </div>
+
+      {/* Floating scan CTA — accent bg, frosted, appears when hero CTA scrolls out */}
+      <button
+        onClick={() => navigate('/scan')}
+        className="floating-scan-cta"
+        style={{
+          position: 'fixed',
+          bottom: '32px',
+          right: '32px',
+          zIndex: 90,
+          padding: '20px 48px 22px',
+          fontSize: '20px',
+          fontWeight: 600,
+          letterSpacing: '-0.01em',
+          fontFamily: 'inherit',
+          color: '#FFFFFF',
+          background: 'var(--cta-bg-soft)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: 'var(--radius-full)',
+          cursor: 'pointer',
+          boxShadow: 'none',
+          opacity: showFloatingCta ? 1 : 0,
+          transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
+          pointerEvents: showFloatingCta ? 'auto' : 'none',
+        }}
+      >
+        {t('home.cta')}
+      </button>
 
       {/* Lightbox */}
       {lightboxOpen && (
