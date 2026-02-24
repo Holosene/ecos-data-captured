@@ -38,9 +38,13 @@ export function MapView({
     const map = L.map(mapRef.current, {
       center: [46.6, 2.3],
       zoom: 6,
-      zoomControl: true,
+      zoomControl: false,
+      scrollWheelZoom: false,
       attributionControl: false,
     });
+
+    // Custom zoom control positioned top-right
+    L.control.zoom({ position: 'topright' }).addTo(map);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,

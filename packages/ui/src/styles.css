@@ -16,7 +16,7 @@
   --c-border-active: rgba(255, 255, 255, 0.25);
   --c-text-1: #EAEAEA;
   --c-text-2: #969696;
-  --c-text-3: rgba(234, 234, 234, 0.3);
+  --c-text-3: rgba(234, 234, 234, 0.55);
   --c-success: #34D399;
   --c-warning: #FBBF24;
   --c-error: #F87171;
@@ -47,11 +47,13 @@
   --logo-block-w: 140px;
   --content-gutter: calc(var(--page-gutter) + var(--logo-block-w));
 
-  /* Topbar gradient — subtle Adobe Fonts-inspired */
+  /* Topbar gradient — liquid glass */
   --topbar-bg:
-    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(138, 124, 255, 0.04), transparent 70%),
-    linear-gradient(90deg, rgba(17, 17, 17, 0.93) 0%, rgba(17, 17, 17, 0.88) 45%, rgba(17, 17, 17, 0.85) 100%);
-  --topbar-border: rgba(255, 255, 255, 0.06);
+    radial-gradient(ellipse 260px 80px at 24px 100%, rgba(138, 124, 255, 0.07), transparent 70%),
+    radial-gradient(ellipse 180px 60px at 85% 0%, rgba(138, 124, 255, 0.04), transparent 70%),
+    linear-gradient(180deg, rgba(30, 30, 36, 0.82) 0%, rgba(22, 22, 28, 0.78) 100%);
+  --topbar-border: rgba(255, 255, 255, 0.08);
+  --topbar-glass-highlight: rgba(255, 255, 255, 0.04);
 }
 
 /* Light mode overrides */
@@ -69,7 +71,7 @@
   --c-border-active: rgba(0, 0, 0, 0.25);
   --c-text-1: #111111;
   --c-text-2: rgba(17, 17, 17, 0.6);
-  --c-text-3: rgba(17, 17, 17, 0.5);
+  --c-text-3: rgba(17, 17, 17, 0.65);
   --color-primary: #4221CE;
   --color-black: #FAFAFA;
   --color-white: #111111;
@@ -77,28 +79,33 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
 
-  /* Topbar gradient — light mode */
+  /* Topbar gradient — light liquid glass */
   --topbar-bg:
-    radial-gradient(ellipse 220px 70px at 24px 100%, rgba(66, 33, 206, 0.035), transparent 70%),
-    linear-gradient(90deg, rgba(250, 250, 250, 0.96) 0%, rgba(250, 250, 250, 0.93) 45%, rgba(250, 250, 250, 0.90) 100%);
-  --topbar-border: rgba(0, 0, 0, 0.06);
+    radial-gradient(ellipse 260px 80px at 24px 100%, rgba(66, 33, 206, 0.06), transparent 70%),
+    radial-gradient(ellipse 180px 60px at 85% 0%, rgba(66, 33, 206, 0.03), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 248, 252, 0.82) 100%);
+  --topbar-border: rgba(0, 0, 0, 0.07);
+  --topbar-glass-highlight: rgba(255, 255, 255, 0.6);
 }
 [data-theme="light"] body {
   background: #FAFAFA;
   color: #111111;
 }
 
-/* Topbar with gradient — full-bleed background, inner content aligned to layout grid */
+/* Topbar with liquid glass — full-bleed background, inner content aligned to layout grid */
 .echos-topbar {
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 100;
   height: 72px;
   background: var(--topbar-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px) saturate(1.4);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
   border-bottom: 1px solid var(--topbar-border);
-  transition: background 350ms ease, border-color 350ms ease;
+  box-shadow:
+    0 1px 0 0 var(--topbar-glass-highlight),
+    0 4px 24px -4px rgba(0, 0, 0, 0.18);
+  transition: background 350ms ease, border-color 350ms ease, box-shadow 350ms ease;
 }
 .topbar-inner {
   width: 100%;
@@ -128,11 +135,11 @@ body {
 
 #root { min-height: 100vh; }
 
-/* Scrollbar */
+/* Scrollbar — accent blue */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--c-border-hover); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--c-border-active); }
+::-webkit-scrollbar-thumb { background: var(--c-accent-muted); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
 
 :focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
 ::selection { background: var(--c-accent); color: var(--c-white); }
@@ -338,4 +345,54 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .grid-4-cols {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* Map container — keep below topbar */
+.leaflet-container {
+  z-index: 1;
+  font-family: var(--font-body);
+}
+
+/* Leaflet zoom controls — redesigned to match site style */
+.leaflet-control-zoom {
+  border: none !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden;
+  box-shadow: var(--shadow-md) !important;
+  background: var(--c-surface) !important;
+  border: 1px solid var(--c-border) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.leaflet-control-zoom a {
+  background: var(--c-surface) !important;
+  color: var(--c-accent) !important;
+  border: none !important;
+  width: 36px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  font-size: 18px !important;
+  font-weight: 500 !important;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--c-surface-hover) !important;
+  color: var(--c-accent-hover) !important;
+}
+
+.leaflet-control-zoom-in {
+  border-bottom: 1px solid var(--c-border) !important;
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+.leaflet-control-zoom-out {
+  border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-accent-muted) transparent;
 }
