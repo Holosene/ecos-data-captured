@@ -143,11 +143,18 @@ export function VolumeViewer({
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
-  // Volume data for slices:
-  // - Mode A: built from raw frames at full pixel resolution (v1-style stacking)
+  // Volume data for 2D orthogonal slices:
+  // - Mode A: built from ALL raw frames at full pixel resolution (v1-style stacking)
   // - Mode B: uses conic-projected data
   const [sliceVolumeData, setSliceVolumeData] = useState<Float32Array | null>(null);
   const [sliceDimensions, setSliceDimensions] = useState<[number, number, number]>([1, 1, 1]);
+
+  // Build full-resolution slice volume from ALL frames once (v1 approach).
+  // This gives proper resolution on every axis instead of the 12-frame window.
+  const fullSliceVolume = useMemo(() => {
+    if (!frames || frames.length === 0) return null;
+    return buildSliceVolumeFromFrames(frames);
+  }, [frames]);
 
   // Initialize renderer
   useEffect(() => {
@@ -170,14 +177,23 @@ export function VolumeViewer({
   useEffect(() => {
     if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
     rendererRef.current.uploadVolume(volumeData, dimensions, extent);
-    setSliceVolumeData(volumeData);
-    setSliceDimensions(dimensions);
 
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
       updateSetting('threshold', threshold);
     }
   }, [volumeData, dimensions, extent, isTemporalMode]);
+
+  // Set slice data: full-frame volume for Mode A, static data for Mode B
+  useEffect(() => {
+    if (isTemporalMode && fullSliceVolume) {
+      setSliceVolumeData(fullSliceVolume.data);
+      setSliceDimensions(fullSliceVolume.dimensions);
+    } else if (!isTemporalMode && volumeData && volumeData.length > 0) {
+      setSliceVolumeData(volumeData);
+      setSliceDimensions(dimensions);
+    }
+  }, [isTemporalMode, fullSliceVolume, volumeData, dimensions]);
 
   // Pre-computed frame projection cache for smooth playback
   const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
@@ -221,17 +237,6 @@ export function VolumeViewer({
 
     // Upload conic-projected volume for 3D ray marching
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-
-    // Build full-resolution stacked volume from raw frames for 2D slices
-    const halfWin = Math.floor(WINDOW_SIZE / 2);
-    const startIdx = Math.max(0, currentFrame - halfWin);
-    const endIdx = Math.min(frames!.length - 1, currentFrame + halfWin);
-    const windowFrames = frames!.slice(startIdx, endIdx + 1);
-    const sliceResult = buildSliceVolumeFromFrames(windowFrames);
-    if (sliceResult) {
-      setSliceVolumeData(sliceResult.data);
-      setSliceDimensions(sliceResult.dimensions);
-    }
   }, [isTemporalMode, currentFrame, frames, beam, grid]);
 
   // Playback animation loop

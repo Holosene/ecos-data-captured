@@ -169,7 +169,7 @@ function SliceView({
           width: '100%',
           height: 'auto',
           borderRadius: '6px',
-          imageRendering: 'auto',
+          imageRendering: 'pixelated',
           background: colors.black,
           display: 'block',
         }}
