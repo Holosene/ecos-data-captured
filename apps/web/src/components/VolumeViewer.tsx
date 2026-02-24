@@ -16,8 +16,9 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer } from '../engine/volume-renderer.js';
-import type { CameraPreset } from '../engine/volume-renderer.js';
+import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
+import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
+import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
@@ -136,6 +137,54 @@ export function VolumeViewer({
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
 
+  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
+  const [calibrationSaved, setCalibrationSaved] = useState(false);
+  const bPressCountRef = useRef(0);
+  const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // "b" x5 toggle + Ctrl+S save
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl+S / Cmd+S — save calibration
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
+        e.preventDefault();
+        const cal = rendererRef.current?.getCalibration() ?? calibration;
+        saveCalibration(cal);
+        downloadCalibration(cal);
+        setCalibrationSaved(true);
+        setTimeout(() => setCalibrationSaved(false), 2000);
+        return;
+      }
+
+      // Press "b" 5 times within 2 seconds
+      if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        bPressCountRef.current += 1;
+        if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
+        bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
+        if (bPressCountRef.current >= 5) {
+          bPressCountRef.current = 0;
+          setCalibrationOpen((prev) => !prev);
+        }
+      }
+
+      // Escape closes calibration
+      if (e.key === 'Escape' && calibrationOpen) {
+        setCalibrationOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [calibrationOpen, calibration]);
+
+  // Apply calibration to renderer when it changes
+  const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
+    setCalibration(cal);
+    setCalibrationSaved(false);
+    rendererRef.current?.setCalibration(cal);
+  }, []);
+
   // Temporal playback state (Mode A)
   const isTemporalMode = mode === 'instrument' && frames && frames.length > 0 && beam && grid;
   const [currentFrame, setCurrentFrame] = useState(0);
@@ -161,7 +210,7 @@ export function VolumeViewer({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderer = new VolumeRenderer(containerRef.current, settings);
+    const renderer = new VolumeRenderer(containerRef.current, settings, calibration);
     rendererRef.current = renderer;
 
     const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
@@ -398,7 +447,7 @@ export function VolumeViewer({
           )}
         </div>
 
-        {/* Controls panel */}
+        {/* Controls / Calibration panel */}
         <div
           style={{
             width: '240px',
@@ -409,87 +458,98 @@ export function VolumeViewer({
             overflowY: 'auto',
           }}
         >
-          <GlassPanel style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-              {t('v2.controls.title')}
-            </h3>
+          {calibrationOpen ? (
+            <CalibrationPanel
+              config={calibration}
+              onChange={handleCalibrationChange}
+              onClose={() => setCalibrationOpen(false)}
+              saved={calibrationSaved}
+            />
+          ) : (
+            <>
+              <GlassPanel style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+                  {t('v2.controls.title')}
+                </h3>
 
-            {/* Chromatic mode — larger pill buttons */}
-            <div>
-              <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '6px', display: 'block' }}>
-                {t('v2.controls.palette')}
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                {chromaticModes.map((m: ChromaticMode) => (
-                  <button
-                    key={m}
-                    onClick={() => updateSetting('chromaticMode', m)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '20px',
-                      border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                      background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                      color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      transition: 'all 150ms ease',
-                    }}
-                  >
-                    {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                  </button>
-                ))}
-              </div>
-            </div>
+                {/* Chromatic mode — larger pill buttons */}
+                <div>
+                  <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '6px', display: 'block' }}>
+                    {t('v2.controls.palette')}
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                    {chromaticModes.map((m: ChromaticMode) => (
+                      <button
+                        key={m}
+                        onClick={() => updateSetting('chromaticMode', m)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                          background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                          color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          transition: 'all 150ms ease',
+                        }}
+                      >
+                        {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
+                <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
 
-            {/* Threshold with auto toggle */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-                <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input
-                    type="checkbox"
-                    checked={autoThreshold}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
-                    style={{ width: '12px', height: '12px' }}
-                  />
-                  Auto
-                </label>
-              </div>
-              <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
-            </div>
+                {/* Threshold with auto toggle */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+                    <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoThreshold}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
+                        style={{ width: '12px', height: '12px' }}
+                      />
+                      Auto
+                    </label>
+                  </div>
+                  <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
+                </div>
 
-            <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
-            <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
+                <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
+                <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
 
-            {mode === 'spatial' && (
-              <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
-            )}
+                {mode === 'spatial' && (
+                  <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
+                )}
 
-            <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
+                <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
 
-            {mode === 'instrument' && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-                <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                {t('v2.controls.showBeam')}
-              </label>
-            )}
+                {mode === 'instrument' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
+                    {t('v2.controls.showBeam')}
+                  </label>
+                )}
 
-            {isTemporalMode && (
-              <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-            )}
-          </GlassPanel>
+                {isTemporalMode && (
+                  <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
+                )}
+              </GlassPanel>
 
-          {/* Export panel */}
-          <ExportPanel
-            volumeData={sliceVolumeData}
-            dimensions={sliceDimensions}
-            extent={extent}
-            onCaptureScreenshot={handleCaptureScreenshot}
-          />
+              {/* Export panel */}
+              <ExportPanel
+                volumeData={sliceVolumeData}
+                dimensions={sliceDimensions}
+                extent={extent}
+                onCaptureScreenshot={handleCaptureScreenshot}
+              />
+            </>
+          )}
         </div>
       </div>
 

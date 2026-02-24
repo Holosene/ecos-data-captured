@@ -11,6 +11,7 @@
  *   - Real-time interactive controls
  *   - Beam wireframe overlay
  *   - Camera presets (frontal, horizontal, vertical, free)
+ *   - Live calibration via CalibrationConfig
  */
 
 import * as THREE from 'three';
@@ -18,6 +19,49 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { RendererSettings, ChromaticMode } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
 import { generateLUT } from './transfer-function.js';
+
+// ─── Calibration config ─────────────────────────────────────────────────────
+
+export interface CalibrationConfig {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number }; // degrees
+  scale: { x: number; y: number; z: number };
+  axisMapping: {
+    lateral: 'x' | 'y' | 'z';
+    depth: 'x' | 'y' | 'z';
+    track: 'x' | 'y' | 'z';
+  };
+  camera: { dist: number; fov: number };
+  grid: { y: number };
+  axes: { size: number };
+  bgColor: string;
+}
+
+export const DEFAULT_CALIBRATION: CalibrationConfig = {
+  position: { x: 0, y: -0.12, z: 0 },
+  rotation: { x: 180, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
+  camera: { dist: 1.6, fov: 50 },
+  grid: { y: -0.5 },
+  axes: { size: 0.6 },
+  bgColor: '#0a0a0f',
+};
+
+const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
+const DEG2RAD = Math.PI / 180;
+
+/** Build a 3×3 permutation matrix that remaps box-space UVW → texture-space UVW */
+function buildAxisRemapMatrix(mapping: CalibrationConfig['axisMapping']): THREE.Matrix3 {
+  // Column-major: e[col*3 + row]
+  const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  e[AXIS_IDX[mapping.lateral] * 3 + 0] = 1; // tex U (lateral) ← world axis
+  e[AXIS_IDX[mapping.track] * 3 + 1] = 1;   // tex V (track)   ← world axis
+  e[AXIS_IDX[mapping.depth] * 3 + 2] = 1;   // tex W (depth)   ← world axis
+  const mat = new THREE.Matrix3();
+  mat.fromArray(e);
+  return mat;
+}
 
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
@@ -41,9 +85,17 @@ export class VolumeRenderer {
   private currentPreset: CameraPreset = 'frontal';
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
+  private calibration: CalibrationConfig;
+  private gridHelper: THREE.GridHelper;
+  private axesHelper: THREE.AxesHelper;
 
-  constructor(container: HTMLElement, initialSettings?: Partial<RendererSettings>) {
+  constructor(
+    container: HTMLElement,
+    initialSettings?: Partial<RendererSettings>,
+    initialCalibration?: CalibrationConfig,
+  ) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
+    this.calibration = initialCalibration ?? { ...DEFAULT_CALIBRATION };
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -53,7 +105,7 @@ export class VolumeRenderer {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x0a0a0f, 1);
+    this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
     container.appendChild(this.renderer.domElement);
 
     // Scene (no fog — clean rendering)
@@ -61,7 +113,7 @@ export class VolumeRenderer {
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(
-      50,
+      this.calibration.camera.fov,
       container.clientWidth / container.clientHeight,
       0.1,
       100,
@@ -92,14 +144,20 @@ export class VolumeRenderer {
     this.scene.add(this.beamGroup);
 
     // Axes helper
-    const axes = new THREE.AxesHelper(0.3);
-    axes.position.set(-0.6, -0.6, -0.6);
-    this.scene.add(axes);
+    const axesBaseSize = 0.3;
+    this.axesHelper = new THREE.AxesHelper(axesBaseSize);
+    this.axesHelper.scale.setScalar(this.calibration.axes.size / axesBaseSize);
+    this.axesHelper.position.set(
+      -this.calibration.axes.size,
+      -this.calibration.axes.size,
+      -this.calibration.axes.size,
+    );
+    this.scene.add(this.axesHelper);
 
     // Grid helper
-    const gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
-    gridHelper.position.y = -0.5;
-    this.scene.add(gridHelper);
+    this.gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+    this.gridHelper.position.y = this.calibration.grid.y;
+    this.scene.add(this.gridHelper);
 
     // Default camera
     this.setCameraPreset('frontal');
@@ -112,23 +170,83 @@ export class VolumeRenderer {
     ro.observe(container);
   }
 
+  // ─── Calibration ──────────────────────────────────────────────────────
+
+  /** Compute volume scale from extent + calibration axis mapping + stretch */
+  private computeVolumeScale(): THREE.Vector3 {
+    const maxExtent = Math.max(...this.extent);
+    const cal = this.calibration;
+    const s = [0, 0, 0];
+    // Map each data extent to its calibrated 3D axis
+    s[AXIS_IDX[cal.axisMapping.lateral]] = this.extent[0] / maxExtent; // lateral
+    s[AXIS_IDX[cal.axisMapping.track]] = this.extent[1] / maxExtent;   // track
+    s[AXIS_IDX[cal.axisMapping.depth]] = this.extent[2] / maxExtent;   // depth
+    // Apply calibration stretch factors
+    s[0] *= cal.scale.x;
+    s[1] *= cal.scale.y;
+    s[2] *= cal.scale.z;
+    return new THREE.Vector3(s[0], s[1], s[2]);
+  }
+
+  /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
+  setCalibration(config: CalibrationConfig): void {
+    this.calibration = config;
+
+    // Mesh transform
+    if (this.volumeMesh) {
+      const r = config.rotation;
+      this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
+      this.volumeMesh.position.set(config.position.x, config.position.y, config.position.z);
+      this.volumeMesh.updateMatrixWorld(true);
+    }
+
+    // Recompute scale + axis remap
+    if (this.material) {
+      const scale = this.computeVolumeScale();
+      this.volumeScale = scale;
+      const halfScale = scale.clone().multiplyScalar(0.5);
+      this.material.uniforms.volumeScale.value.copy(scale);
+      this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
+      this.material.uniforms.uVolumeMax.value.copy(halfScale);
+      this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
+    }
+
+    // Scene helpers
+    const axesBaseSize = 0.3;
+    this.axesHelper.scale.setScalar(config.axes.size / axesBaseSize);
+    this.axesHelper.position.set(-config.axes.size, -config.axes.size, -config.axes.size);
+    this.gridHelper.position.y = config.grid.y;
+
+    // Background color
+    this.renderer.setClearColor(new THREE.Color(config.bgColor), 1);
+
+    // Camera FOV
+    this.camera.fov = config.camera.fov;
+    this.camera.updateProjectionMatrix();
+  }
+
+  getCalibration(): CalibrationConfig {
+    return JSON.parse(JSON.stringify(this.calibration));
+  }
+
   // ─── Camera Presets ─────────────────────────────────────────────────────
 
   setCameraPreset(preset: CameraPreset): void {
     this.currentPreset = preset;
     const s = this.volumeScale;
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
+    const distMul = this.calibration.camera.dist;
 
     switch (preset) {
       case 'frontal': {
-        const dist = maxDim * 1.6;
+        const dist = maxDim * distMul;
         this.camera.position.set(0, 0, dist);
         this.camera.up.set(0, 1, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'horizontal': {
-        const dist = maxDim * 1.5;
+        const dist = maxDim * (distMul * 0.94);
         const angle25 = (25 * Math.PI) / 180;
         this.camera.position.set(
           dist * 0.3,
@@ -139,13 +257,13 @@ export class VolumeRenderer {
         break;
       }
       case 'vertical': {
-        const dist = maxDim * 1.6;
+        const dist = maxDim * distMul;
         this.camera.position.set(dist, 0, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'free': {
-        const dist = maxDim * 1.2;
+        const dist = maxDim * (distMul * 0.75);
         this.camera.position.set(dist, dist * 0.7, dist);
         this.controls.target.set(0, 0, 0);
         break;
@@ -217,14 +335,7 @@ export class VolumeRenderer {
       this.volumeMesh.geometry.dispose();
     }
 
-    // Axis mapping (calibrated): lateral→Z, depth→Y, track→X
-    // Data: extent[0]=lateral, extent[1]=track, extent[2]=depth
-    const maxExtent = Math.max(...this.extent);
-    const scale = new THREE.Vector3(
-      this.extent[1] / maxExtent, // X = track
-      this.extent[2] / maxExtent, // Y = depth
-      this.extent[0] / maxExtent, // Z = lateral
-    );
+    const scale = this.computeVolumeScale();
     this.volumeScale = scale;
 
     const halfScale = scale.clone().multiplyScalar(0.5);
@@ -242,6 +353,7 @@ export class VolumeRenderer {
         uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
+        uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -260,9 +372,11 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Calibrated orientation: Rx=180° flips depth (Y→-Y) and lateral (Z→-Z)
-    this.volumeMesh.rotation.set(Math.PI, 0, 0);
-    this.volumeMesh.position.set(0, -0.12, 0);
+    // Calibrated orientation
+    const r = this.calibration.rotation;
+    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
+    const p = this.calibration.position;
+    this.volumeMesh.position.set(p.x, p.y, p.z);
 
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
@@ -304,6 +418,7 @@ uniform vec3 uCameraPos;
 uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
+uniform mat3 uAxisRemap;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -369,8 +484,8 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Remap box space (X=track,Y=depth,Z=lateral) → texture space (U=lateral,V=track,W=depth)
-      vec3 texCoord = vec3(uvw.z, uvw.x, uvw.y);
+      // Remap box space → texture space via calibrated permutation matrix
+      vec3 texCoord = uAxisRemap * uvw;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
