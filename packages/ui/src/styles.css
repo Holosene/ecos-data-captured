@@ -101,11 +101,11 @@
   color: #111111;
 }
 
-/* Topbar with liquid glass — full-bleed background, inner content aligned to layout grid */
+/* Topbar with liquid glass — sits above the scrolling main content */
 .echos-topbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 100;
+  flex-shrink: 0;
   height: 72px;
   background: var(--topbar-bg);
   backdrop-filter: blur(8px) saturate(1.4);
@@ -131,32 +131,33 @@ html {
   zoom: 0.9;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Overlay scrollbar: no gutter reserved, scrollbar floats over content.
-     Prevents the dark scrollbar track from appearing next to the topbar. */
-  overflow-y: overlay;
+  overflow: hidden;
+  height: 100%;
 }
 
 body {
   font-family: var(--font-body);
   background: var(--c-black);
   color: var(--c-text-1);
-  min-height: 100vh;
+  height: 100%;
   line-height: 1.6;
   transition: background 350ms ease, color 350ms ease;
+  overflow: hidden;
 }
 
-#root { min-height: 100vh; }
+#root { height: 100%; overflow: hidden; }
 
-/* Scrollbar — accent 70% opacity, no arrows, transparent track */
-::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.7); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
-::-webkit-scrollbar-button,
-::-webkit-scrollbar-button:start:decrement,
-::-webkit-scrollbar-button:end:increment,
-::-webkit-scrollbar-button:vertical:start:decrement,
-::-webkit-scrollbar-button:vertical:end:increment {
+/* Scrollbar — accent 70% opacity, no arrows, transparent track.
+   Only #main-content scrolls (topbar stays above, no scrollbar next to it). */
+#main-content::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+#main-content::-webkit-scrollbar-track { background: transparent; }
+#main-content::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.7); border-radius: 3px; }
+#main-content::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+#main-content::-webkit-scrollbar-button,
+#main-content::-webkit-scrollbar-button:start:decrement,
+#main-content::-webkit-scrollbar-button:end:increment,
+#main-content::-webkit-scrollbar-button:vertical:start:decrement,
+#main-content::-webkit-scrollbar-button:vertical:end:increment {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -373,6 +374,8 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 .leaflet-container {
   z-index: 1;
   font-family: var(--font-body);
+  outline: none !important;
+  border: none !important;
 }
 
 /* Leaflet zoom controls — redesigned to match site style, 1.5× size, centered vertically */
@@ -439,8 +442,8 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   transition-duration: 80ms !important;
 }
 
-/* Firefox scrollbar */
-* {
+/* Firefox scrollbar — only on main content */
+#main-content {
   scrollbar-width: thin;
   scrollbar-color: rgba(var(--cta-glow), 0.7) transparent;
 }

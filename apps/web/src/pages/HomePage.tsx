@@ -461,7 +461,7 @@ export function HomePage() {
       {/* Scroll to top */}
       <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 clamp(32px, 4vw, 56px)' }}>
         <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' })}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -495,11 +495,11 @@ export function HomePage() {
           bottom: '32px',
           right: '32px',
           zIndex: 90,
-          padding: '14px 36px',
-          fontSize: '24px',
-          fontFamily: fonts.display,
-          fontVariationSettings: "'wght' 600",
+          padding: '20px 48px 22px',
+          fontSize: '20px',
+          fontWeight: 600,
           letterSpacing: '-0.01em',
+          fontFamily: 'inherit',
           color: '#FFFFFF',
           background: 'var(--cta-bg-soft)',
           backdropFilter: 'blur(16px)',

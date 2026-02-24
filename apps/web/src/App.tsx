@@ -82,7 +82,7 @@ function Topbar() {
     // Home: scroll to top or navigate to /
     if (item.path === '/') {
       if (location.pathname === '/') {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
       } else {
         navigate('/');
       }
@@ -113,7 +113,7 @@ function Topbar() {
       <button
         onClick={() => {
           if (location.pathname === '/') {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
           } else {
             navigate('/');
           }
@@ -203,9 +203,9 @@ export function App() {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease' }}>
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease', overflow: 'hidden' }}>
         <Topbar />
-        <main style={{ flex: 1 }}>
+        <main id="main-content" style={{ flex: 1, overflowY: 'auto' }}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/scan" element={<ScanPage />} />
