@@ -4,11 +4,11 @@
  * Main 3D viewer wrapping the WebGL ray marching engine.
  * Provides:
  *   - 3D ray-marched volume
- *   - Camera presets (horizontal, vertical section, free)
+ *   - Camera presets (frontal, horizontal, vertical, free)
  *   - Rendering controls (opacity, threshold, density, etc.)
  *   - Adaptive threshold (auto percentile-based)
  *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ)
+ *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets
  *   - Export panel (NRRD, PNG, CSV)
  */
 
@@ -34,15 +34,52 @@ interface VolumeViewerProps {
   beam?: BeamSettings;
   grid?: VolumeGridSettings;
   onSettingsChange?: (settings: RendererSettings) => void;
+  /** Action callbacks from parent */
+  onReconfigure?: () => void;
+  onNewScan?: () => void;
 }
 
 const WINDOW_SIZE = 12;
 
-const CAMERA_PRESETS: { key: CameraPreset; label: string; icon: string }[] = [
-  { key: 'frontal', label: 'Frontale 2D', icon: '▣' },
-  { key: 'horizontal', label: 'Horizontale', icon: '⬛' },
-  { key: 'vertical', label: 'Coupe verticale', icon: '▮' },
-  { key: 'free', label: 'Libre', icon: '◇' },
+// ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
+
+const IconFrontal = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="1" />
+    <line x1="8" y1="2" x2="8" y2="14" opacity="0.4" />
+    <line x1="2" y1="8" x2="14" y2="8" opacity="0.4" />
+  </svg>
+);
+
+const IconHorizontal = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12L6 4H14L10 12H2Z" />
+    <line x1="8" y1="4" x2="6" y2="12" opacity="0.4" />
+  </svg>
+);
+
+const IconVertical = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="1" width="6" height="14" rx="1" />
+    <line x1="8" y1="1" x2="8" y2="15" opacity="0.4" />
+  </svg>
+);
+
+const IconFree = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12L2 7L8 4L14 7L12 12H4Z" />
+    <path d="M8 4V1" />
+    <path d="M8 4L14 7" />
+    <path d="M8 4L2 7" />
+    <path d="M8 9L8 12" opacity="0.4" />
+  </svg>
+);
+
+const CAMERA_PRESETS: { key: CameraPreset; label: string; Icon: React.FC }[] = [
+  { key: 'frontal', label: 'Frontale 2D', Icon: IconFrontal },
+  { key: 'horizontal', label: 'Horizontale', Icon: IconHorizontal },
+  { key: 'vertical', label: 'Coupe verticale', Icon: IconVertical },
+  { key: 'free', label: 'Libre', Icon: IconFree },
 ];
 
 export function VolumeViewer({
@@ -54,6 +91,8 @@ export function VolumeViewer({
   beam,
   grid,
   onSettingsChange,
+  onReconfigure,
+  onNewScan,
 }: VolumeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<VolumeRenderer | null>(null);
@@ -85,7 +124,6 @@ export function VolumeViewer({
     const renderer = new VolumeRenderer(containerRef.current, settings);
     rendererRef.current = renderer;
 
-    // Set default camera preset based on mode
     const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
     renderer.setCameraPreset(defaultPreset);
 
@@ -103,7 +141,6 @@ export function VolumeViewer({
     setSliceVolumeData(volumeData);
     setSliceDimensions(dimensions);
 
-    // Auto threshold on new volume
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
       updateSetting('threshold', threshold);
@@ -120,7 +157,6 @@ export function VolumeViewer({
     const cache = frameCacheRef.current;
     const lookAhead = 16;
 
-    // Pre-compute frames ahead in a microtask to avoid blocking
     let cancelled = false;
     (async () => {
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
@@ -128,11 +164,9 @@ export function VolumeViewer({
         if (idx >= frames!.length || cache.has(idx)) continue;
         const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
         if (!cancelled) cache.set(idx, result);
-        // Yield to main thread every few frames
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
 
-      // Evict old entries to limit memory
       const minKeep = Math.max(0, currentFrame - 4);
       for (const key of cache.keys()) {
         if (key < minKeep) cache.delete(key);
@@ -158,7 +192,7 @@ export function VolumeViewer({
     setSliceDimensions(result.dimensions);
   }, [isTemporalMode, currentFrame, frames, beam, grid]);
 
-  // Playback animation loop — uses requestAnimationFrame for smooth timing
+  // Playback animation loop
   useEffect(() => {
     if (!isTemporalMode) return;
     playingRef.current = playing;
@@ -238,7 +272,7 @@ export function VolumeViewer({
             borderRadius: '12px',
             overflow: 'hidden',
             border: `1px solid ${colors.border}`,
-            background: '#080810',
+            background: '#0a0a0f',
             position: 'relative',
           }}
         >
@@ -279,20 +313,21 @@ export function VolumeViewer({
                 onClick={() => handleCameraPreset(p.key)}
                 title={p.label}
                 style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: `1px solid ${cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.15)'}`,
-                  background: cameraPreset === p.key ? 'rgba(68,136,255,0.25)' : 'rgba(0,0,0,0.4)',
-                  color: cameraPreset === p.key ? colors.accent : colors.text3,
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '8px',
+                  border: `1px solid ${cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.12)'}`,
+                  background: cameraPreset === p.key ? 'rgba(68,136,255,0.2)' : 'rgba(10,10,15,0.7)',
+                  color: cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.5)',
                   cursor: 'pointer',
-                  fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  backdropFilter: 'blur(8px)',
+                  transition: 'all 150ms ease',
                 }}
               >
-                {p.icon}
+                <p.Icon />
               </button>
             ))}
           </div>
@@ -314,7 +349,7 @@ export function VolumeViewer({
           )}
         </div>
 
-        {/* Controls panel — always visible */}
+        {/* Controls panel */}
         <div
           style={{
             width: '240px',
@@ -330,25 +365,27 @@ export function VolumeViewer({
               {t('v2.controls.title')}
             </h3>
 
-            {/* Chromatic mode */}
+            {/* Chromatic mode — larger pill buttons */}
             <div>
-              <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+              <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '6px', display: 'block' }}>
                 {t('v2.controls.palette')}
               </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                 {chromaticModes.map((m: ChromaticMode) => (
                   <button
                     key={m}
                     onClick={() => updateSetting('chromaticMode', m)}
                     style={{
-                      padding: '3px 8px',
-                      borderRadius: '12px',
+                      padding: '6px 12px',
+                      borderRadius: '20px',
                       border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
                       background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                      color: settings.chromaticMode === m ? colors.text1 : colors.text2,
-                      fontSize: '10px',
+                      color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                      fontSize: '12px',
+                      fontWeight: 500,
                       cursor: 'pointer',
                       fontFamily: 'inherit',
+                      transition: 'all 150ms ease',
                     }}
                   >
                     {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
@@ -466,35 +503,27 @@ export function VolumeViewer({
         </div>
       )}
 
-      {/* Orthogonal slice panels — always visible */}
+      {/* Orthogonal slice panels — v1-style with inline presets */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <div>
-          <h3 style={{ fontSize: '13px', color: colors.text1, fontWeight: 600, marginBottom: '8px' }}>
-            {t('v2.slices.title') || 'Coupes orthogonales'}
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-            <SlicePanel
-              volumeData={sliceVolumeData}
-              dimensions={sliceDimensions}
-              axis="y"
-              label={t('v2.slices.crossSection') || 'Transversale (XZ)'}
-              chromaticMode={settings.chromaticMode}
-            />
-            <SlicePanel
-              volumeData={sliceVolumeData}
-              dimensions={sliceDimensions}
-              axis="z"
-              label={t('v2.slices.planView') || 'Vue en plan (XY)'}
-              chromaticMode={settings.chromaticMode}
-            />
-            <SlicePanel
-              volumeData={sliceVolumeData}
-              dimensions={sliceDimensions}
-              axis="x"
-              label={t('v2.slices.longitudinal') || 'Longitudinale (YZ)'}
-              chromaticMode={settings.chromaticMode}
-            />
-          </div>
+        <SlicePanel
+          volumeData={sliceVolumeData}
+          dimensions={sliceDimensions}
+        />
+      )}
+
+      {/* Bottom action buttons */}
+      {(onReconfigure || onNewScan) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', flexShrink: 0 }}>
+          {onReconfigure && (
+            <Button variant="ghost" size="lg" onClick={onReconfigure}>
+              {t('v2.viewer.reconfigure')}
+            </Button>
+          )}
+          {onNewScan && (
+            <Button variant="primary" size="lg" onClick={onNewScan}>
+              {t('v2.viewer.newScan')}
+            </Button>
+          )}
         </div>
       )}
     </div>

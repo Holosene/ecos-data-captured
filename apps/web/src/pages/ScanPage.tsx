@@ -854,23 +854,9 @@ export function ScanPage() {
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexShrink: 0 }}>
-              <h1 style={{ color: colors.text1, fontSize: '18px', fontWeight: 600, margin: 0 }}>
-                {t('v2.viewer.title')}
-              </h1>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <Button variant="ghost" size="sm" onClick={() => setPhase('settings')}>
-                  {t('v2.viewer.reconfigure')}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setPhase('import');
-                  setVolumeData(null);
-                  setFrameReady(false);
-                }}>
-                  {t('v2.viewer.newScan')}
-                </Button>
-              </div>
-            </div>
+            <h1 style={{ color: colors.text1, fontSize: '18px', fontWeight: 600, margin: 0, marginBottom: '8px', flexShrink: 0 }}>
+              {t('v2.viewer.title')}
+            </h1>
 
             <VolumeViewer
               volumeData={volumeData}
@@ -880,6 +866,12 @@ export function ScanPage() {
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}
+              onReconfigure={() => setPhase('settings')}
+              onNewScan={() => {
+                setPhase('import');
+                setVolumeData(null);
+                setFrameReady(false);
+              }}
             />
           </div>
         )}

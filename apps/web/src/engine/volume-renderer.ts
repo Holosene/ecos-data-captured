@@ -6,12 +6,11 @@
  *
  * Supports:
  *   - 3D Float32/Half-float texture upload
- *   - Single-pass front-to-back ray accumulation with gradient lighting
+ *   - Single-pass front-to-back ray accumulation
  *   - Transfer function LUT
  *   - Real-time interactive controls
  *   - Beam wireframe overlay
- *   - Camera presets (horizontal, vertical section, free)
- *   - Depth-based fog and falloff
+ *   - Camera presets (frontal, horizontal, vertical, free)
  */
 
 import * as THREE from 'three';
@@ -33,7 +32,6 @@ export class VolumeRenderer {
   private volumeMesh: THREE.Mesh | null = null;
   private material: THREE.RawShaderMaterial | null = null;
   private beamGroup: THREE.Group;
-  private gridHelper: THREE.GridHelper;
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
@@ -42,6 +40,7 @@ export class VolumeRenderer {
   private disposed = false;
   private currentPreset: CameraPreset = 'frontal';
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
+  private meshCreated = false;
 
   constructor(container: HTMLElement, initialSettings?: Partial<RendererSettings>) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
@@ -54,14 +53,11 @@ export class VolumeRenderer {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x080810, 1);
+    this.renderer.setClearColor(0x0a0a0f, 1);
     container.appendChild(this.renderer.domElement);
 
-    // Scene
+    // Scene (no fog — clean rendering)
     this.scene = new THREE.Scene();
-
-    // Fog (distance-based)
-    this.scene.fog = new THREE.FogExp2(0x080810, 0.25);
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(
@@ -95,21 +91,17 @@ export class VolumeRenderer {
     this.beamGroup = new THREE.Group();
     this.scene.add(this.beamGroup);
 
-    // Axes helper (subtle)
-    const axes = new THREE.AxesHelper(0.2);
+    // Axes helper
+    const axes = new THREE.AxesHelper(0.3);
     axes.position.set(-0.6, -0.6, -0.6);
-    (axes.material as THREE.Material).opacity = 0.4;
-    (axes.material as THREE.Material).transparent = true;
     this.scene.add(axes);
 
-    // Grid helper — reduced opacity, thinner visual
-    this.gridHelper = new THREE.GridHelper(2, 10, 0x181830, 0x0e0e22);
-    this.gridHelper.position.y = -0.5;
-    (this.gridHelper.material as THREE.Material).opacity = 0.35;
-    (this.gridHelper.material as THREE.Material).transparent = true;
-    this.scene.add(this.gridHelper);
+    // Grid helper — visible blue-tinted grid
+    const gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+    gridHelper.position.y = -0.5;
+    this.scene.add(gridHelper);
 
-    // Default camera: frontal 2D view (surface top, ground bottom)
+    // Default camera
     this.setCameraPreset('frontal');
 
     // Start render loop
@@ -129,17 +121,14 @@ export class VolumeRenderer {
 
     switch (preset) {
       case 'frontal': {
-        // Frontal 2D view — looking straight at the volume from the front
-        // Surface at top, ground at bottom (depth = -Y in world)
-        const dist = maxDim * 2.5;
+        const dist = maxDim * 1.6;
         this.camera.position.set(0, 0, dist);
         this.camera.up.set(0, 1, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'horizontal': {
-        // Horizontal (terrain-like), ~25° down tilt
-        const dist = maxDim * 2.2;
+        const dist = maxDim * 1.5;
         const angle25 = (25 * Math.PI) / 180;
         this.camera.position.set(
           dist * 0.3,
@@ -150,15 +139,13 @@ export class VolumeRenderer {
         break;
       }
       case 'vertical': {
-        // Vertical cross-section (looking from the side)
-        const dist = maxDim * 2.5;
+        const dist = maxDim * 1.6;
         this.camera.position.set(dist, 0, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'free': {
-        // 3/4 view (classic)
-        const dist = maxDim * 2.0;
+        const dist = maxDim * 1.2;
         this.camera.position.set(dist, dist * 0.7, dist);
         this.controls.target.set(0, 0, 0);
         break;
@@ -179,14 +166,23 @@ export class VolumeRenderer {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
+    const dimsChanged =
+      this.dimensions[0] !== dimensions[0] ||
+      this.dimensions[1] !== dimensions[1] ||
+      this.dimensions[2] !== dimensions[2];
+    const extentChanged =
+      this.extent[0] !== extent[0] ||
+      this.extent[1] !== extent[1] ||
+      this.extent[2] !== extent[2];
+
     this.dimensions = dimensions;
     this.extent = extent;
-    const [dimX, dimY, dimZ] = dimensions;
 
     if (this.volumeTexture) {
       this.volumeTexture.dispose();
     }
 
+    const [dimX, dimY, dimZ] = dimensions;
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -197,12 +193,15 @@ export class VolumeRenderer {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
+    // If mesh exists and dimensions/extent haven't changed, just update the texture
+    if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
+      this.material.uniforms.uVolume.value = this.volumeTexture;
+      return;
+    }
+
     this.createVolumeMesh();
   }
 
-  /**
-   * Get the current volume data dimensions for slice extraction.
-   */
   getVolumeDimensions(): [number, number, number] {
     return [...this.dimensions];
   }
@@ -258,17 +257,17 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Rotate volume so depth (data Z) maps to -Y in world space:
-    // Surface at top (small Z → +Y), ground (deep water) at bottom (large Z → -Y)
+    // Rotate volume so depth (data Z) maps to -Y in world space
     this.volumeMesh.rotation.x = Math.PI / 2;
 
     this.scene.add(this.volumeMesh);
-
-    // Force world matrix update so worldToLocal() works on the first frame
     this.volumeMesh.updateMatrixWorld(true);
 
-    // Re-apply current camera preset with new volume scale
-    this.setCameraPreset(this.currentPreset);
+    // Set camera on first mesh creation only
+    if (!this.meshCreated) {
+      this.setCameraPreset(this.currentPreset);
+      this.meshCreated = true;
+    }
   }
 
   private buildVertexShader(): string {
@@ -292,6 +291,8 @@ void main() {
   }
 
   private buildFragmentShader(): string {
+    // Simple shader: direct transfer function lookup, no gradient lighting,
+    // no shadows, no depth falloff — clean vivid sonar rendering
     return `precision highp float;
 precision highp sampler3D;
 
@@ -317,8 +318,6 @@ in vec3 vLocalPos;
 
 out vec4 fragColor;
 
-// ─── Ray-box intersection ───────────────────────────────────────────────
-
 vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   vec3 invDir = 1.0 / dir;
   vec3 t0 = (bmin - origin) * invDir;
@@ -329,8 +328,6 @@ vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   float tFar = min(min(tmax.x, tmax.y), tmax.z);
   return vec2(tNear, tFar);
 }
-
-// ─── Volume sampling with smoothing ─────────────────────────────────────
 
 float sampleVolume(vec3 pos) {
   float val = texture(uVolume, pos).r;
@@ -348,18 +345,6 @@ float sampleVolume(vec3 pos) {
   return val;
 }
 
-// ─── Gradient estimation (central differences) ──────────────────────────
-
-vec3 computeGradient(vec3 pos) {
-  vec3 ts = 1.0 / uVolumeSize;
-  float dx = sampleVolume(pos + vec3(ts.x, 0, 0)) - sampleVolume(pos - vec3(ts.x, 0, 0));
-  float dy = sampleVolume(pos + vec3(0, ts.y, 0)) - sampleVolume(pos - vec3(0, ts.y, 0));
-  float dz = sampleVolume(pos + vec3(0, 0, ts.z)) - sampleVolume(pos - vec3(0, 0, ts.z));
-  return vec3(dx, dy, dz) / (2.0 * ts);
-}
-
-// ─── Main ray march with gradient lighting & depth effects ──────────────
-
 void main() {
   vec3 rayOrigin = uCameraPos;
   vec3 rayDir = normalize(vWorldPos - uCameraPos);
@@ -371,15 +356,8 @@ void main() {
   if (tNear >= tFar) discard;
 
   float stepSize = (tFar - tNear) / float(uStepCount);
-  float rayLength = tFar - tNear;
   vec4 accum = vec4(0.0);
   float t = tNear;
-
-  // Light direction (slightly above and to the side for 3D feel)
-  vec3 lightDir = normalize(vec3(0.3, 1.0, 0.5));
-
-  // Accumulation shadow: light transmission through volume
-  float shadowAccum = 0.0;
 
   for (int i = 0; i < 512; i++) {
     if (i >= uStepCount) break;
@@ -394,42 +372,10 @@ void main() {
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 
       if (density > uThreshold) {
-        // ── Gradient-based lighting ──
-        vec3 gradient = computeGradient(uvw);
-        float gradLen = length(gradient);
-        float lighting = 1.0;
-
-        if (gradLen > 0.001) {
-          vec3 normal = normalize(gradient);
-          // Diffuse (Lambertian)
-          float diffuse = max(dot(normal, lightDir), 0.0);
-          // Ambient + diffuse mix
-          lighting = 0.35 + 0.65 * diffuse;
-        }
-
-        // ── Accumulation shadow (light is progressively absorbed) ──
-        shadowAccum += density * stepSize * 2.0;
-        float shadow = exp(-shadowAccum * 0.5);
-        lighting *= mix(1.0, shadow, 0.6);
-
-        // ── Depth-based falloff ──
-        float depthT = (t - tNear) / rayLength;
-        float depthFalloff = 1.0 - depthT * 0.3;
-
-        // ── Logarithmic opacity curve (non-linear) ──
-        float logDensity = log(1.0 + density * 10.0) / log(11.0);
-        float lookupVal = clamp(logDensity, 0.0, 1.0);
-
+        float lookupVal = clamp(density, 0.0, 1.0);
         vec4 tfColor = texture(uTransferFunction, vec2(lookupVal, 0.5));
-
-        // Apply lighting and depth
-        tfColor.rgb *= lighting * depthFalloff;
-
-        // Non-linear opacity
         tfColor.a *= uOpacityScale * stepSize * 100.0;
         tfColor.a = clamp(tfColor.a, 0.0, 1.0);
-
-        // Front-to-back compositing
         tfColor.rgb *= tfColor.a;
         accum += (1.0 - accum.a) * tfColor;
       }
@@ -522,8 +468,6 @@ void main() {
     this.controls.update();
 
     if (this.material && this.volumeMesh) {
-      // Camera position must be in volume local space for correct ray marching
-      // (the shader works in local space but the camera is in world space)
       const camLocal = this.camera.position.clone();
       this.volumeMesh.worldToLocal(camLocal);
       this.material.uniforms.uCameraPos.value.copy(camLocal);
