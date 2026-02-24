@@ -23,6 +23,7 @@ import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
+import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
 
 interface VolumeViewerProps {
@@ -137,6 +138,7 @@ export function VolumeViewer({
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>(mode === 'instrument' ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
+  const { theme } = useTheme();
 
   // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -178,6 +180,13 @@ export function VolumeViewer({
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [calibrationOpen, calibration]);
+
+  // Sync renderer background color with theme
+  useEffect(() => {
+    if (!rendererRef.current) return;
+    const bgColor = theme === 'light' ? '#fafafa' : '#111111';
+    rendererRef.current.setCalibration({ ...calibration, bgColor });
+  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply calibration to renderer when it changes
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
@@ -371,7 +380,7 @@ export function VolumeViewer({
             borderRadius: '12px',
             overflow: 'hidden',
             border: `1px solid ${colors.border}`,
-            background: '#0a0a0f',
+            background: theme === 'light' ? '#fafafa' : '#111111',
             position: 'relative',
           }}
         >

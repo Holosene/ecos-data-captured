@@ -38,14 +38,14 @@ export interface CalibrationConfig {
 }
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
-  position: { x: 0, y: -0.12, z: 0 },
+  position: { x: 0, y: 0, z: 0 },
   rotation: { x: 180, y: 0, z: 0 },
-  scale: { x: 1, y: 1, z: 1 },
+  scale: { x: 3, y: 1, z: 1 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
-  camera: { dist: 1.6, fov: 50 },
+  camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
-  axes: { size: 0.6 },
-  bgColor: '#0a0a0f',
+  axes: { size: 0.8 },
+  bgColor: '#111111',
 };
 
 const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
