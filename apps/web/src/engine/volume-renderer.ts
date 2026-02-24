@@ -41,7 +41,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
-  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
+  axisMapping: { track: 'x', depth: 'y', lateral: 'z' },
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -173,19 +173,20 @@ export class VolumeRenderer {
   // ─── Calibration ──────────────────────────────────────────────────────
 
   /** Compute volume scale from extent + calibration stretch.
-   *  Fixed geometry layout: track→X (wide), depth→Y (tall), lateral→Z (thin).
-   *  axisMapping only controls texture coordinate remapping (which data appears
-   *  on which face), NOT the physical volume dimensions. */
+   *  Each world axis gets the physical extent of whichever data dimension is
+   *  mapped to it via axisMapping, multiplied by the corresponding scale factor.
+   *  scale.x = lateral stretch, scale.y = depth stretch, scale.z = track stretch.
+   *  This keeps the box shape consistent with the data shown on each face. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
+    const map = cal.axisMapping;
     // extent = [lateral, track, depth]
-    const s = [
-      (this.extent[1] / maxExtent) * cal.scale.x, // world X ← track extent
-      (this.extent[2] / maxExtent) * cal.scale.y, // world Y ← depth extent
-      (this.extent[0] / maxExtent) * cal.scale.z, // world Z ← lateral extent
-    ];
-    return new THREE.Vector3(s[0], s[1], s[2]);
+    const s: Record<string, number> = { x: 1, y: 1, z: 1 };
+    s[map.lateral] = (this.extent[0] / maxExtent) * cal.scale.x;
+    s[map.track]   = (this.extent[1] / maxExtent) * cal.scale.z;
+    s[map.depth]   = (this.extent[2] / maxExtent) * cal.scale.y;
+    return new THREE.Vector3(s.x, s.y, s.z);
   }
 
   /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
