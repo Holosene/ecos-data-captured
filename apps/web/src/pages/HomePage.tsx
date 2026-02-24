@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
@@ -19,6 +19,21 @@ export function HomePage() {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
+  const [showFloatingCta, setShowFloatingCta] = useState(false);
+  const heroCtaRef = useRef<HTMLDivElement>(null);
+
+  // Show floating CTA when hero button scrolls out of view
+  useEffect(() => {
+    const el = heroCtaRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowFloatingCta(!entry.isIntersecting),
+      { threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   const FEATURES = [
     { title: t('home.feat1.title'), desc: t('home.feat1.desc'), num: '01' },
     { title: t('home.feat2.title'), desc: t('home.feat2.desc'), num: '02' },
@@ -85,7 +100,7 @@ export function HomePage() {
           {t('home.description')}
         </p>
 
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        <div ref={heroCtaRef} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
           <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
@@ -334,16 +349,6 @@ export function HomePage() {
           />
         </div>
 
-        {state.sessions.length === 0 && (
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <p style={{ color: colors.text3, fontSize: '14px', marginBottom: '12px' }}>
-              {t('v2.map.noSessions')}
-            </p>
-            <Button variant="primary" size="sm" onClick={() => navigate('/scan')}>
-              {t('v2.map.newScan')}
-            </Button>
-          </div>
-        )}
       </section>
 
       {/* Documentation */}
@@ -450,11 +455,6 @@ export function HomePage() {
           </GlassPanel>
         </div>
 
-        <div style={{ textAlign: 'center', marginTop: '56px' }}>
-          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
-            {t('manifesto.cta')}
-          </Button>
-        </div>
       </section>
 
       {/* Scroll to top */}
@@ -484,6 +484,44 @@ export function HomePage() {
           <IconChevronUp size={20} />
         </button>
       </div>
+
+      {/* Floating scan CTA — glass effect, appears when hero CTA scrolls out */}
+      <button
+        onClick={() => navigate('/scan')}
+        className="floating-scan-cta"
+        style={{
+          position: 'fixed',
+          bottom: '32px',
+          right: '32px',
+          zIndex: 90,
+          padding: '16px 32px',
+          fontSize: '16px',
+          fontWeight: 600,
+          fontFamily: 'inherit',
+          color: 'var(--c-accent)',
+          background: 'var(--topbar-bg)',
+          backdropFilter: 'blur(8px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(8px) saturate(1.4)',
+          border: '1px solid var(--topbar-border)',
+          borderRadius: 'var(--radius-lg)',
+          cursor: 'pointer',
+          boxShadow: '0 1px 0 0 var(--topbar-glass-highlight), 0 8px 32px -4px rgba(0, 0, 0, 0.3)',
+          transition: 'opacity 300ms ease, transform 300ms ease, box-shadow 200ms ease',
+          opacity: showFloatingCta ? 1 : 0,
+          transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
+          pointerEvents: showFloatingCta ? 'auto' : 'none',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = '0 1px 0 0 var(--topbar-glass-highlight), 0 12px 40px -4px rgba(0, 0, 0, 0.4)';
+          e.currentTarget.style.borderColor = 'var(--c-accent-muted)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = '0 1px 0 0 var(--topbar-glass-highlight), 0 8px 32px -4px rgba(0, 0, 0, 0.3)';
+          e.currentTarget.style.borderColor = 'var(--topbar-border)';
+        }}
+      >
+        {t('home.cta')}
+      </button>
 
       {/* Lightbox */}
       {lightboxOpen && (
