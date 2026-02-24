@@ -435,31 +435,64 @@ export function ScanPage() {
       worker.onerror = (err) => reject(new Error(err.message));
     });
 
-    // ── Extract frames on main thread, send to worker as Transferable bitmaps ──
-    for (let i = 0; i < totalFrames; i++) {
-      if (abortRef.current) break;
+    // ── Parallel frame extraction using multiple <video> elements ──
+    // Each video element seeks through its own range of frames concurrently.
+    // This parallelizes the main bottleneck: video seeking (~50-200ms per frame).
+    const PARALLEL = Math.min(4, Math.max(2, Math.floor(navigator.hardwareConcurrency / 2)));
+    const blobUrl = video.src; // reuse the blob URL already created above
+    const chunkSize = Math.ceil(totalFrames / PARALLEL);
+    let extractedCount = 0;
 
-      const timeS = i / fpsExtraction;
-      video.currentTime = timeS;
-      await new Promise<void>((r) => { video.onseeked = () => r(); });
+    const extractChunk = async (videoEl: HTMLVideoElement, startIdx: number, endIdx: number) => {
+      for (let i = startIdx; i < endIdx; i++) {
+        if (abortRef.current) break;
 
-      const bitmap = await createImageBitmap(
-        video, crop.x, crop.y, crop.width, crop.height,
-      );
+        const timeS = i / fpsExtraction;
+        videoEl.currentTime = timeS;
+        await new Promise<void>((r) => { videoEl.onseeked = () => r(); });
 
-      // Transfer bitmap (zero-copy) — worker will decode + preprocess
-      worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
+        const bitmap = await createImageBitmap(
+          videoEl, crop.x, crop.y, crop.width, crop.height,
+        );
 
-      setProgress({
-        stage: 'preprocessing',
-        progress: (i + 1) / totalFrames,
-        message: `${t('v2.pipeline.extracting')} ${i + 1}/${totalFrames}`,
-        currentFrame: i + 1,
-        totalFrames,
-      });
+        // Transfer bitmap (zero-copy) — worker will decode + preprocess
+        worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
+
+        extractedCount++;
+        setProgress({
+          stage: 'preprocessing',
+          progress: extractedCount / totalFrames,
+          message: `${t('v2.pipeline.extracting')} ${extractedCount}/${totalFrames}`,
+          currentFrame: extractedCount,
+          totalFrames,
+        });
+      }
+    };
+
+    // Create parallel video elements (reuse the first one, create N-1 more)
+    const videos: HTMLVideoElement[] = [video];
+    for (let p = 1; p < PARALLEL; p++) {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.src = blobUrl;
+      videos.push(v);
     }
 
-    URL.revokeObjectURL(video.src);
+    // Wait for all video elements to be ready
+    await Promise.all(
+      videos.slice(1).map((v) => new Promise<void>((r) => { v.oncanplaythrough = () => r(); })),
+    );
+
+    // Launch parallel extraction
+    const chunkPromises = videos.map((v, p) => {
+      const start = p * chunkSize;
+      const end = Math.min(start + chunkSize, totalFrames);
+      return extractChunk(v, start, end);
+    });
+
+    await Promise.all(chunkPromises);
+
+    URL.revokeObjectURL(blobUrl);
     // Extraction loop finished — let worker progress messages through now
     extractionDone = true;
 
