@@ -203,7 +203,7 @@ export function App() {
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease', overflow: 'hidden' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease', overflow: 'hidden' }}>
         <Topbar />
         <main id="main-content" style={{ flex: 1, overflowY: 'auto' }}>
           <Routes>
