@@ -217,11 +217,13 @@ export class VolumeRenderer {
       this.volumeMesh.geometry.dispose();
     }
 
+    // Axis mapping (calibrated): lateral→Z, depth→Y, track→X
+    // Data: extent[0]=lateral, extent[1]=track, extent[2]=depth
     const maxExtent = Math.max(...this.extent);
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,
-      this.extent[1] / maxExtent,
-      this.extent[2] / maxExtent,
+      this.extent[1] / maxExtent, // X = track
+      this.extent[2] / maxExtent, // Y = depth
+      this.extent[0] / maxExtent, // Z = lateral
     );
     this.volumeScale = scale;
 
@@ -258,10 +260,9 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Calibrated orientation: flip X and Y so sonar data faces viewer correctly
-    // (Rx=180° mirrors depth/track, Ry=180° mirrors lateral — net: left-right + along-track inverted)
-    this.volumeMesh.rotation.set(Math.PI, Math.PI, 0);
-    this.volumeMesh.position.set(0, 0.12, 0);
+    // Calibrated orientation: Rx=180° flips depth (Y→-Y) and lateral (Z→-Z)
+    this.volumeMesh.rotation.set(Math.PI, 0, 0);
+    this.volumeMesh.position.set(0, -0.12, 0);
 
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
@@ -368,7 +369,9 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      float rawVal = sampleVolume(uvw);
+      // Remap box space (X=track,Y=depth,Z=lateral) → texture space (U=lateral,V=track,W=depth)
+      vec3 texCoord = vec3(uvw.z, uvw.x, uvw.y);
+      float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 
