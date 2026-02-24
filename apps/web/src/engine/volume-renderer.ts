@@ -31,6 +31,7 @@ export interface CalibrationConfig {
     depth: 'x' | 'y' | 'z';
     track: 'x' | 'y' | 'z';
   };
+  dataRotation: { x: number; y: number; z: number }; // degrees — rotates data inside texture independently
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -42,6 +43,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
   axisMapping: { track: 'x', depth: 'y', lateral: 'z' },
+  dataRotation: { x: 0, y: 0, z: 0 },
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -50,6 +52,21 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
 
 const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
 const DEG2RAD = Math.PI / 180;
+
+/** Build a 3×3 rotation matrix from Euler angles (degrees, XYZ order) */
+function buildDataRotationMatrix(rot: { x: number; y: number; z: number }): THREE.Matrix3 {
+  const cx = Math.cos(rot.x * DEG2RAD), sx = Math.sin(rot.x * DEG2RAD);
+  const cy = Math.cos(rot.y * DEG2RAD), sy = Math.sin(rot.y * DEG2RAD);
+  const cz = Math.cos(rot.z * DEG2RAD), sz = Math.sin(rot.z * DEG2RAD);
+  // Rz * Ry * Rx — column-major for THREE.Matrix3.fromArray
+  const mat = new THREE.Matrix3();
+  mat.fromArray([
+    cy * cz,                    cy * sz,                   -sy,
+    sx * sy * cz - cx * sz,     sx * sy * sz + cx * cz,     sx * cy,
+    cx * sy * cz + sx * sz,     cx * sy * sz - sx * cz,     cx * cy,
+  ]);
+  return mat;
+}
 
 /** Build a 3×3 permutation matrix that remaps box-space UVW → texture-space UVW */
 function buildAxisRemapMatrix(mapping: CalibrationConfig['axisMapping']): THREE.Matrix3 {
@@ -210,6 +227,7 @@ export class VolumeRenderer {
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
       this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
+      this.material.uniforms.uDataRotation.value.copy(buildDataRotationMatrix(config.dataRotation ?? { x: 0, y: 0, z: 0 }));
     }
 
     // Scene helpers
@@ -355,6 +373,7 @@ export class VolumeRenderer {
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
         uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
+        uDataRotation: { value: buildDataRotationMatrix(this.calibration.dataRotation ?? { x: 0, y: 0, z: 0 }) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -420,6 +439,7 @@ uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
 uniform mat3 uAxisRemap;
+uniform mat3 uDataRotation;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -487,6 +507,8 @@ void main() {
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
       // Remap box space → texture space via calibrated permutation matrix
       vec3 texCoord = uAxisRemap * uvw;
+      // Rotate data independently: center → rotate → uncenter
+      texCoord = uDataRotation * (texCoord - 0.5) + 0.5;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
