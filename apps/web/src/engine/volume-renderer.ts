@@ -200,8 +200,8 @@ export class VolumeRenderer {
   }
 
   private buildVertexShader(): string {
-    return `#version 300 es
-precision highp float;
+    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
+    return `precision highp float;
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
@@ -221,8 +221,8 @@ void main() {
   }
 
   private buildFragmentShader(): string {
-    return `#version 300 es
-precision highp float;
+    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
+    return `precision highp float;
 precision highp sampler3D;
 
 uniform sampler3D uVolume;
