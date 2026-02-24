@@ -172,19 +172,19 @@ export class VolumeRenderer {
 
   // ─── Calibration ──────────────────────────────────────────────────────
 
-  /** Compute volume scale from extent + calibration axis mapping + stretch */
+  /** Compute volume scale from extent + calibration stretch.
+   *  Fixed geometry layout: track→X (wide), depth→Y (tall), lateral→Z (thin).
+   *  axisMapping only controls texture coordinate remapping (which data appears
+   *  on which face), NOT the physical volume dimensions. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
-    const s = [0, 0, 0];
-    // Map each data extent to its calibrated 3D axis
-    s[AXIS_IDX[cal.axisMapping.lateral]] = this.extent[0] / maxExtent; // lateral
-    s[AXIS_IDX[cal.axisMapping.track]] = this.extent[1] / maxExtent;   // track
-    s[AXIS_IDX[cal.axisMapping.depth]] = this.extent[2] / maxExtent;   // depth
-    // Apply calibration stretch factors
-    s[0] *= cal.scale.x;
-    s[1] *= cal.scale.y;
-    s[2] *= cal.scale.z;
+    // extent = [lateral, track, depth]
+    const s = [
+      (this.extent[1] / maxExtent) * cal.scale.x, // world X ← track extent
+      (this.extent[2] / maxExtent) * cal.scale.y, // world Y ← depth extent
+      (this.extent[0] / maxExtent) * cal.scale.z, // world Z ← lateral extent
+    ];
     return new THREE.Vector3(s[0], s[1], s[2]);
   }
 
