@@ -452,11 +452,12 @@ export function VolumeViewer({
         <div
           className="echos-controls-panel"
           style={{
-            width: '240px',
+            width: '480px',
+            minWidth: '480px',
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
+            gap: '6px',
             overflowY: 'auto',
             scrollbarWidth: 'thin',
           }}
@@ -469,41 +470,42 @@ export function VolumeViewer({
               saved={calibrationSaved}
             />
           ) : (
-            <>
-              <GlassPanel style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-                  {t('v2.controls.title')}
-                </h3>
+            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+                {t('v2.controls.title')}
+              </h3>
 
-                {/* Chromatic mode — larger pill buttons */}
-                <div>
-                  <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '6px', display: 'block' }}>
-                    {t('v2.controls.palette')}
-                  </label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                    {chromaticModes.map((m: ChromaticMode) => (
-                      <button
-                        key={m}
-                        onClick={() => updateSetting('chromaticMode', m)}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '20px',
-                          border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                          background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                          color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          transition: 'all 150ms ease',
-                        }}
-                      >
-                        {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                      </button>
-                    ))}
-                  </div>
+              {/* Chromatic mode — pill buttons in a row */}
+              <div>
+                <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+                  {t('v2.controls.palette')}
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                  {chromaticModes.map((m: ChromaticMode) => (
+                    <button
+                      key={m}
+                      onClick={() => updateSetting('chromaticMode', m)}
+                      style={{
+                        padding: '5px 11px',
+                        borderRadius: '20px',
+                        border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                        background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                        color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
+              {/* Two-column layout for sliders to reduce height */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
                 <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
 
                 {/* Threshold with auto toggle */}
@@ -531,27 +533,19 @@ export function VolumeViewer({
                 )}
 
                 <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
+              </div>
 
-                {mode === 'instrument' && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                    {t('v2.controls.showBeam')}
-                  </label>
-                )}
+              {mode === 'instrument' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
+                  {t('v2.controls.showBeam')}
+                </label>
+              )}
 
-                {isTemporalMode && (
-                  <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-                )}
-              </GlassPanel>
-
-              {/* Export panel */}
-              <ExportPanel
-                volumeData={sliceVolumeData}
-                dimensions={sliceDimensions}
-                extent={extent}
-                onCaptureScreenshot={handleCaptureScreenshot}
-              />
-            </>
+              {isTemporalMode && (
+                <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
+              )}
+            </GlassPanel>
           )}
         </div>
       </div>
@@ -623,9 +617,18 @@ export function VolumeViewer({
         />
       )}
 
-      {/* Bottom action buttons */}
+      {/* Export panel — prominent, at bottom */}
+      <ExportPanel
+        volumeData={sliceVolumeData}
+        dimensions={sliceDimensions}
+        extent={extent}
+        onCaptureScreenshot={handleCaptureScreenshot}
+      />
+
+      {/* Bottom spacing + action buttons */}
+      <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0, paddingBottom: '24px' }}>
           {onReconfigure && (
             <Button variant="ghost" size="lg" onClick={onReconfigure}>
               {t('v2.viewer.reconfigure')}

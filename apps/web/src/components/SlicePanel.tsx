@@ -13,6 +13,20 @@ import type { TranslationKey } from '../i18n/translations.js';
 // ─── Color map presets ────────────────────────────────────────────────────
 
 const PRESETS = {
+  'Sonar Original': {
+    labelKey: 'v2.slices.presetSonarOriginal',
+    colorMap: [
+      [0.0, 0, 0, 40, 0],
+      [0.1, 0, 20, 80, 20],
+      [0.25, 0, 60, 160, 80],
+      [0.4, 0, 120, 200, 140],
+      [0.5, 40, 180, 200, 180],
+      [0.65, 120, 220, 120, 200],
+      [0.8, 220, 220, 40, 230],
+      [0.9, 255, 140, 0, 245],
+      [1.0, 255, 40, 0, 255],
+    ] as number[][],
+  },
   'Water Off': {
     labelKey: 'v2.slices.presetWaterOff',
     colorMap: [

@@ -115,18 +115,18 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
   const hasVolume = volumeData && volumeData.length > 0;
 
   return (
-    <GlassPanel padding="12px" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-      <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: colors.text1 }}>
-        {t('v2.export.title') || 'Exporter'}
-      </h4>
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-        <Button variant="secondary" size="sm" onClick={handleExportNrrd} disabled={!hasVolume}>
+    <GlassPanel padding="20px" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: colors.text1, letterSpacing: '-0.02em' }}>
+        {t('v2.export.title')}
+      </h3>
+      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <Button variant="secondary" size="lg" onClick={handleExportNrrd} disabled={!hasVolume}>
           NRRD
         </Button>
-        <Button variant="secondary" size="sm" onClick={handleExportPng} disabled={!onCaptureScreenshot}>
+        <Button variant="secondary" size="lg" onClick={handleExportPng} disabled={!onCaptureScreenshot}>
           PNG
         </Button>
-        <Button variant="secondary" size="sm" onClick={handleExportCsv} disabled={!hasVolume}>
+        <Button variant="secondary" size="lg" onClick={handleExportCsv} disabled={!hasVolume}>
           CSV
         </Button>
       </div>
