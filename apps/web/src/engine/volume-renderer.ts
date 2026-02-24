@@ -119,14 +119,14 @@ export class VolumeRenderer {
     const s = this.volumeScale;
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
 
-    // Volume axes (no rotation): X=lateral, Y=time/distance, Z=depth
-    // Wide face = XZ (lateral × depth), viewed from Y axis
+    // Volume axes (after remap): X=echoWidth, Y=depth(vertical), Z=time
+    // Wide face = XZ (echoWidth × time), viewed from Y axis
     switch (preset) {
       case 'frontal': {
-        // Frontal 2D: looking at the wide face (XZ) from the Y axis
+        // Frontal 2D: looking at the wide face (XZ) from the Y axis (depth)
         const dist = maxDim * 1.6;
         this.camera.position.set(0, dist, 0);
-        this.camera.up.set(0, 0, -1); // depth (Z) points down
+        this.camera.up.set(0, 0, -1); // time (Z) increases downward in view
         this.controls.target.set(0, 0, 0);
         break;
       }
@@ -138,14 +138,14 @@ export class VolumeRenderer {
         break;
       }
       case 'vertical': {
-        // Side view: looking along X axis to see YZ face (time × depth)
+        // Side view: looking along X axis to see YZ face (depth × time)
         const dist = maxDim * 1.6;
         this.camera.position.set(dist, 0, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'free': {
-        // Classic 3/4 view (same as original v1 auto-fit)
+        // Classic 3/4 view
         const dist = maxDim * 1.2;
         this.camera.position.set(
           s.x * dist,
@@ -171,24 +171,44 @@ export class VolumeRenderer {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
-    const dimsChanged =
-      this.dimensions[0] !== dimensions[0] ||
-      this.dimensions[1] !== dimensions[1] ||
-      this.dimensions[2] !== dimensions[2];
-    const extentChanged =
-      this.extent[0] !== extent[0] ||
-      this.extent[1] !== extent[1] ||
-      this.extent[2] !== extent[2];
+    // Input axes from conic projection: [X=lateral, Y=time, Z=depth]
+    // Target world axes: [X=echoWidth, Y=depth, Z=time]
+    // Remap: swap Y(time) ↔ Z(depth) in the data layout
+    const [dimX, dimY, dimZ] = dimensions;
 
-    this.dimensions = dimensions;
-    this.extent = extent;
+    const remapped = new Float32Array(data.length);
+    for (let z = 0; z < dimZ; z++) {       // z = depth in source
+      for (let y = 0; y < dimY; y++) {     // y = time in source
+        for (let x = 0; x < dimX; x++) {   // x = lateral (unchanged)
+          const srcIdx = z * dimY * dimX + y * dimX + x;
+          const dstIdx = y * dimZ * dimX + z * dimX + x;  // time→slowest(Z), depth→middle(Y)
+          remapped[dstIdx] = data[srcIdx];
+        }
+      }
+    }
+
+    // Remapped: Data3DTexture(echoWidth, depth, time)
+    const remappedDims: [number, number, number] = [dimX, dimZ, dimY];
+    const remappedExtent: [number, number, number] = [extent[0], extent[2], extent[1]];
+
+    const dimsChanged =
+      this.dimensions[0] !== remappedDims[0] ||
+      this.dimensions[1] !== remappedDims[1] ||
+      this.dimensions[2] !== remappedDims[2];
+    const extentChanged =
+      this.extent[0] !== remappedExtent[0] ||
+      this.extent[1] !== remappedExtent[1] ||
+      this.extent[2] !== remappedExtent[2];
+
+    this.dimensions = remappedDims;
+    this.extent = remappedExtent;
 
     if (this.volumeTexture) {
       this.volumeTexture.dispose();
     }
 
-    const [dimX, dimY, dimZ] = dimensions;
-    this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
+    const [texW, texH, texD] = remappedDims;
+    this.volumeTexture = new THREE.Data3DTexture(remapped, texW, texH, texD);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
     this.volumeTexture.minFilter = THREE.LinearFilter;
@@ -262,7 +282,7 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // No rotation: X=lateral, Y=time, Z=depth (natural data layout)
+    // Remapped axes: X=echoWidth, Y=depth, Z=time (no rotation needed)
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
 
