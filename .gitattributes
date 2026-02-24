@@ -1,0 +1,11 @@
+# Normalize line endings
+* text=auto
+
+# Force LF for web assets
+*.svg text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
