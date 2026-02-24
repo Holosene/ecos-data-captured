@@ -486,7 +486,7 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Floating scan CTA — glass backdrop matching topbar, appears when hero CTA scrolls out */}
+      {/* Floating scan CTA — accent bg, frosted, appears when hero CTA scrolls out */}
       <button
         onClick={() => navigate('/scan')}
         className="floating-scan-cta"
@@ -496,18 +496,18 @@ export function HomePage() {
           right: '32px',
           zIndex: 90,
           padding: '20px 48px',
-          fontSize: '20px',
+          fontSize: '24px',
           fontFamily: fonts.display,
           fontVariationSettings: "'wght' 600",
           letterSpacing: '-0.01em',
-          color: 'var(--c-text-1)',
-          background: 'var(--topbar-bg)',
-          backdropFilter: 'blur(12px) saturate(1.4)',
-          WebkitBackdropFilter: 'blur(12px) saturate(1.4)',
-          border: '1px solid var(--topbar-border)',
-          borderRadius: 'var(--radius-lg)',
+          color: '#FFFFFF',
+          background: 'var(--cta-bg)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: 'var(--radius-full)',
           cursor: 'pointer',
-          boxShadow: '0 0 24px rgba(var(--cta-glow), 0.2), 0 8px 32px -4px rgba(0, 0, 0, 0.3)',
+          boxShadow: 'none',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',

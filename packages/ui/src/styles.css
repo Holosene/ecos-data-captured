@@ -57,6 +57,7 @@
 
   /* CTA glow triplet (r, g, b) for box-shadow rgba() */
   --cta-glow: 138, 124, 255;
+  --cta-bg: rgba(138, 124, 255, 0.75);
 }
 
 /* Light mode overrides */
@@ -91,6 +92,7 @@
   --topbar-glass-highlight: rgba(255, 255, 255, 0.6);
 
   --cta-glow: 66, 33, 206;
+  --cta-bg: rgba(66, 33, 206, 0.75);
 }
 [data-theme="light"] body {
   background: #FAFAFA;
@@ -404,40 +406,22 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
 }
 
-/* Floating scan CTA — dynamic hover & click animations */
+/* Floating scan CTA — simple hover & click feedback */
 .floating-scan-cta {
   transition:
     opacity 300ms ease,
     transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 250ms ease,
     background 200ms ease,
-    border-color 200ms ease,
     filter 200ms ease;
 }
 .floating-scan-cta:hover {
-  transform: translateY(-4px) scale(1.04) !important;
-  box-shadow:
-    0 0 60px rgba(var(--cta-glow), 0.35),
-    0 14px 44px -6px rgba(0, 0, 0, 0.5) !important;
-  border-color: var(--c-border-hover) !important;
-  filter: brightness(1.12);
+  transform: translateY(-3px) scale(1.03) !important;
+  filter: brightness(1.1);
 }
 .floating-scan-cta:active {
-  transform: translateY(1px) scale(0.96) !important;
-  box-shadow:
-    0 0 20px rgba(var(--cta-glow), 0.4),
-    0 2px 8px rgba(0, 0, 0, 0.4) !important;
-  filter: brightness(0.92);
+  transform: translateY(1px) scale(0.97) !important;
+  filter: brightness(0.9);
   transition-duration: 80ms !important;
-}
-
-/* Pulse glow keyframe for floating CTA */
-@keyframes cta-pulse {
-  0%, 100% { box-shadow: 0 0 24px rgba(var(--cta-glow), 0.2), 0 8px 32px -4px rgba(0, 0, 0, 0.3); }
-  50%      { box-shadow: 0 0 36px rgba(var(--cta-glow), 0.3), 0 10px 36px -4px rgba(0, 0, 0, 0.35); }
-}
-.floating-scan-cta:not(:hover):not(:active) {
-  animation: cta-pulse 3s ease-in-out infinite;
 }
 
 /* Firefox scrollbar */
