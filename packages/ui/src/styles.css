@@ -288,6 +288,16 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   animation: echos-dots 1.2s steps(1) infinite;
 }
 
+/* Processing completion animations */
+@keyframes echos-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes echos-scale-in {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* Gallery card — flex-based hover zoom */
 .gallery-card {
   transition: flex 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),

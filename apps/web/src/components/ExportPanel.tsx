@@ -11,7 +11,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { GlassPanel, Button, colors } from '@echos/ui';
+import { colors } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
 
 function download(blob: Blob, filename: string) {
@@ -114,22 +114,52 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
 
   const hasVolume = volumeData && volumeData.length > 0;
 
+  const exportButtons = [
+    { label: 'NRRD', onClick: handleExportNrrd, disabled: !hasVolume },
+    { label: 'PNG', onClick: handleExportPng, disabled: !onCaptureScreenshot },
+    { label: 'CSV', onClick: handleExportCsv, disabled: !hasVolume },
+  ];
+
   return (
-    <GlassPanel padding="20px" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: colors.text1, letterSpacing: '-0.02em' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
         {t('v2.export.title')}
       </h3>
       <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-        <Button variant="secondary" size="lg" onClick={handleExportNrrd} disabled={!hasVolume}>
-          NRRD
-        </Button>
-        <Button variant="secondary" size="lg" onClick={handleExportPng} disabled={!onCaptureScreenshot}>
-          PNG
-        </Button>
-        <Button variant="secondary" size="lg" onClick={handleExportCsv} disabled={!hasVolume}>
-          CSV
-        </Button>
+        {exportButtons.map((btn) => (
+          <button
+            key={btn.label}
+            onClick={btn.onClick}
+            disabled={btn.disabled}
+            style={{
+              padding: '10px 28px',
+              borderRadius: '10px',
+              border: `1.5px solid ${colors.text1}`,
+              background: 'transparent',
+              color: colors.text1,
+              fontSize: '14px',
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              cursor: btn.disabled ? 'not-allowed' : 'pointer',
+              opacity: btn.disabled ? 0.35 : 1,
+              transition: 'all 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              if (btn.disabled) return;
+              (e.currentTarget as HTMLElement).style.background = colors.accent;
+              (e.currentTarget as HTMLElement).style.borderColor = colors.accent;
+              (e.currentTarget as HTMLElement).style.color = '#FFFFFF';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+              (e.currentTarget as HTMLElement).style.borderColor = colors.text1;
+              (e.currentTarget as HTMLElement).style.color = colors.text1;
+            }}
+          >
+            {btn.label}
+          </button>
+        ))}
       </div>
-    </GlassPanel>
+    </div>
   );
 }

@@ -369,9 +369,14 @@ export function VolumeViewer({
   const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Volume viewer title */}
+      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
+        {t('v2.viewer.title')}
+      </h3>
+
       {/* Main row: 3D viewport + controls */}
-      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 180px)', minHeight: '400px' }}>
+      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 190px)', minHeight: '400px' }}>
         {/* 3D viewport */}
         <div
           ref={containerRef}
@@ -467,8 +472,6 @@ export function VolumeViewer({
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
           }}
         >
           {calibrationOpen ? (
@@ -479,7 +482,7 @@ export function VolumeViewer({
               saved={calibrationSaved}
             />
           ) : (
-            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
               <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
                 {t('v2.controls.title')}
               </h3>
@@ -620,13 +623,16 @@ export function VolumeViewer({
 
       {/* Orthogonal slice panels — v1-style with inline presets */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <SlicePanel
-          volumeData={sliceVolumeData}
-          dimensions={sliceDimensions}
-        />
+        <div style={{ marginTop: '32px' }}>
+          <SlicePanel
+            volumeData={sliceVolumeData}
+            dimensions={sliceDimensions}
+          />
+        </div>
       )}
 
-      {/* Export panel — prominent, at bottom */}
+      {/* Export panel — at bottom */}
+      <div style={{ marginTop: '32px' }} />
       <ExportPanel
         volumeData={sliceVolumeData}
         dimensions={sliceDimensions}
