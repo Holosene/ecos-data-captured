@@ -39,16 +39,16 @@ import { VolumeViewer } from '../components/VolumeViewer.js';
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
 
 // Steps shown in the bar (no "Traitement")
-const PIPELINE_STEPS: { label: string; key: string }[] = [
-  { label: 'Importer', key: 'import' },
-  { label: 'Recadrer', key: 'crop' },
-  { label: 'Configurer', key: 'settings' },
-  { label: 'Visualiser', key: 'viewer' },
-];
+const PIPELINE_STEP_KEYS = [
+  { labelKey: 'v2.step.import', key: 'import' },
+  { labelKey: 'v2.step.crop', key: 'crop' },
+  { labelKey: 'v2.step.settings', key: 'settings' },
+  { labelKey: 'v2.step.viewer', key: 'viewer' },
+] as const;
 
 function phaseToStepIndex(phase: ScanPhase): number {
   if (phase === 'processing') return 2; // stays on "Configurer"
-  return PIPELINE_STEPS.findIndex((s) => s.key === phase);
+  return PIPELINE_STEP_KEYS.findIndex((s) => s.key === phase);
 }
 
 // Exponential depth steps: fine resolution at shallow depths
@@ -581,10 +581,10 @@ export function ScanPage() {
           }}
         >
           <StepIndicator
-            steps={PIPELINE_STEPS.map((s) => ({ label: s.label, key: s.key }))}
+            steps={PIPELINE_STEP_KEYS.map((s) => ({ label: t(s.labelKey as any), key: s.key }))}
             currentStep={phaseToStepIndex(phase)}
             onStepClick={(idx: number) => {
-              const target = PIPELINE_STEPS[idx];
+              const target = PIPELINE_STEP_KEYS[idx];
               if (!target) return;
               if (idx < phaseToStepIndex(phase) && phase !== 'processing') {
                 setPhase(target.key as ScanPhase);
@@ -758,23 +758,35 @@ export function ScanPage() {
                 justifyContent: 'center',
                 borderRadius: '12px',
               }}>
-                <h2 style={{ color: colors.text1, fontSize: '24px', fontWeight: 600, marginBottom: '24px' }}>
-                  {t('v2.pipeline.title')}
-                </h2>
-                <div style={{ width: '100%', maxWidth: '500px' }}>
-                  <GlassPanel style={{ padding: '24px' }}>
-                    <div style={{ marginBottom: '16px' }}>
-                      <ProgressBar value={progress.progress} />
-                    </div>
-                    <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '8px', textAlign: 'center' }}>
-                      {progress.message}
-                    </p>
-                    {progress.currentFrame !== undefined && progress.totalFrames && (
-                      <p style={{ color: colors.text3, fontSize: '12px', textAlign: 'center' }}>
-                        {t('v2.pipeline.frame')} {progress.currentFrame} / {progress.totalFrames}
-                      </p>
-                    )}
-                  </GlassPanel>
+                <div style={{ width: '100%', maxWidth: '420px' }}>
+                  {/* Gray status cell with animated dots */}
+                  <div style={{
+                    background: colors.surface,
+                    borderRadius: '10px',
+                    padding: '14px 20px',
+                    marginBottom: '24px',
+                    textAlign: 'center',
+                  }}>
+                    <span className="echos-loading-dots" style={{ color: colors.text1, fontSize: '15px', fontWeight: 500 }}>
+                      {t('v2.pipeline.generating')}
+                    </span>
+                  </div>
+
+                  {/* Big percentage */}
+                  <div style={{
+                    textAlign: 'center',
+                    fontSize: '56px',
+                    fontWeight: 700,
+                    color: colors.text1,
+                    fontVariantNumeric: 'tabular-nums',
+                    lineHeight: 1,
+                    marginBottom: '16px',
+                  }}>
+                    {Math.round(progress.progress * 100)}%
+                  </div>
+
+                  {/* Progress bar */}
+                  <ProgressBar value={progress.progress} />
                 </div>
                 <div style={{ marginTop: '24px' }}>
                   <Button
@@ -937,50 +949,84 @@ export function ScanPage() {
               </GlassPanel>
             </div>
 
-            {/* Synchronization section (from V1) */}
-            <GlassPanel style={{ padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '14px' }}>
+            {/* Synchronization section — two trim sliders */}
+            <GlassPanel style={{ padding: '16px', marginBottom: '16px' }}>
+              <h3 style={{ color: colors.text1, fontSize: '15px', fontWeight: 600, marginBottom: '10px' }}>
                 {t('v2.sync.title')}
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div style={{ padding: '12px 16px', borderRadius: '8px', background: colors.surface }}>
-                  <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '4px' }}>{t('v2.sync.videoDuration')}</div>
-                  <div style={{ fontSize: '20px', fontWeight: 600, color: colors.text1 }}>{state.videoDurationS.toFixed(1)}s</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.videoDuration')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>{state.videoDurationS.toFixed(1)}s</div>
                 </div>
-                <div style={{ padding: '12px 16px', borderRadius: '8px', background: colors.surface }}>
-                  <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '4px' }}>{t('v2.sync.gpxDuration')}</div>
-                  <div style={{ fontSize: '20px', fontWeight: 600, color: colors.text1 }}>{state.gpxTrack?.durationS.toFixed(1) ?? '-'}s</div>
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.gpxDuration')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>{state.gpxTrack?.durationS.toFixed(1) ?? '-'}s</div>
+                </div>
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.totalDist')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>{maxDist.toFixed(0)} m</div>
+                </div>
+                <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
+                  <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.avgSpeed')}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
+                    {state.gpxTrack && state.gpxTrack.durationS > 0
+                      ? (maxDist / state.gpxTrack.durationS).toFixed(1)
+                      : '-'}{' '}
+                    m/s
+                  </div>
                 </div>
               </div>
 
-              <Slider
-                label={t('v2.sync.timeOffset')}
-                value={state.sync.offsetS}
-                min={-30}
-                max={30}
-                step={0.5}
-                unit=" s"
-                tooltip={t('v2.sync.timeOffsetTooltip')}
-                onChange={(v) => dispatch({ type: 'SET_SYNC', sync: { offsetS: v } })}
-              />
-
-              <div style={{ marginTop: '12px' }}>
-                <div style={{ fontSize: '12px', color: colors.text3, marginBottom: '8px' }}>
+              {/* Chart with trim zones */}
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '4px' }}>
                   {t('v2.sync.distOverTime')}
                 </div>
                 <svg
                   viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                  style={{ width: '100%', height: '100px', background: colors.surface, borderRadius: '8px' }}
+                  style={{ width: '100%', height: '80px', background: colors.surface, borderRadius: '8px' }}
                 >
-                  {state.sync.offsetS !== 0 && state.gpxTrack && (
+                  {/* Trim start zone (left, red overlay) */}
+                  {state.sync.trimStartS > 0 && state.gpxTrack && (
+                    <rect
+                      x={0}
+                      y={0}
+                      width={(state.sync.trimStartS / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      height={chartHeight}
+                      fill="rgba(248, 113, 113, 0.15)"
+                    />
+                  )}
+                  {state.sync.trimStartS > 0 && state.gpxTrack && (
                     <line
-                      x1={(Math.abs(state.sync.offsetS) / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      x1={(state.sync.trimStartS / (state.gpxTrack.durationS || 1)) * chartWidth}
                       y1={0}
-                      x2={(Math.abs(state.sync.offsetS) / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      x2={(state.sync.trimStartS / (state.gpxTrack.durationS || 1)) * chartWidth}
                       y2={chartHeight}
-                      stroke={colors.warning}
-                      strokeWidth={1}
+                      stroke={colors.success}
+                      strokeWidth={1.5}
+                      strokeDasharray="4 3"
+                    />
+                  )}
+                  {/* Trim end zone (right, red overlay) */}
+                  {state.sync.trimEndS > 0 && state.gpxTrack && (
+                    <rect
+                      x={chartWidth - (state.sync.trimEndS / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      y={0}
+                      width={(state.sync.trimEndS / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      height={chartHeight}
+                      fill="rgba(248, 113, 113, 0.15)"
+                    />
+                  )}
+                  {state.sync.trimEndS > 0 && state.gpxTrack && (
+                    <line
+                      x1={chartWidth - (state.sync.trimEndS / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      y1={0}
+                      x2={chartWidth - (state.sync.trimEndS / (state.gpxTrack.durationS || 1)) * chartWidth}
+                      y2={chartHeight}
+                      stroke={colors.error}
+                      strokeWidth={1.5}
                       strokeDasharray="4 3"
                     />
                   )}
@@ -993,26 +1039,28 @@ export function ScanPage() {
                 </svg>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginTop: '12px', textAlign: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.totalDist')}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>{maxDist.toFixed(0)} m</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.avgSpeed')}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>
-                    {state.gpxTrack && state.gpxTrack.durationS > 0
-                      ? (maxDist / state.gpxTrack.durationS).toFixed(1)
-                      : '-'}{' '}
-                    m/s
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '11px', color: colors.text3 }}>{t('v2.sync.timeRatio')}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, marginTop: '2px' }}>
-                    {state.gpxTrack ? (state.gpxTrack.durationS / state.videoDurationS).toFixed(2) : '-'}x
-                  </div>
-                </div>
+              {/* Two trim sliders side by side */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <Slider
+                  label={t('v2.sync.trimStart')}
+                  value={state.sync.trimStartS}
+                  min={0}
+                  max={Math.floor((state.gpxTrack?.durationS ?? 60) / 2)}
+                  step={0.5}
+                  unit=" s"
+                  tooltip={t('v2.sync.trimStartTooltip')}
+                  onChange={(v) => dispatch({ type: 'SET_SYNC', sync: { trimStartS: v } })}
+                />
+                <Slider
+                  label={t('v2.sync.trimEnd')}
+                  value={state.sync.trimEndS}
+                  min={0}
+                  max={Math.floor((state.gpxTrack?.durationS ?? 60) / 2)}
+                  step={0.5}
+                  unit=" s"
+                  tooltip={t('v2.sync.trimEndTooltip')}
+                  onChange={(v) => dispatch({ type: 'SET_SYNC', sync: { trimEndS: v } })}
+                />
               </div>
             </GlassPanel>
 

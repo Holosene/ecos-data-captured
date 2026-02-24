@@ -138,11 +138,10 @@ export interface TransferFunctionPoint {
 
 export type ChromaticMode =
   | 'sonar-original'
-  | 'scientific-grayscale'
-  | 'thermal'
-  | 'density-probabilistic'
-  | 'ghost-accumulation'
-  | 'water-off';
+  | 'water-off'
+  | 'structures'
+  | 'high-contrast'
+  | 'grayscale';
 
 // ─── Pipeline V2 ────────────────────────────────────────────────────────────
 
@@ -192,7 +191,7 @@ export const DEFAULT_RENDERER: RendererSettings = {
   showBeam: false,
   ghostEnhancement: 0.0,
   stepCount: 192,
-  chromaticMode: 'thermal',
+  chromaticMode: 'sonar-original',
 };
 
 // ─── Performance ────────────────────────────────────────────────────────────

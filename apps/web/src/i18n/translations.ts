@@ -196,6 +196,12 @@ export const translations = {
     // V2 Nav
     'nav.map': 'Carte',
 
+    // V2 Step labels
+    'v2.step.import': 'Importer',
+    'v2.step.crop': 'Recadrer',
+    'v2.step.settings': 'Configurer',
+    'v2.step.viewer': 'Visualiser',
+
     // V2 Scan
     'v2.scan.title': 'Nouveau scan volumétrique',
     'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
@@ -256,8 +262,8 @@ export const translations = {
 
     // V2 Pipeline
     'v2.pipeline.title': 'Génération en cours\u2026',
-    'v2.pipeline.extracting': 'Extraction des frames\u2026',
-    'v2.pipeline.preprocessing': 'Prétraitement frame',
+    'v2.pipeline.extracting': 'Extraction des images\u2026',
+    'v2.pipeline.preprocessing': 'Prétraitement des images',
     'v2.pipeline.projecting': 'Projection conique',
     'v2.pipeline.accumulating': 'Accumulation probabiliste',
     'v2.pipeline.ready': 'Volume prêt !',
@@ -289,6 +295,7 @@ export const translations = {
     'v2.slices.axisDepth': 'Profondeur (Y)',
     'v2.slices.axisDistance': 'Distance (Z)',
     'v2.slices.axisWidth': 'Largeur (X)',
+    'v2.slices.presetSonarOriginal': 'Sonar Original',
     'v2.slices.presetWaterOff': 'Water Off',
     'v2.slices.presetStructures': 'Structures',
     'v2.slices.presetHighContrast': 'Haut contraste',
@@ -305,7 +312,8 @@ export const translations = {
 
     // V2 Auto
     'v2.controls.auto': 'Auto',
-    'v2.pipeline.frame': 'Frame',
+    'v2.pipeline.frame': 'Image',
+    'v2.pipeline.generating': 'Génération des volumes',
 
     // V2 Sync (inside config)
     'v2.sync.title': 'Synchronisation vidéo / GPX',
@@ -317,6 +325,10 @@ export const translations = {
     'v2.sync.totalDist': 'Distance totale',
     'v2.sync.avgSpeed': 'Vitesse moyenne',
     'v2.sync.timeRatio': 'Ratio temps',
+    'v2.sync.trimStart': 'Rogner le début',
+    'v2.sync.trimEnd': 'Rogner la fin',
+    'v2.sync.trimStartTooltip': 'Retire des secondes au début de l\u2019enregistrement GPX pour aligner avec la vidéo.',
+    'v2.sync.trimEndTooltip': 'Retire des secondes à la fin de l\u2019enregistrement GPX pour aligner avec la vidéo.',
 
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
@@ -525,6 +537,12 @@ export const translations = {
     // V2 Nav
     'nav.map': 'Map',
 
+    // V2 Step labels
+    'v2.step.import': 'Import',
+    'v2.step.crop': 'Crop',
+    'v2.step.settings': 'Configure',
+    'v2.step.viewer': 'View',
+
     // V2 Scan
     'v2.scan.title': 'New Volumetric Scan',
     'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX). Preprocessing and conic projection will run automatically.',
@@ -618,6 +636,7 @@ export const translations = {
     'v2.slices.axisDepth': 'Depth (Y)',
     'v2.slices.axisDistance': 'Distance (Z)',
     'v2.slices.axisWidth': 'Width (X)',
+    'v2.slices.presetSonarOriginal': 'Sonar Original',
     'v2.slices.presetWaterOff': 'Water Off',
     'v2.slices.presetStructures': 'Structures',
     'v2.slices.presetHighContrast': 'High Contrast',
@@ -635,6 +654,7 @@ export const translations = {
     // V2 Auto
     'v2.controls.auto': 'Auto',
     'v2.pipeline.frame': 'Frame',
+    'v2.pipeline.generating': 'Generating volumes',
 
     // V2 Sync (inside config)
     'v2.sync.title': 'Video / GPX Synchronization',
@@ -646,6 +666,10 @@ export const translations = {
     'v2.sync.totalDist': 'Total Distance',
     'v2.sync.avgSpeed': 'Avg Speed',
     'v2.sync.timeRatio': 'Time Ratio',
+    'v2.sync.trimStart': 'Trim start',
+    'v2.sync.trimEnd': 'Trim end',
+    'v2.sync.trimStartTooltip': 'Remove seconds from the beginning of the GPX recording to align with video.',
+    'v2.sync.trimEndTooltip': 'Remove seconds from the end of the GPX recording to align with video.',
 
     // V2 Map
     'v2.map.title': 'Recording Sessions',
