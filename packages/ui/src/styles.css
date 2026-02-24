@@ -51,7 +51,7 @@
   --topbar-bg:
     radial-gradient(ellipse 260px 80px at 24px 100%, rgba(138, 124, 255, 0.08), transparent 70%),
     radial-gradient(ellipse 180px 60px at 85% 0%, rgba(138, 124, 255, 0.05), transparent 70%),
-    linear-gradient(180deg, rgba(28, 28, 36, 0.88) 0%, rgba(20, 20, 28, 0.84) 100%);
+    linear-gradient(180deg, rgba(28, 28, 36, 0.72) 0%, rgba(20, 20, 28, 0.68) 100%);
   --topbar-border: rgba(255, 255, 255, 0.10);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.06);
 
@@ -88,7 +88,7 @@
   --topbar-bg:
     radial-gradient(ellipse 260px 80px at 24px 100%, rgba(66, 33, 206, 0.06), transparent 70%),
     radial-gradient(ellipse 180px 60px at 85% 0%, rgba(66, 33, 206, 0.03), transparent 70%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 248, 252, 0.82) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(248, 248, 252, 0.66) 100%);
   --topbar-border: rgba(0, 0, 0, 0.07);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.6);
 
@@ -107,10 +107,10 @@
   z-index: 100;
   flex-shrink: 0;
   height: 72px;
-  background: var(--cta-bg-soft);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(8px) saturate(1.4);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  border-bottom: 1px solid var(--topbar-border);
   box-shadow:
     0 1px 0 0 var(--topbar-glass-highlight),
     0 4px 24px -4px rgba(0, 0, 0, 0.18);
