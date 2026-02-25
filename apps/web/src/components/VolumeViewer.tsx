@@ -48,28 +48,26 @@ const WINDOW_SIZE = 12;
 // This gives full pixel resolution for 2D slice views instead of the
 // low-res conic projection grid.
 // Layout: data[z * dimY * dimX + y * dimX + x]
-//   X = frame index (track/time), Y = pixel col (lateral), Z = pixel row (depth)
-// Convention: [track, lateral, depth] — matches conic-projection axes.
+//   X = pixel col (lateral), Y = frame index (track/time), Z = pixel row (depth)
 
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
 ): { data: Float32Array; dimensions: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
 
-  const dimX = frameList.length;     // track (frames) — stacking along X
-  const dimY = frameList[0].width;   // lateral (beam columns)
+  const dimX = frameList[0].width;   // lateral (beam columns)
+  const dimY = frameList.length;     // track (frames) — stacking along Y
   const dimZ = frameList[0].height;  // depth (sonar rows)
 
-  if (dimY === 0 || dimZ === 0) return null;
+  if (dimX === 0 || dimZ === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  // Z-outer (depth), Y-middle (lateral), X-inner (track)
-  for (let xi = 0; xi < dimX; xi++) {
-    const frame = frameList[xi];
+  for (let yi = 0; yi < dimY; yi++) {
+    const frame = frameList[yi];
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let yi = 0; yi < dimY; yi++) {
-        const srcIdx = zi * dimY + yi;  // frame intensity: row-major [depth × width]
+      for (let xi = 0; xi < dimX; xi++) {
+        const srcIdx = zi * dimX + xi;  // frame intensity: row-major [depth × width]
         const dstIdx = zi * dimY * dimX + yi * dimX + xi;
         data[dstIdx] = frame.intensity[srcIdx] ?? 0;
       }

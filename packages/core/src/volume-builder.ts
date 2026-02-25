@@ -2,14 +2,14 @@
  * Volume builder.
  *
  * Takes a sequence of grayscale frame slices (each mapped to a distance),
- * resamples them onto a regular grid (y_step), and produces a 3D Float32Array.
+ * resamples them onto a regular Y-grid (y_step), and produces a 3D Float32Array.
  *
  * Volume layout: Float32Array of size dimX × dimY × dimZ
  * Index: data[z * dimY * dimX + y * dimX + x]
  *
  * Axes:
- *   X = distance along track (resampled at y_step intervals)
- *   Y = horizontal position in sonar image (lateral)
+ *   X = horizontal position in sonar image (0..cropWidth)
+ *   Y = distance along track (resampled at y_step intervals)
  *   Z = depth (0 = surface, depthMax = bottom)
  */
 
@@ -137,9 +137,9 @@ export function buildVolume(
     throw new Error('Resampling produced 0 slices. Check your data and settings.');
   }
 
-  const dimX = slices.length;       // track (stacking direction)
-  const dimY = slices[0].width;     // lateral
-  const dimZ = slices[0].height;    // depth
+  const dimX = slices[0].width;
+  const dimZ = slices[0].height;
+  const dimY = slices.length;
 
   // Memory check (warn, don't block)
   const estimatedMB = (dimX * dimY * dimZ * 4) / (1024 * 1024);
@@ -155,28 +155,27 @@ export function buildVolume(
   const data = new Float32Array(dimX * dimY * dimZ);
 
   // Fill volume: data[z * dimY * dimX + y * dimX + x]
-  // Z-outer (depth), Y-middle (lateral), X-inner (track)
-  for (let xi = 0; xi < dimX; xi++) {
-    const slice = slices[xi];
+  for (let yi = 0; yi < dimY; yi++) {
+    const slice = slices[yi];
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let yi = 0; yi < dimY; yi++) {
-        const srcIdx = zi * dimY + yi;   // frame pixels: row-major [depth × width]
+      for (let xi = 0; xi < dimX; xi++) {
+        const srcIdx = zi * dimX + xi;
         const dstIdx = zi * dimY * dimX + yi * dimX + xi;
         data[dstIdx] = slice.pixels[srcIdx] ?? 0;
       }
     }
 
-    if (xi % 50 === 0) {
-      onProgress?.(0.3 + 0.6 * (xi / dimX), `Filling volume slice ${xi}/${dimX}...`);
+    if (yi % 50 === 0) {
+      onProgress?.(0.3 + 0.6 * (yi / dimY), `Filling volume slice ${yi}/${dimY}...`);
     }
   }
 
   // Compute spacing
   const totalDistanceM =
     slices.length > 1 ? slices[slices.length - 1].distanceM - slices[0].distanceM : 0;
-  const xSpacing = calibration.yStepM;             // track spacing (X axis)
-  const zSpacing = calibration.depthMaxM / dimZ;   // depth spacing
-  const ySpacing = zSpacing; // lateral spacing ≈ depth pixel size (approximation)
+  const ySpacing = calibration.yStepM;
+  const zSpacing = calibration.depthMaxM / dimZ;
+  const xSpacing = zSpacing; // Assume square pixels in sonar image (approximation)
 
   onProgress?.(1.0, 'Volume build complete.');
 
@@ -187,7 +186,7 @@ export function buildVolume(
     totalDistanceM,
     depthMaxM: calibration.depthMaxM,
     sourceFrameCount: frames.length,
-    resampledSliceCount: dimX,
+    resampledSliceCount: dimY,
   };
 
   return { data, metadata };
@@ -203,9 +202,9 @@ export function estimateVolume(
   yStepM: number,
   downscaleFactor: number,
 ): { dimX: number; dimY: number; dimZ: number; estimatedMB: number } {
-  const dimX = Math.max(1, Math.floor(totalDistanceM / yStepM) + 1); // track
-  const dimY = Math.round(cropWidth * downscaleFactor);    // lateral
-  const dimZ = Math.round(cropHeight * downscaleFactor);   // depth
+  const dimX = Math.round(cropWidth * downscaleFactor);
+  const dimZ = Math.round(cropHeight * downscaleFactor);
+  const dimY = Math.max(1, Math.floor(totalDistanceM / yStepM) + 1);
   const estimatedMB = (dimX * dimY * dimZ * 4) / (1024 * 1024);
   return { dimX, dimY, dimZ, estimatedMB };
 }

@@ -4,8 +4,8 @@
  * Probabilistic Conic Acoustic Projection Model
  *
  * Coordinate system:
- *   X = track (distance along GPS track / frame stacking direction)
- *   Y = lateral (perpendicular to boat heading, cone spread direction)
+ *   X = lateral (perpendicular to boat heading)
+ *   Y = distance along GPS track (meters)
  *   Z = depth (meters, 0 at surface, positive downward)
  */
 
@@ -55,18 +55,18 @@ export const DEFAULT_BEAM: BeamSettings = {
 // ─── Volume Grid ────────────────────────────────────────────────────────────
 
 export interface VolumeGridSettings {
-  /** Resolution along X (track / frame stacking) in voxels */
+  /** Resolution along X (lateral) in voxels */
   resX: number;
-  /** Resolution along Y (lateral / cone spread) in voxels */
+  /** Resolution along Y (track distance) in voxels */
   resY: number;
   /** Resolution along Z (depth) in voxels */
   resZ: number;
 }
 
 export const DEFAULT_GRID: VolumeGridSettings = {
-  resX: 256,   // track (was resY — more voxels along stacking direction)
-  resY: 128,   // lateral (was resX — cone spread direction)
-  resZ: 128,
+  resX: 96,
+  resY: 128,
+  resZ: 96,
 };
 
 // ─── Probabilistic Volume ───────────────────────────────────────────────────
@@ -76,9 +76,9 @@ export interface ProbabilisticVolume {
   data: Float32Array;
   /** Accumulation count per voxel (for normalization) */
   weights: Float32Array;
-  /** Grid dimensions [X(track), Y(lateral), Z(depth)] */
+  /** Grid dimensions [X, Y, Z] */
   dimensions: [number, number, number];
-  /** Spatial extent in meters [track, lateral, depth] */
+  /** Spatial extent in meters [width, length, depth] */
   extent: [number, number, number];
   /** Origin in meters [x0, y0, z0] */
   origin: [number, number, number];
