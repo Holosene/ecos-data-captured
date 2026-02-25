@@ -105,3 +105,8 @@ export { generateQcReport, qcReportToBlob } from './qc-report.js';
 // ─── Adaptive Threshold ─────────────────────────────────────────────────────
 
 export { computeAutoThreshold, computeVolumeStats } from './adaptive-threshold.js';
+
+// ─── Volume Snapshot (.echos-vol) ───────────────────────────────────────────
+
+export { serializeVolume, deserializeVolume, volumeSnapshotToBlob } from './volume-snapshot.js';
+export type { VolumeSnapshot } from './volume-snapshot.js';

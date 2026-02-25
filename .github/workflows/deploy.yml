@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/fix-mobile-scan-buttons-5iEUw']
   workflow_dispatch:
 
 permissions:
