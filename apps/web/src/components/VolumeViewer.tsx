@@ -15,7 +15,7 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer } from '../engine/volume-renderer.js';
+import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
@@ -120,7 +120,7 @@ export function VolumeViewer({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderer = new VolumeRenderer(containerRef.current, settings);
+    const renderer = new VolumeRenderer(containerRef.current, settings, DEFAULT_CALIBRATION);
     rendererRef.current = renderer;
 
     return () => {
