@@ -67,22 +67,44 @@ export function createEmptyVolume(
 
 /**
  * Project a single frame into a conic volume (Mode A: Instrument).
- * The volume represents the cone itself — no GPS, time axis = Z.
+ *
+ * Coordinate system (fixed direction, boat along Z+):
+ *   X = lateral (perpendicular to boat heading)
+ *   Y = depth  (beam axis, downward from transducer)
+ *   Z = track  (boat forward direction, orthogonal to beam)
+ *
+ * @param trackPositionM — spatial position of this frame along the track axis (metres)
  */
 export function projectFrameIntoCone(
   frame: PreprocessedFrame,
   volume: ProbabilisticVolume,
   beam: BeamSettings,
-  frameSliceIndex: number,
+  trackPositionM: number,
 ): void {
+<<<<<<< HEAD
   // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
+=======
+>>>>>>> origin/claude/continue-dev-wip-DMtWB
   const resX = volume.dimensions[0];
   const resTrack = volume.dimensions[1];
   const resDepth = volume.dimensions[2];
   const extX = volume.extent[0];
+<<<<<<< HEAD
   const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
+=======
+  const extDepth = volume.extent[1];
+  const extTrack = volume.extent[2];
+  const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+
+  // Map spatial track position (metres) → grid index
+  const ti = extTrack > 0
+    ? Math.floor((trackPositionM / extTrack) * (resTrack - 1))
+    : 0;
+  if (ti < 0 || ti >= resTrack) return;
+
+>>>>>>> origin/claude/continue-dev-wip-DMtWB
   for (let row = 0; row < frame.height; row++) {
     const depth = (row / frame.height) * beam.depthMaxM;
     if (depth < beam.nearFieldM) continue;
@@ -109,8 +131,13 @@ export function projectFrameIntoCone(
       const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
       if (xi < 0 || xi >= resX) continue;
 
+<<<<<<< HEAD
       // Z-outer (depth), Y-middle (track), X-inner (lateral)
       const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
+=======
+      // Z-outer (track), Y-middle (depth), X-inner (lateral)
+      const voxelIdx = ti * resDepth * resX + di * resX + xi;
+>>>>>>> origin/claude/continue-dev-wip-DMtWB
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         volume.data[voxelIdx] += intensity * gaussWeight;
         volume.weights[voxelIdx] += gaussWeight;
@@ -248,10 +275,14 @@ export function buildInstrumentVolume(
   };
 
   const volume = createEmptyVolume(adjustedGrid, extentX, extentY, extentZ);
+  const trackExtent = volume.extent[2];
 
   for (let i = 0; i < frames.length; i++) {
-    const yi = Math.floor((i / frames.length) * adjustedGrid.resY);
-    projectFrameIntoCone(frames[i], volume, beam, yi);
+    // Uniform spacing: map frame index → spatial position along track (metres)
+    const trackPosM = frames.length > 1
+      ? (i / (frames.length - 1)) * trackExtent
+      : trackExtent / 2;
+    projectFrameIntoCone(frames[i], volume, beam, trackPosM);
     onProgress?.(i + 1, frames.length);
   }
 
@@ -299,18 +330,21 @@ export function projectFrameWindow(
   };
 
   const volume = createEmptyVolume(windowGrid, extentX, extentY, extentZ);
+  const trackExtent = volume.extent[2];
 
   for (let i = startIdx; i <= endIdx; i++) {
     const localIdx = i - startIdx;
-    const yi = windowFrames > 1
-      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resY - 1))
-      : Math.floor(windowGrid.resY / 2);
+
+    // Uniform spacing: map window position → spatial track position (metres)
+    const trackPosM = windowFrames > 1
+      ? (localIdx / (windowFrames - 1)) * trackExtent
+      : trackExtent / 2;
 
     // Recency weight: frames closer to center are stronger
     const distFromCenter = Math.abs(i - centerIndex) / Math.max(1, halfWin);
     const recencyWeight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
 
-    projectFrameIntoConeWeighted(frames[i], volume, beam, yi, recencyWeight);
+    projectFrameIntoConeWeighted(frames[i], volume, beam, trackPosM, recencyWeight);
   }
 
   const normalized = normalizeVolume(volume);
@@ -324,21 +358,37 @@ export function projectFrameWindow(
 
 /**
  * Same as projectFrameIntoCone but with an extra weight multiplier.
+ *
+ * @param trackPositionM — spatial position along the track axis (metres)
  */
 function projectFrameIntoConeWeighted(
   frame: PreprocessedFrame,
   volume: ProbabilisticVolume,
   beam: BeamSettings,
-  frameSliceIndex: number,
+  trackPositionM: number,
   weight: number,
 ): void {
+<<<<<<< HEAD
   // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
+=======
+>>>>>>> origin/claude/continue-dev-wip-DMtWB
   const resX = volume.dimensions[0];
   const resTrack = volume.dimensions[1];
   const resDepth = volume.dimensions[2];
   const extX = volume.extent[0];
+<<<<<<< HEAD
   const extDepth = volume.extent[2];
+=======
+  const extDepth = volume.extent[1];
+  const extTrack = volume.extent[2];
+>>>>>>> origin/claude/continue-dev-wip-DMtWB
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+
+  // Map spatial track position (metres) → grid index
+  const ti = extTrack > 0
+    ? Math.floor((trackPositionM / extTrack) * (resTrack - 1))
+    : 0;
+  if (ti < 0 || ti >= resTrack) return;
 
   for (let row = 0; row < frame.height; row++) {
     const depth = (row / frame.height) * beam.depthMaxM;
@@ -367,7 +417,7 @@ function projectFrameIntoConeWeighted(
       if (xi < 0 || xi >= resX) continue;
 
       // Z-outer (track), Y-middle (depth), X-inner (lateral)
-      const voxelIdx = frameSliceIndex * resDepth * resX + di * resX + xi;
+      const voxelIdx = ti * resDepth * resX + di * resX + xi;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         const w = gaussWeight * weight;
         volume.data[voxelIdx] += intensity * w;
