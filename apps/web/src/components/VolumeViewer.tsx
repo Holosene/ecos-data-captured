@@ -12,7 +12,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
-import type { RendererSettings, ChromaticMode } from '@echos/core';
+import type { RendererSettings, ChromaticMode, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
 import { VolumeRenderer } from '../engine/volume-renderer.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
@@ -23,7 +23,12 @@ interface VolumeViewerProps {
   dimensions: [number, number, number];
   extent: [number, number, number];
   mode: 'instrument' | 'spatial';
+  frames?: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
+  beam?: BeamSettings;
+  grid?: VolumeGridSettings;
   onSettingsChange?: (settings: RendererSettings) => void;
+  onReconfigure?: () => void;
+  onNewScan?: () => void;
 }
 
 export function VolumeViewer({
@@ -31,7 +36,12 @@ export function VolumeViewer({
   dimensions,
   extent,
   mode,
+  frames,
+  beam,
+  grid,
   onSettingsChange,
+  onReconfigure,
+  onNewScan,
 }: VolumeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<VolumeRenderer | null>(null);
@@ -269,6 +279,22 @@ export function VolumeViewer({
                 />
                 {t('v2.controls.showBeam')}
               </label>
+            )}
+
+            {/* Navigation buttons */}
+            {(onReconfigure || onNewScan) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                {onReconfigure && (
+                  <Button variant="ghost" size="sm" onClick={onReconfigure}>
+                    {t('v2.viewer.reconfigure') ?? 'Reconfigurer'}
+                  </Button>
+                )}
+                {onNewScan && (
+                  <Button variant="ghost" size="sm" onClick={onNewScan}>
+                    {t('v2.viewer.newScan') ?? 'Nouveau scan'}
+                  </Button>
+                )}
+              </div>
             )}
           </GlassPanel>
         )}

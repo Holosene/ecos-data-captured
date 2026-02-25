@@ -261,6 +261,27 @@ export function buildInstrumentVolume(
   };
 }
 
+// ─── Frame window projection (Mode A playback) ──────────────────────────────
+
+/**
+ * Project a window of frames around a center index into a conic volume.
+ * Used for Mode A temporal playback and static instrument volume export.
+ */
+export function projectFrameWindow(
+  frames: PreprocessedFrame[],
+  centerIndex: number,
+  windowSize: number,
+  beam: BeamSettings,
+  grid: VolumeGridSettings,
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
+  const half = Math.floor(windowSize / 2);
+  const start = Math.max(0, centerIndex - half);
+  const end = Math.min(frames.length, start + windowSize);
+  const windowFrames = frames.slice(start, end);
+
+  return buildInstrumentVolume(windowFrames, beam, grid);
+}
+
 // ─── Estimate memory ────────────────────────────────────────────────────────
 
 export function estimateVolumeMemoryMB(grid: VolumeGridSettings): number {
