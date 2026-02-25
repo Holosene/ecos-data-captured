@@ -6,6 +6,9 @@ import { I18nProvider } from './i18n/index.js';
 import { ThemeProvider } from './theme/index.js';
 import { App } from './App.js';
 
+declare const __COMMIT_HASH__: string;
+console.log(`[ECHOS] commit: ${__COMMIT_HASH__}`);
+
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element not found');
 

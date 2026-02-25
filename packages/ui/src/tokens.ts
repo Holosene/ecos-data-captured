@@ -36,7 +36,7 @@ export const colors = {
   // Legacy aliases (backward compat)
   primary: 'var(--c-accent)',
   primaryLight: 'var(--c-accent-hover)',
-  primaryDark: '#3318A8',
+  primaryDark: '#4221CE',
   blackLight: 'var(--c-surface)',
   blackLighter: 'var(--c-surface-raised)',
   whiteDim: 'var(--c-text-2)',
@@ -73,7 +73,7 @@ export const shadows = {
   sm: '0 1px 2px rgba(0, 0, 0, 0.3)',
   md: '0 4px 12px rgba(0, 0, 0, 0.4)',
   lg: '0 8px 24px rgba(0, 0, 0, 0.5)',
-  glow: '0 0 20px rgba(66, 33, 206, 0.25)',
+  glow: '0 0 20px rgba(138, 124, 255, 0.25)',
 } as const;
 
 export const transitions = {

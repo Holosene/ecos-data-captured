@@ -1,4 +1,6 @@
 import React from 'react';
+import { getBrandingForTheme } from '../branding.js';
+import { useTheme } from '../theme/index.js';
 
 interface LogoProps {
   height?: number;
@@ -7,11 +9,11 @@ interface LogoProps {
 }
 
 /**
- * Logo component - renders logotype.png from public/.
- * Uses <img> with explicit dimensions for zero CLS.
+ * Logo component - renders theme-aware logotype from branding assets.
  */
 export function Logo({ height = 32, onClick, style }: LogoProps) {
-  const src = `${import.meta.env.BASE_URL}logotype.png`;
+  const { theme } = useTheme();
+  const src = getBrandingForTheme(theme).logotype;
 
   return (
     <img

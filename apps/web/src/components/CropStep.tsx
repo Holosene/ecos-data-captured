@@ -4,144 +4,212 @@ import type { CropRect } from '@echos/core';
 import { useTranslation } from '../i18n/index.js';
 import { useAppState } from '../store/app-state.js';
 
+/**
+ * CropStep — Sonar region crop overlay
+ *
+ * Root cause of previous bugs:
+ *   The old code created a new blob URL + <video> element on every localCrop
+ *   change (i.e. every mousemove during drag). This caused:
+ *   - Hundreds of blob URLs created per second
+ *   - Videos still loading from revoked URLs → ERR_FILE_NOT_FOUND
+ *   - Massive CPU/memory spike, frozen UI
+ *
+ * Fix: cache frame as ImageBitmap once, draw overlay purely on canvas.
+ *   Pipeline processing only happens on "Confirm" click.
+ */
 export function CropStep() {
   const { state, dispatch } = useAppState();
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [frameReady, setFrameReady] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [localCrop, setLocalCrop] = useState<CropRect>(state.crop);
   const [scale, setScale] = useState(1);
 
+  // Cached frame bitmap — loaded once, reused for all overlay draws
+  const frameBitmapRef = useRef<ImageBitmap | null>(null);
+
+  // Drag state in refs to avoid re-renders during mouse movement
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const localCropRef = useRef<CropRect>(state.crop);
+  const scaleRef = useRef(1);
+  const rafIdRef = useRef(0);
+
+  // Keep refs in sync
+  localCropRef.current = localCrop;
+  scaleRef.current = scale;
+
+  // ─── Load video frame once as ImageBitmap ──────────────────────────
   useEffect(() => {
     if (!state.videoFile) return;
+
     const url = URL.createObjectURL(state.videoFile);
     const video = document.createElement('video');
     video.preload = 'auto';
     video.muted = true;
+    let disposed = false;
 
     video.onloadeddata = () => {
       video.currentTime = Math.min(2, video.duration / 2);
     };
 
-    video.onseeked = () => {
+    video.onseeked = async () => {
+      if (disposed) return;
       const canvas = canvasRef.current;
+      const container = containerRef.current;
       if (!canvas) return;
 
-      const container = containerRef.current;
       const maxW = container ? container.clientWidth - 40 : 800;
       const s = Math.min(1, maxW / video.videoWidth);
       setScale(s);
+      scaleRef.current = s;
 
       canvas.width = video.videoWidth * s;
       canvas.height = video.videoHeight * s;
 
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      // Render to offscreen canvas then create ImageBitmap
+      const offscreen = document.createElement('canvas');
+      offscreen.width = canvas.width;
+      offscreen.height = canvas.height;
+      const offCtx = offscreen.getContext('2d');
+      if (offCtx) {
+        offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+          frameBitmapRef.current = await createImageBitmap(offscreen);
+        } catch {
+          // Fallback: keep reference to offscreen canvas
+          frameBitmapRef.current = null;
+        }
       }
-      setFrameReady(true);
+
+      // Revoke blob URL — video element is no longer needed
       URL.revokeObjectURL(url);
+
+      if (!disposed) {
+        setFrameReady(true);
+      }
     };
 
     video.src = url;
-    return () => URL.revokeObjectURL(url);
+
+    return () => {
+      disposed = true;
+      URL.revokeObjectURL(url);
+    };
   }, [state.videoFile]);
 
+  // ─── Draw overlay using cached bitmap — zero blob URLs ─────────────
+  const drawOverlay = useCallback(() => {
+    const canvas = canvasRef.current;
+    const bitmap = frameBitmapRef.current;
+    if (!canvas || !bitmap) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const crop = localCropRef.current;
+    const s = scaleRef.current;
+
+    // Draw full frame
+    ctx.drawImage(bitmap, 0, 0);
+
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Crop region: clear dimming and redraw bright
+    const cx = crop.x * s;
+    const cy = crop.y * s;
+    const cw = crop.width * s;
+    const ch = crop.height * s;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx, cy, cw, ch);
+    ctx.clip();
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.restore();
+
+    // Dashed border
+    ctx.strokeStyle = '#8A7CFF';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(cx, cy, cw, ch);
+    ctx.setLineDash([]);
+
+    // Corner handles
+    const hs = 8;
+    ctx.fillStyle = '#8A7CFF';
+    for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
+      ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    }
+  }, []);
+
+  // Redraw on crop change (but NOT during drag — see rAF below)
+  useEffect(() => {
+    if (frameReady) drawOverlay();
+  }, [frameReady, localCrop, scale, drawOverlay]);
+
+  // ─── Mouse events with rAF throttle for 60fps drag ────────────────
   const getCanvasCoords = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
       return {
-        x: Math.round((e.clientX - rect.left) / scale),
-        y: Math.round((e.clientY - rect.top) / scale),
+        x: Math.round((e.clientX - rect.left) / scaleRef.current),
+        y: Math.round((e.clientY - rect.top) / scaleRef.current),
       };
     },
-    [scale],
+    [],
   );
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      const coords = getCanvasCoords(e);
-      setDragStart(coords);
-      setDragging(true);
+      dragStartRef.current = getCanvasCoords(e);
+      draggingRef.current = true;
     },
     [getCanvasCoords],
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragging || !dragStart) return;
+      if (!draggingRef.current || !dragStartRef.current) return;
+
       const coords = getCanvasCoords(e);
-      const x = Math.min(dragStart.x, coords.x);
-      const y = Math.min(dragStart.y, coords.y);
-      const w = Math.abs(coords.x - dragStart.x);
-      const h = Math.abs(coords.y - dragStart.y);
-      setLocalCrop({ x, y, width: Math.max(10, w), height: Math.max(10, h) });
+      const start = dragStartRef.current;
+      const x = Math.min(start.x, coords.x);
+      const y = Math.min(start.y, coords.y);
+      const w = Math.abs(coords.x - start.x);
+      const h = Math.abs(coords.y - start.y);
+      const newCrop = { x, y, width: Math.max(10, w), height: Math.max(10, h) };
+
+      // Update ref immediately (for drawOverlay)
+      localCropRef.current = newCrop;
+
+      // Throttle: rAF for canvas draw + batched React state update
+      if (!rafIdRef.current) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          rafIdRef.current = 0;
+          drawOverlay();
+          setLocalCrop(localCropRef.current);
+        });
+      }
     },
-    [dragging, dragStart, getCanvasCoords],
+    [getCanvasCoords, drawOverlay],
   );
 
   const handleMouseUp = useCallback(() => {
-    setDragging(false);
-    setDragStart(null);
-  }, []);
-
-  useEffect(() => {
-    if (!frameReady) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    if (!state.videoFile) return;
-    const url = URL.createObjectURL(state.videoFile);
-    const video = document.createElement('video');
-    video.preload = 'auto';
-    video.muted = true;
-
-    video.onloadeddata = () => {
-      video.currentTime = Math.min(2, video.duration / 2);
-    };
-
-    video.onseeked = () => {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const cx = localCrop.x * scale;
-      const cy = localCrop.y * scale;
-      const cw = localCrop.width * scale;
-      const ch = localCrop.height * scale;
-      ctx.clearRect(cx, cy, cw, ch);
-      ctx.drawImage(
-        video,
-        localCrop.x, localCrop.y, localCrop.width, localCrop.height,
-        cx, cy, cw, ch,
-      );
-
-      ctx.strokeStyle = colors.accent;
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
-      ctx.strokeRect(cx, cy, cw, ch);
-      ctx.setLineDash([]);
-
-      const handleSize = 8;
-      ctx.fillStyle = colors.accent;
-      for (const [hx, hy] of [[cx, cy], [cx + cw, cy], [cx, cy + ch], [cx + cw, cy + ch]]) {
-        ctx.fillRect(hx - handleSize / 2, hy - handleSize / 2, handleSize, handleSize);
-      }
-
-      URL.revokeObjectURL(url);
-    };
-
-    video.src = url;
-    return () => URL.revokeObjectURL(url);
-  }, [frameReady, localCrop, scale, state.videoFile]);
+    draggingRef.current = false;
+    dragStartRef.current = null;
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = 0;
+    }
+    setLocalCrop(localCropRef.current);
+    drawOverlay();
+  }, [drawOverlay]);
 
   return (
     <div style={{ display: 'grid', gap: '32px' }}>

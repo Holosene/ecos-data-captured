@@ -57,6 +57,10 @@ export interface CalibrationSettings {
 export interface SyncSettings {
   /** Offset in seconds: positive = GPX starts after video */
   offsetS: number;
+  /** Trim GPX start (seconds to remove from beginning, >= 0) */
+  trimStartS: number;
+  /** Trim GPX end (seconds to remove from end, >= 0) */
+  trimEndS: number;
   /** Video start time (epoch ms) — set by user or auto */
   videoStartEpochMs: number;
   /** Video end time (epoch ms) */
