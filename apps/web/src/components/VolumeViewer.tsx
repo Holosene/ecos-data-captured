@@ -234,6 +234,12 @@ export function VolumeViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Update beam wireframe when beam settings are available
+  useEffect(() => {
+    if (!rendererRef.current || !beam) return;
+    rendererRef.current.updateBeamGeometry(beam.beamAngleDeg / 2, beam.depthMaxM);
+  }, [beam]);
+
   // Upload static volume data (Mode B or non-temporal Mode A)
   useEffect(() => {
     if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
