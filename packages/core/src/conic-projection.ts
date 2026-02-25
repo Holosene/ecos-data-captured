@@ -67,7 +67,9 @@ export function createEmptyVolume(
 
 /**
  * Project a single frame into a conic volume (Mode A: Instrument).
- * The volume represents the cone itself — no GPS, time axis = Z.
+ *
+ * Synthetic cone: average all columns per row → one depth profile,
+ * then paint across the full angular width with Gaussian falloff.
  */
 export function projectFrameIntoCone(
   frame: PreprocessedFrame,
@@ -83,7 +85,22 @@ export function projectFrameIntoCone(
   const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
+  // Step 1: average all columns per row → one depth profile
+  const depthProfile = new Float32Array(frame.height);
   for (let row = 0; row < frame.height; row++) {
+    let sum = 0;
+    const rowOffset = row * frame.width;
+    for (let col = 0; col < frame.width; col++) {
+      sum += frame.intensity[rowOffset + col];
+    }
+    depthProfile[row] = sum / frame.width;
+  }
+
+  // Step 2: paint the depth profile across the cone's angular width
+  for (let row = 0; row < frame.height; row++) {
+    const intensity = depthProfile[row];
+    if (intensity < 0.001) continue;
+
     const depth = (row / frame.height) * beam.depthMaxM;
     if (depth < beam.nearFieldM) continue;
 
@@ -94,20 +111,17 @@ export function projectFrameIntoCone(
     const di = Math.floor((depth / extDepth) * resDepth);
     if (di < 0 || di >= resDepth) continue;
 
-    for (let col = 0; col < frame.width; col++) {
-      const intensity = frame.intensity[row * frame.width + col];
-      if (intensity < 0.001) continue;
+    // Paint across ALL lateral positions in the cone at this depth
+    for (let xi = 0; xi < resX; xi++) {
+      const lateralPos = volume.origin[0] + (xi / resX) * extX;
+      const lateralDist2 = lateralPos * lateralPos;
 
-      const normalizedCol = (col / frame.width - 0.5) * 2;
-      const lateralOffset = normalizedCol * radiusAtDepth;
+      // Only fill within the cone radius
+      if (Math.abs(lateralPos) > radiusAtDepth) continue;
 
-      const lateralDist2 = lateralOffset * lateralOffset;
       const gaussWeight = sigma2x2 > 0
         ? Math.exp(-lateralDist2 / sigma2x2)
         : 1.0;
-
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-      if (xi < 0 || xi >= resX) continue;
 
       // Z-outer (depth), Y-middle (track), X-inner (lateral)
       const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
@@ -323,7 +337,15 @@ export function projectFrameWindow(
 }
 
 /**
- * Same as projectFrameIntoCone but with an extra weight multiplier.
+ * Synthetic cone projection for waterfall sonar (Option B).
+ *
+ * Waterfall images have cols = successive pings (time), NOT angular positions.
+ * Treating cols as lateral angles is wrong — it spreads temporal data across
+ * the cone's width.
+ *
+ * Fix: average ALL columns for each row to produce a single depth profile,
+ * then paint that profile across the full angular width of the cone with
+ * Gaussian falloff.  Result: triangle = depth ↓, track = cone thickness.
  */
 function projectFrameIntoConeWeighted(
   frame: PreprocessedFrame,
@@ -340,7 +362,22 @@ function projectFrameIntoConeWeighted(
   const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
+  // Step 1: average all columns per row → one depth profile
+  const depthProfile = new Float32Array(frame.height);
   for (let row = 0; row < frame.height; row++) {
+    let sum = 0;
+    const rowOffset = row * frame.width;
+    for (let col = 0; col < frame.width; col++) {
+      sum += frame.intensity[rowOffset + col];
+    }
+    depthProfile[row] = sum / frame.width;
+  }
+
+  // Step 2: paint the depth profile across the cone's angular width
+  for (let row = 0; row < frame.height; row++) {
+    const intensity = depthProfile[row];
+    if (intensity < 0.001) continue;
+
     const depth = (row / frame.height) * beam.depthMaxM;
     if (depth < beam.nearFieldM) continue;
 
@@ -351,20 +388,17 @@ function projectFrameIntoConeWeighted(
     const di = Math.floor((depth / extDepth) * resDepth);
     if (di < 0 || di >= resDepth) continue;
 
-    for (let col = 0; col < frame.width; col++) {
-      const intensity = frame.intensity[row * frame.width + col];
-      if (intensity < 0.001) continue;
+    // Paint across ALL lateral positions in the cone at this depth
+    for (let xi = 0; xi < resX; xi++) {
+      const lateralPos = volume.origin[0] + (xi / resX) * extX;
+      const lateralDist2 = lateralPos * lateralPos;
 
-      const normalizedCol = (col / frame.width - 0.5) * 2;
-      const lateralOffset = normalizedCol * radiusAtDepth;
+      // Only fill within the cone radius
+      if (Math.abs(lateralPos) > radiusAtDepth) continue;
 
-      const lateralDist2 = lateralOffset * lateralOffset;
       const gaussWeight = sigma2x2 > 0
         ? Math.exp(-lateralDist2 / sigma2x2)
         : 1.0;
-
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-      if (xi < 0 || xi >= resX) continue;
 
       // Z-outer (depth), Y-middle (track), X-inner (lateral)
       const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
