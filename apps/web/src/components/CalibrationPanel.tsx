@@ -8,8 +8,7 @@
 
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
-import type { CalibrationConfig, TexAxisOrder } from '../engine/volume-renderer.js';
-import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
+import type { CalibrationConfig } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
 
@@ -249,40 +248,6 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
-      {/* Data Axes — reorder/flip data inside the volume independently */}
-      <Section title="Data Axes" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
-        <span style={{ width: '48px', fontSize: '10px', color: colors.text3, flexShrink: 0 }}>Order</span>
-        <select
-          value={config.dataAxes?.order ?? 'UVW'}
-          onChange={(e) => update('dataAxes.order', e.target.value as TexAxisOrder)}
-          style={{
-            flex: 1, fontSize: '10px', fontFamily: 'monospace',
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.border}`,
-            borderRadius: '4px', color: colors.text1, padding: '2px 4px', cursor: 'pointer',
-          }}
-        >
-          {(['UVW', 'UWV', 'VUW', 'VWU', 'WUV', 'WVU'] as TexAxisOrder[]).map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
-      </div>
-      {(['flipU', 'flipV', 'flipW'] as const).map((key) => (
-        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', fontSize: '10px', color: colors.text3, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={config.dataAxes?.[key] ?? false}
-            onChange={(e) => {
-              const next = JSON.parse(JSON.stringify(config)) as CalibrationConfig;
-              next.dataAxes = { ...DEFAULT_CALIBRATION.dataAxes, ...next.dataAxes, [key]: e.target.checked };
-              onChange(next);
-            }}
-            style={{ width: '12px', height: '12px' }}
-          />
-          {key}
-        </label>
-      ))}
-
       {/* Camera */}
       <Section title="Camera" />
       <Row label="Dist" value={config.camera.dist} min={0.5} max={5} step={0.1} onChange={(v) => update('camera.dist', v)} />
@@ -339,23 +304,12 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
   );
 }
 
-/** Load calibration from localStorage, merging with defaults for new fields */
+/** Load calibration from localStorage */
 export function loadCalibration(): CalibrationConfig | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
-    // Deep-merge with defaults so new fields (e.g. dataAxes) are always present
-    return {
-      ...DEFAULT_CALIBRATION,
-      ...saved,
-      position: { ...DEFAULT_CALIBRATION.position, ...saved.position },
-      rotation: { ...DEFAULT_CALIBRATION.rotation, ...saved.rotation },
-      scale: { ...DEFAULT_CALIBRATION.scale, ...saved.scale },
-      axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...saved.axisMapping },
-      dataAxes: { ...DEFAULT_CALIBRATION.dataAxes, ...saved.dataAxes },
-      camera: { ...DEFAULT_CALIBRATION.camera, ...saved.camera },
-    };
+    return JSON.parse(raw) as CalibrationConfig;
   } catch {
     return null;
   }
