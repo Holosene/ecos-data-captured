@@ -18,8 +18,6 @@ import {
   estimateVolumeMemoryMB,
   autoDetectCropRegion,
   autoDetectDepthMax,
-  deserializeVolume,
-  volumeSnapshotToBlob,
 } from '@echos/core';
 import type {
   PreprocessingSettings,
@@ -176,31 +174,6 @@ export function ScanPage() {
         dispatch({ type: 'SET_GPX', file, track });
       } catch (e) {
         dispatch({ type: 'SET_ERROR', error: `Could not parse GPX: ${(e as Error).message}` });
-      }
-    },
-    [dispatch],
-  );
-
-  // ─── Load pre-computed volume (.echos-vol) — skip entire pipeline ─────
-  const handleVolumeFile = useCallback(
-    async (files: File[]) => {
-      const file = files[0];
-      if (!file) return;
-      try {
-        const buffer = await file.arrayBuffer();
-        const snap = deserializeVolume(buffer);
-        setVolumeData(snap.data);
-        setVolumeDims(snap.dimensions);
-        setVolumeExtent(snap.extent);
-        dispatch({ type: 'SET_V2_VOLUME', data: snap.data, dimensions: snap.dimensions, extent: snap.extent });
-        // Jump straight to viewer
-        setPhase('viewer');
-        setTimeout(() => {
-          setStepBarAnimating(true);
-          setTimeout(() => setStepBarVisible(false), 500);
-        }, 300);
-      } catch (e) {
-        dispatch({ type: 'SET_ERROR', error: `Invalid .echos-vol: ${(e as Error).message}` });
       }
     },
     [dispatch],
@@ -648,19 +621,6 @@ export function ScanPage() {
                 />
               </GlassPanel>
             </div>
-
-            {/* Quick-load a pre-computed volume */}
-            <GlassPanel style={{ padding: '16px', marginBottom: '24px', opacity: 0.7 }}>
-              <h3 style={{ color: colors.text3, fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Volume rapide (.echos-vol)
-              </h3>
-              <FileDropZone
-                accept=".echos-vol"
-                onFile={(file: File) => handleVolumeFile([file])}
-                label="Glisser un .echos-vol pour charger directement"
-                hint="Skip le pipeline — charge un volume pré-calculé"
-              />
-            </GlassPanel>
 
             {state.error && (
               <div style={{
@@ -1172,26 +1132,6 @@ export function ScanPage() {
                 setFrameReady(false);
               }}
             />
-            {/* Export volume snapshot for fast reload */}
-            {volumeData && (
-              <div style={{ padding: '8px 0', display: 'flex', justifyContent: 'flex-end' }}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    const blob = volumeSnapshotToBlob({ data: volumeData, dimensions: volumeDims, extent: volumeExtent });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `echos-volume-${Date.now()}.echos-vol`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  Exporter .echos-vol
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </div>
