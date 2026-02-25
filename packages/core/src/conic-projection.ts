@@ -51,11 +51,9 @@ export function createEmptyVolume(
   extentZ: number,
 ): ProbabilisticVolume {
   const total = grid.resX * grid.resY * grid.resZ;
-  // dims/extent order: [lateral(X), depth(Y), track(Z)] — direct texture mapping
-  const dims: [number, number, number] = [grid.resX, grid.resZ, grid.resY];
-  const ext: [number, number, number] = [extentX, extentZ, extentY];
-  console.log('[ECHOS] createEmptyVolume — grid:', JSON.stringify(grid),
-    '→ dims [lat,depth,track]:', dims, '→ extent:', ext);
+  // dims/extent order: [lateral(X), track(Y), depth(Z)] — no swap, direct from grid
+  const dims: [number, number, number] = [grid.resX, grid.resY, grid.resZ];
+  const ext: [number, number, number] = [extentX, extentY, extentZ];
   return {
     data: new Float32Array(total),
     weights: new Float32Array(total),
@@ -77,18 +75,13 @@ export function projectFrameIntoCone(
   beam: BeamSettings,
   frameSliceIndex: number,
 ): void {
-  // dims = [lateral(X), depth(Y), track(Z)], extent = [lateral, depth, track]
+  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
   const resX = volume.dimensions[0];
-  const resDepth = volume.dimensions[1];
-  const resTrack = volume.dimensions[2];
+  const resTrack = volume.dimensions[1];
+  const resDepth = volume.dimensions[2];
   const extX = volume.extent[0];
-  const extDepth = volume.extent[1];
+  const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
-
-  if (frameSliceIndex === 0) {
-    console.log('[ECHOS] projectFrameIntoCone — resX(lat):', resX, 'resDepth:', resDepth,
-      'resTrack:', resTrack, '— index formula: track*%d + depth*%d + lat', resDepth * resX, resX);
-  }
 
   for (let row = 0; row < frame.height; row++) {
     const depth = (row / frame.height) * beam.depthMaxM;
@@ -116,8 +109,8 @@ export function projectFrameIntoCone(
       const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
       if (xi < 0 || xi >= resX) continue;
 
-      // Z-outer (track), Y-middle (depth), X-inner (lateral)
-      const voxelIdx = frameSliceIndex * resDepth * resX + di * resX + xi;
+      // Z-outer (depth), Y-middle (track), X-inner (lateral)
+      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         volume.data[voxelIdx] += intensity * gaussWeight;
         volume.weights[voxelIdx] += gaussWeight;
@@ -130,7 +123,7 @@ export function projectFrameIntoCone(
 
 /**
  * Project all frames into a spatial volume (Mode B: Spatial Trace).
- * Frames are positioned along the Z axis according to GPS distance.
+ * Frames are positioned along the Y axis according to GPS distance.
  */
 export function projectFramesSpatial(
   frames: PreprocessedFrame[],
@@ -139,9 +132,9 @@ export function projectFramesSpatial(
   beam: BeamSettings,
   onProgress?: (current: number, total: number) => void,
 ): void {
-  // dims = [lateral(X), depth(Y), track(Z)], extent = [lateral, depth, track]
-  const [resX, resDepth, resTrack] = volume.dimensions;
-  const [extX, extDepth, extTrack] = volume.extent;
+  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
+  const [resX, resTrack, resDepth] = volume.dimensions;
+  const [extX, extTrack, extDepth] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
   // Find distance range
@@ -155,7 +148,7 @@ export function projectFramesSpatial(
     const mapping = mappings[fi];
     if (!mapping) continue;
 
-    // Track position → Z axis (outermost)
+    // Track position → Y axis (middle)
     const tNorm = (mapping.distanceM - minDist) / distRange;
     const ti = Math.floor(tNorm * (resTrack - 1));
     if (ti < 0 || ti >= resTrack) continue;
@@ -168,7 +161,7 @@ export function projectFramesSpatial(
       const sigma = beam.lateralFalloffSigma * radiusAtDepth;
       const sigma2x2 = 2 * sigma * sigma;
 
-      // Depth → Y axis (middle)
+      // Depth → Z axis (outermost)
       const di = Math.floor((depth / extDepth) * resDepth);
       if (di < 0 || di >= resDepth) continue;
 
@@ -186,8 +179,8 @@ export function projectFramesSpatial(
         const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
         if (xi < 0 || xi >= resX) continue;
 
-        // Z-outer (track), Y-middle (depth), X-inner (lateral)
-        const voxelIdx = ti * resDepth * resX + di * resX + xi;
+        // Z-outer (depth), Y-middle (track), X-inner (lateral)
+        const voxelIdx = di * resTrack * resX + ti * resX + xi;
         if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
           volume.data[voxelIdx] += intensity * gaussWeight;
           volume.weights[voxelIdx] += gaussWeight;
@@ -232,7 +225,7 @@ export function normalizeVolume(volume: ProbabilisticVolume): Float32Array {
 
 /**
  * Build a conic instrument volume from frames.
- * All frames are stacked along Z axis (time/track axis).
+ * All frames are stacked along Y axis (track axis).
  */
 export function buildInstrumentVolume(
   frames: PreprocessedFrame[],
@@ -279,7 +272,7 @@ export function buildInstrumentVolume(
  * the frames around `centerIndex` (±windowHalf) into a fresh cone volume.
  * Recent frames are weighted more heavily for a natural "live sonar" feel.
  *
- * The Z axis maps to frames within the window (time thickness).
+ * The Y axis maps to frames within the window (time thickness).
  */
 export function projectFrameWindow(
   frames: PreprocessedFrame[],
@@ -291,7 +284,7 @@ export function projectFrameWindow(
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5;
-  const extentY = beam.depthMaxM * 0.5; // Thin Y — this is a live slice, not full track
+  const extentY = beam.depthMaxM * 0.5; // Thin track — this is a live window, not full track
   const extentZ = beam.depthMaxM;
 
   const halfWin = Math.floor(windowSize / 2);
@@ -322,27 +315,8 @@ export function projectFrameWindow(
 
   const normalized = normalizeVolume(volume);
 
-  // ─── DIAGNOSTIC TEST: override with uniaxial test pattern ───
-  // Fill only track slice yi=0 with 1.0, rest stays 0.0
-  // This should produce a single bright slab at one end of the track axis (Box Z)
-  const [testResX, testResDepth, testResTrack] = volume.dimensions;
-  const testData = new Float32Array(testResX * testResDepth * testResTrack);
-  for (let yi = 0; yi < testResTrack; yi++) {
-    for (let di = 0; di < testResDepth; di++) {
-      for (let xi = 0; xi < testResX; xi++) {
-        const index = yi * (testResDepth * testResX) + di * testResX + xi;
-        if (yi === 0) {
-          testData[index] = 1.0;
-        }
-      }
-    }
-  }
-  console.log('[ECHOS] TEST PATTERN — resX:', testResX, 'resDepth:', testResDepth, 'resTrack:', testResTrack);
-  console.log('[ECHOS] TEST PATTERN — track=0 filled, data length:', testData.length);
-  // ─── END DIAGNOSTIC TEST ───
-
   return {
-    normalized: testData,
+    normalized,
     dimensions: volume.dimensions,
     extent: volume.extent,
   };
@@ -358,12 +332,12 @@ function projectFrameIntoConeWeighted(
   frameSliceIndex: number,
   weight: number,
 ): void {
-  // dims = [lateral(X), depth(Y), track(Z)], extent = [lateral, depth, track]
+  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
   const resX = volume.dimensions[0];
-  const resDepth = volume.dimensions[1];
-  const resTrack = volume.dimensions[2];
+  const resTrack = volume.dimensions[1];
+  const resDepth = volume.dimensions[2];
   const extX = volume.extent[0];
-  const extDepth = volume.extent[1];
+  const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
   for (let row = 0; row < frame.height; row++) {
@@ -392,8 +366,8 @@ function projectFrameIntoConeWeighted(
       const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
       if (xi < 0 || xi >= resX) continue;
 
-      // Z-outer (track), Y-middle (depth), X-inner (lateral)
-      const voxelIdx = frameSliceIndex * resDepth * resX + di * resX + xi;
+      // Z-outer (depth), Y-middle (track), X-inner (lateral)
+      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         const w = gaussWeight * weight;
         volume.data[voxelIdx] += intensity * w;

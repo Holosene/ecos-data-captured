@@ -162,9 +162,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ─── Default state (= calibrated values) ─────────────────────────────────
 const DEFAULTS = {
   position: { x: 0, y: 0.12, z: 0 },
-  rotation: { x: 180, y: 180, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 0.65, y: 1.24, z: 1.53 },
-  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
   camera: { dist: 1.6, fov: 50, near: 0.1, preset: 'frontal' },
   grid: { y: -0.5 },
   axes: { size: 0.6 },
@@ -388,12 +387,8 @@ function applyState() {
     state.rotation.z * Math.PI / 180,
   );
 
-  // Scale based on axis mapping
-  const s = { x: 1, y: 1, z: 1 };
-  const map = state.axisMapping;
-  s[map.lateral] = state.scale.x;
-  s[map.depth] = state.scale.y;
-  s[map.track] = state.scale.z;
+  // Direct scale: X=lateral, Y=track, Z=depth — no axis mapping
+  const s = { x: state.scale.x, y: state.scale.y, z: state.scale.z };
   volumeGroup.scale.set(s.x, s.y, s.z);
 
   // Update face labels positions (in world space, outside the volume)
@@ -525,12 +520,7 @@ function updateMappingLabels() {
     const outEl = document.getElementById('map' + key.charAt(0).toUpperCase() + key.slice(1) + '_out')
       || document.getElementById(`map${key}_out`);
   });
-  document.getElementById('mapLateral_out').textContent = names[state.axisMapping.lateral];
-  document.getElementById('mapLateral_out').style.color = colors[state.axisMapping.lateral];
-  document.getElementById('mapDepth_out').textContent = names[state.axisMapping.depth];
-  document.getElementById('mapDepth_out').style.color = colors[state.axisMapping.depth];
-  document.getElementById('mapTrack_out').textContent = names[state.axisMapping.track];
-  document.getElementById('mapTrack_out').style.color = colors[state.axisMapping.track];
+  // Axis mapping display removed — fixed: X=lateral, Y=track, Z=depth
 }
 
 // Position
@@ -558,10 +548,7 @@ bindSlider('gridY', () => state.grid.y, v => state.grid.y = v);
 bindSlider('axesSize', () => state.axes.size, v => state.axes.size = v);
 document.getElementById('bgColor').addEventListener('input', (e) => { state.bgColor = e.target.value; applyState(); });
 
-// Axis mapping
-bindSelect('mapLateral', () => state.axisMapping.lateral, v => state.axisMapping.lateral = v);
-bindSelect('mapDepth', () => state.axisMapping.depth, v => state.axisMapping.depth = v);
-bindSelect('mapTrack', () => state.axisMapping.track, v => state.axisMapping.track = v);
+// Axis mapping removed — direct X=lateral, Y=track, Z=depth
 
 // Camera preset buttons
 document.querySelectorAll('[data-preset]').forEach(btn => {
@@ -576,7 +563,6 @@ function getConfig() {
     position: { ...state.position },
     rotation: { ...state.rotation },
     scale: { ...state.scale },
-    axisMapping: { ...state.axisMapping },
     camera: {
       ...state.camera,
       currentPosition: {
@@ -610,7 +596,6 @@ function loadConfig(config) {
   if (config.position) Object.assign(state.position, config.position);
   if (config.rotation) Object.assign(state.rotation, config.rotation);
   if (config.scale) Object.assign(state.scale, config.scale);
-  if (config.axisMapping) Object.assign(state.axisMapping, config.axisMapping);
   if (config.camera) {
     state.camera.dist = config.camera.dist ?? state.camera.dist;
     state.camera.fov = config.camera.fov ?? state.camera.fov;
@@ -642,9 +627,7 @@ function refreshUI() {
   });
   document.getElementById('camNear').value = state.camera.near;
   document.getElementById('bgColor').value = state.bgColor;
-  document.getElementById('mapLateral').value = state.axisMapping.lateral;
-  document.getElementById('mapDepth').value = state.axisMapping.depth;
-  document.getElementById('mapTrack').value = state.axisMapping.track;
+  // axisMapping removed — fixed: X=lateral, Y=track, Z=depth
 }
 
 function updateConfigPreview() {

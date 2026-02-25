@@ -26,11 +26,6 @@ export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number }; // degrees
   scale: { x: number; y: number; z: number };
-  axisMapping: {
-    lateral: 'x' | 'y' | 'z';
-    depth: 'x' | 'y' | 'z';
-    track: 'x' | 'y' | 'z';
-  };
   beamAxis: 'x' | 'y' | 'z';
   camera: { dist: number; fov: number };
   grid: { y: number };
@@ -40,10 +35,9 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 180, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
-  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
-  beamAxis: 'y',
+  beamAxis: 'z',
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -163,14 +157,14 @@ export class VolumeRenderer {
   // ─── Calibration ──────────────────────────────────────────────────────
 
   /** Compute volume scale from extent + calibration stretch.
-   *  extent = [lateral, depth, track] → direct mapping to Box [X, Y, Z]. */
+   *  extent = [lateral, track, depth] → direct mapping to Box [X, Y, Z]. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
     return new THREE.Vector3(
       (this.extent[0] / maxExtent) * cal.scale.x,  // lateral → X
-      (this.extent[1] / maxExtent) * cal.scale.y,  // depth   → Y
-      (this.extent[2] / maxExtent) * cal.scale.z,  // track   → Z
+      (this.extent[1] / maxExtent) * cal.scale.y,  // track   → Y
+      (this.extent[2] / maxExtent) * cal.scale.z,  // depth   → Z
     );
   }
 
@@ -328,8 +322,6 @@ export class VolumeRenderer {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
-    console.log('[ECHOS] uploadVolume — dimX (lateral):', dimX, 'dimY (depth):', dimY, 'dimZ (track):', dimZ);
-    console.log('[ECHOS] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -366,7 +358,6 @@ export class VolumeRenderer {
 
     const scale = this.computeVolumeScale();
     this.volumeScale = scale;
-    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(depth):', scale.y, 'Z(track):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 
