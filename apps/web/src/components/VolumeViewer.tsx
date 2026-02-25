@@ -23,6 +23,7 @@ import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
+import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
 
 interface VolumeViewerProps {
@@ -178,6 +179,61 @@ export function VolumeViewer({
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
   }, [calibrationOpen, calibration]);
+
+  // Apply calibration to renderer when it changes
+  const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
+    setCalibration(cal);
+    setCalibrationSaved(false);
+    rendererRef.current?.setCalibration(cal);
+  }, []);
+
+  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
+  const [calibrationSaved, setCalibrationSaved] = useState(false);
+  const bPressCountRef = useRef(0);
+  const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // "b" x5 toggle + Ctrl+S save
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl+S / Cmd+S — save calibration
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
+        e.preventDefault();
+        const cal = rendererRef.current?.getCalibration() ?? calibration;
+        saveCalibration(cal);
+        downloadCalibration(cal);
+        setCalibrationSaved(true);
+        setTimeout(() => setCalibrationSaved(false), 2000);
+        return;
+      }
+
+      // Press "b" 5 times within 2 seconds
+      if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        bPressCountRef.current += 1;
+        if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
+        bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
+        if (bPressCountRef.current >= 5) {
+          bPressCountRef.current = 0;
+          setCalibrationOpen((prev) => !prev);
+        }
+      }
+
+      // Escape closes calibration
+      if (e.key === 'Escape' && calibrationOpen) {
+        setCalibrationOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [calibrationOpen, calibration]);
+
+  // Sync renderer background color with theme
+  useEffect(() => {
+    if (!rendererRef.current) return;
+    const bgColor = theme === 'light' ? '#fafafa' : '#111111';
+    rendererRef.current.setCalibration({ ...calibration, bgColor });
+  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply calibration to renderer when it changes
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
@@ -470,7 +526,7 @@ export function VolumeViewer({
               saved={calibrationSaved}
             />
           ) : (
-            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
               <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
                 {t('v2.controls.title')}
               </h3>
