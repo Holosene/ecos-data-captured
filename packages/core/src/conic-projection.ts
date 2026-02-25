@@ -322,27 +322,8 @@ export function projectFrameWindow(
 
   const normalized = normalizeVolume(volume);
 
-  // ─── DIAGNOSTIC TEST: override with uniaxial test pattern ───
-  // Fill only track slice yi=0 with 1.0, rest stays 0.0
-  // This should produce a single bright slab at one end of the track axis (Box Z)
-  const [testResX, testResDepth, testResTrack] = volume.dimensions;
-  const testData = new Float32Array(testResX * testResDepth * testResTrack);
-  for (let yi = 0; yi < testResTrack; yi++) {
-    for (let di = 0; di < testResDepth; di++) {
-      for (let xi = 0; xi < testResX; xi++) {
-        const index = yi * (testResDepth * testResX) + di * testResX + xi;
-        if (yi === 0) {
-          testData[index] = 1.0;
-        }
-      }
-    }
-  }
-  console.log('[ECHOS] TEST PATTERN — resX:', testResX, 'resDepth:', testResDepth, 'resTrack:', testResTrack);
-  console.log('[ECHOS] TEST PATTERN — track=0 filled, data length:', testData.length);
-  // ─── END DIAGNOSTIC TEST ───
-
   return {
-    normalized: testData,
+    normalized,
     dimensions: volume.dimensions,
     extent: volume.extent,
   };
