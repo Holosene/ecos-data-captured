@@ -206,38 +206,34 @@ export class VolumeRenderer {
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
     const distMul = this.calibration.camera.dist;
 
-    // Volume axes: X=lateral, Y=track (forward), Z=depth (downward).
-    // Three.js screen: Y=up. To show depth going down, set camera.up = (0,0,-1).
     switch (preset) {
       case 'frontal': {
-        // Look along -Y (track): see X (lateral) × Z (depth, down)
-        const dist = maxDim * distMul;
-        this.camera.position.set(0, dist, 0);
-        this.camera.up.set(0, 0, -1);
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-      case 'horizontal': {
-        // Look along -X (lateral): see Y (track) × Z (depth, down)
-        const dist = maxDim * distMul;
-        this.camera.position.set(dist, 0, 0);
-        this.camera.up.set(0, 0, -1);
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-      case 'vertical': {
-        // Look along -Z (depth): see X (lateral) × Y (track)
         const dist = maxDim * distMul;
         this.camera.position.set(0, 0, dist);
         this.camera.up.set(0, 1, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
+      case 'horizontal': {
+        const dist = maxDim * (distMul * 0.94);
+        const angle25 = (25 * Math.PI) / 180;
+        this.camera.position.set(
+          dist * 0.3,
+          dist * Math.sin(angle25),
+          dist * Math.cos(angle25),
+        );
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
+      case 'vertical': {
+        const dist = maxDim * distMul;
+        this.camera.position.set(dist, 0, 0);
+        this.controls.target.set(0, 0, 0);
+        break;
+      }
       case 'free': {
-        // 3/4 elevated view with depth pointing down
         const dist = maxDim * (distMul * 0.75);
-        this.camera.position.set(dist * 0.3, dist, dist * 0.7);
-        this.camera.up.set(0, 0, -1);
+        this.camera.position.set(dist, dist * 0.7, dist);
         this.controls.target.set(0, 0, 0);
         break;
       }
