@@ -2,8 +2,8 @@
  * @echos/core — Type definitions
  *
  * Coordinate system convention:
- *   X = horizontal (sonar scan width, pixels → meters not applicable)
- *   Y = distance along track (meters, from GPX)
+ *   X = distance along track (meters, from GPX)
+ *   Y = horizontal / lateral (sonar scan width)
  *   Z = depth (meters, from 0 at surface to depthMax)
  *
  * Volume is stored as Float32Array in row-major order: [z][y][x]
@@ -93,7 +93,7 @@ export interface FrameMapping {
 // ─── Volume ─────────────────────────────────────────────────────────────────
 
 export interface VolumeMetadata {
-  /** Dimensions: [X, Y, Z] */
+  /** Dimensions: [X(track), Y(lateral), Z(depth)] */
   dimensions: [number, number, number];
   /** Spacing in meters: [xSpacing, ySpacing, zSpacing] */
   spacing: [number, number, number];
@@ -105,7 +105,7 @@ export interface VolumeMetadata {
   depthMaxM: number;
   /** Number of source frames */
   sourceFrameCount: number;
-  /** Number of resampled slices (Y) */
+  /** Number of resampled slices (X = track) */
   resampledSliceCount: number;
 }
 

@@ -8,7 +8,7 @@
  *   - Rendering controls (opacity, threshold, density, etc.)
  *   - Adaptive threshold (auto percentile-based)
  *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=lateral, Y=track, Z=depth)
+ *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=track, Y=lateral, Z=depth)
  *   - Export panel (NRRD, PNG, CSV)
  */
 
@@ -46,30 +46,30 @@ const WINDOW_SIZE = 12;
 
 // ─── Build a v1-style stacked volume from raw preprocessed frames ──────────
 // This gives full pixel resolution for 2D slice views instead of the
-// low-res conic projection grid (128×128×12).
+// low-res conic projection grid.
 // Layout: data[z * dimY * dimX + y * dimX + x]
-//   X = pixel col (lateral), Y = frame index (track/time), Z = pixel row (depth)
-// Convention: [lateral, track, depth] — matches conic-projection and CLAUDE.md.
+//   X = frame index (track/time), Y = pixel col (lateral), Z = pixel row (depth)
+// Convention: [track, lateral, depth] — matches conic-projection axes.
 
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
 ): { data: Float32Array; dimensions: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
 
-  const dimX = frameList[0].width;   // lateral (beam columns)
-  const dimY = frameList.length;     // track (frames)
+  const dimX = frameList.length;     // track (frames) — stacking along X
+  const dimY = frameList[0].width;   // lateral (beam columns)
   const dimZ = frameList[0].height;  // depth (sonar rows)
 
-  if (dimX === 0 || dimZ === 0) return null;
+  if (dimY === 0 || dimZ === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  // Z-outer (depth), Y-middle (track), X-inner (lateral)
-  for (let yi = 0; yi < dimY; yi++) {
-    const frame = frameList[yi];
+  // Z-outer (depth), Y-middle (lateral), X-inner (track)
+  for (let xi = 0; xi < dimX; xi++) {
+    const frame = frameList[xi];
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let xi = 0; xi < dimX; xi++) {
-        const srcIdx = zi * dimX + xi;
+      for (let yi = 0; yi < dimY; yi++) {
+        const srcIdx = zi * dimY + yi;  // frame intensity: row-major [depth × width]
         const dstIdx = zi * dimY * dimX + yi * dimX + xi;
         data[dstIdx] = frame.intensity[srcIdx] ?? 0;
       }

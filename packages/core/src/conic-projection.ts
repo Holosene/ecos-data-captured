@@ -11,6 +11,14 @@
  *   - Each voxel accumulates weighted intensity from all overlapping cones
  *   - Final value = sum(intensity × weight) / sum(weight)
  *
+ * Coordinate system:
+ *   X = track (frame stacking direction / GPS distance)
+ *   Y = lateral (perpendicular to boat heading, cone spread direction)
+ *   Z = depth (meters, 0 at surface, positive downward)
+ *
+ * Memory layout: data[z * dimY * dimX + y * dimX + x]
+ *   Z-outer (depth), Y-middle (lateral), X-inner (track)
+ *
  * Projection math:
  *   For a frame pixel at (col, row):
  *     depth  = row / frameHeight × depthMax
@@ -43,6 +51,8 @@ function coneRadiusAtDepth(depth: number, halfAngleRad: number): number {
 
 /**
  * Create an empty probabilistic volume grid.
+ *
+ * Axes: X = track (frame stacking), Y = lateral (cone spread), Z = depth.
  */
 export function createEmptyVolume(
   grid: VolumeGridSettings,
@@ -51,7 +61,7 @@ export function createEmptyVolume(
   extentZ: number,
 ): ProbabilisticVolume {
   const total = grid.resX * grid.resY * grid.resZ;
-  // dims/extent order: [lateral(X), track(Y), depth(Z)] — no swap, direct from grid
+  // dims/extent order: [track(X), lateral(Y), depth(Z)]
   const dims: [number, number, number] = [grid.resX, grid.resY, grid.resZ];
   const ext: [number, number, number] = [extentX, extentY, extentZ];
   return {
@@ -59,7 +69,7 @@ export function createEmptyVolume(
     weights: new Float32Array(total),
     dimensions: dims,
     extent: ext,
-    origin: [-extentX / 2, 0, 0],
+    origin: [0, -extentY / 2, 0],   // lateral centering on Y axis
   };
 }
 
@@ -67,7 +77,9 @@ export function createEmptyVolume(
 
 /**
  * Project a single frame into a conic volume (Mode A: Instrument).
- * The volume represents the cone itself — no GPS, time axis = Z.
+ * The volume represents the cone itself — no GPS.
+ *
+ * Axes: X = track (frameSliceIndex), Y = lateral (cone spread), Z = depth.
  */
 export function projectFrameIntoCone(
   frame: PreprocessedFrame,
@@ -75,11 +87,11 @@ export function projectFrameIntoCone(
   beam: BeamSettings,
   frameSliceIndex: number,
 ): void {
-  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
-  const resX = volume.dimensions[0];
-  const resTrack = volume.dimensions[1];
+  // dims = [track(X), lateral(Y), depth(Z)], extent = [track, lateral, depth]
+  const resTrack = volume.dimensions[0];
+  const resLateral = volume.dimensions[1];
   const resDepth = volume.dimensions[2];
-  const extX = volume.extent[0];
+  const extLateral = volume.extent[1];
   const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
@@ -106,11 +118,12 @@ export function projectFrameIntoCone(
         ? Math.exp(-lateralDist2 / sigma2x2)
         : 1.0;
 
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-      if (xi < 0 || xi >= resX) continue;
+      // Lateral offset → Y index
+      const yi = Math.floor(((lateralOffset - volume.origin[1]) / extLateral) * resLateral);
+      if (yi < 0 || yi >= resLateral) continue;
 
-      // Z-outer (depth), Y-middle (track), X-inner (lateral)
-      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
+      // Z-outer (depth), Y-middle (lateral), X-inner (track)
+      const voxelIdx = di * resLateral * resTrack + yi * resTrack + frameSliceIndex;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         volume.data[voxelIdx] += intensity * gaussWeight;
         volume.weights[voxelIdx] += gaussWeight;
@@ -123,7 +136,9 @@ export function projectFrameIntoCone(
 
 /**
  * Project all frames into a spatial volume (Mode B: Spatial Trace).
- * Frames are positioned along the Y axis according to GPS distance.
+ * Frames are positioned along the X axis according to GPS distance.
+ *
+ * Axes: X = track (GPS distance), Y = lateral (cone spread), Z = depth.
  */
 export function projectFramesSpatial(
   frames: PreprocessedFrame[],
@@ -132,9 +147,9 @@ export function projectFramesSpatial(
   beam: BeamSettings,
   onProgress?: (current: number, total: number) => void,
 ): void {
-  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
-  const [resX, resTrack, resDepth] = volume.dimensions;
-  const [extX, extTrack, extDepth] = volume.extent;
+  // dims = [track(X), lateral(Y), depth(Z)], extent = [track, lateral, depth]
+  const [resTrack, resLateral, resDepth] = volume.dimensions;
+  const [extTrack, extLateral, extDepth] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
   // Find distance range
@@ -148,7 +163,7 @@ export function projectFramesSpatial(
     const mapping = mappings[fi];
     if (!mapping) continue;
 
-    // Track position → Y axis (middle)
+    // Track position → X axis (inner)
     const tNorm = (mapping.distanceM - minDist) / distRange;
     const ti = Math.floor(tNorm * (resTrack - 1));
     if (ti < 0 || ti >= resTrack) continue;
@@ -176,11 +191,12 @@ export function projectFramesSpatial(
           ? Math.exp(-lateralDist2 / sigma2x2)
           : 1.0;
 
-        const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-        if (xi < 0 || xi >= resX) continue;
+        // Lateral offset → Y index
+        const yi = Math.floor(((lateralOffset - volume.origin[1]) / extLateral) * resLateral);
+        if (yi < 0 || yi >= resLateral) continue;
 
-        // Z-outer (depth), Y-middle (track), X-inner (lateral)
-        const voxelIdx = di * resTrack * resX + ti * resX + xi;
+        // Z-outer (depth), Y-middle (lateral), X-inner (track)
+        const voxelIdx = di * resLateral * resTrack + yi * resTrack + ti;
         if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
           volume.data[voxelIdx] += intensity * gaussWeight;
           volume.weights[voxelIdx] += gaussWeight;
@@ -225,7 +241,7 @@ export function normalizeVolume(volume: ProbabilisticVolume): Float32Array {
 
 /**
  * Build a conic instrument volume from frames.
- * All frames are stacked along Y axis (track axis).
+ * Frames are stacked along X axis (track), cone spreads along Y (lateral).
  */
 export function buildInstrumentVolume(
   frames: PreprocessedFrame[],
@@ -235,23 +251,23 @@ export function buildInstrumentVolume(
 ): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
-  const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
-  // Use depth-proportional extent for Y so the volume has a sensible aspect ratio
-  // (frame count made Y dominate enormously, producing an invisible thin slab)
-  const extentY = beam.depthMaxM * 1.5;
+  // X = track: depth-proportional extent for sensible aspect ratio
+  const extentX = beam.depthMaxM * 1.5;
+  // Y = lateral: extra room for Gaussian tails
+  const extentY = maxRadius * 2.5;
   const extentZ = beam.depthMaxM;
 
-  // Adjust Y resolution to match frame count
+  // Adjust X resolution (track) to match frame count
   const adjustedGrid: VolumeGridSettings = {
     ...grid,
-    resY: Math.min(grid.resY, frames.length),
+    resX: Math.min(grid.resX, frames.length),
   };
 
   const volume = createEmptyVolume(adjustedGrid, extentX, extentY, extentZ);
 
   for (let i = 0; i < frames.length; i++) {
-    const yi = Math.floor((i / frames.length) * adjustedGrid.resY);
-    projectFrameIntoCone(frames[i], volume, beam, yi);
+    const xi = Math.floor((i / frames.length) * adjustedGrid.resX);
+    projectFrameIntoCone(frames[i], volume, beam, xi);
     onProgress?.(i + 1, frames.length);
   }
 
@@ -272,7 +288,9 @@ export function buildInstrumentVolume(
  * the frames around `centerIndex` (±windowHalf) into a fresh cone volume.
  * Recent frames are weighted more heavily for a natural "live sonar" feel.
  *
- * The Y axis maps to frames within the window (time thickness).
+ * X axis = frames within the window (track/time thickness).
+ * Y axis = lateral (cone spread).
+ * Z axis = depth.
  */
 export function projectFrameWindow(
   frames: PreprocessedFrame[],
@@ -283,8 +301,10 @@ export function projectFrameWindow(
 ): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
-  const extentX = maxRadius * 2.5;
-  const extentY = beam.depthMaxM * 0.5; // Thin track — this is a live window, not full track
+  // X = track: thin — this is a live window, not full track
+  const extentX = beam.depthMaxM * 0.5;
+  // Y = lateral: extra room for Gaussian tails
+  const extentY = maxRadius * 2.5;
   const extentZ = beam.depthMaxM;
 
   const halfWin = Math.floor(windowSize / 2);
@@ -293,8 +313,8 @@ export function projectFrameWindow(
   const windowFrames = endIdx - startIdx + 1;
 
   const windowGrid: VolumeGridSettings = {
-    resX: grid.resX,
-    resY: Math.min(grid.resY, Math.max(1, windowFrames)),
+    resX: Math.min(grid.resX, Math.max(1, windowFrames)),   // X = track (window frames)
+    resY: grid.resY,                                          // Y = lateral
     resZ: grid.resZ,
   };
 
@@ -302,15 +322,15 @@ export function projectFrameWindow(
 
   for (let i = startIdx; i <= endIdx; i++) {
     const localIdx = i - startIdx;
-    const yi = windowFrames > 1
-      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resY - 1))
-      : Math.floor(windowGrid.resY / 2);
+    const xi = windowFrames > 1
+      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resX - 1))
+      : Math.floor(windowGrid.resX / 2);
 
     // Recency weight: frames closer to center are stronger
     const distFromCenter = Math.abs(i - centerIndex) / Math.max(1, halfWin);
     const recencyWeight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
 
-    projectFrameIntoConeWeighted(frames[i], volume, beam, yi, recencyWeight);
+    projectFrameIntoConeWeighted(frames[i], volume, beam, xi, recencyWeight);
   }
 
   const normalized = normalizeVolume(volume);
@@ -324,6 +344,8 @@ export function projectFrameWindow(
 
 /**
  * Same as projectFrameIntoCone but with an extra weight multiplier.
+ *
+ * Axes: X = track (frameSliceIndex), Y = lateral (cone spread), Z = depth.
  */
 function projectFrameIntoConeWeighted(
   frame: PreprocessedFrame,
@@ -332,11 +354,11 @@ function projectFrameIntoConeWeighted(
   frameSliceIndex: number,
   weight: number,
 ): void {
-  // dims = [lateral(X), track(Y), depth(Z)], extent = [lateral, track, depth]
-  const resX = volume.dimensions[0];
-  const resTrack = volume.dimensions[1];
+  // dims = [track(X), lateral(Y), depth(Z)], extent = [track, lateral, depth]
+  const resTrack = volume.dimensions[0];
+  const resLateral = volume.dimensions[1];
   const resDepth = volume.dimensions[2];
-  const extX = volume.extent[0];
+  const extLateral = volume.extent[1];
   const extDepth = volume.extent[2];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
@@ -363,11 +385,12 @@ function projectFrameIntoConeWeighted(
         ? Math.exp(-lateralDist2 / sigma2x2)
         : 1.0;
 
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-      if (xi < 0 || xi >= resX) continue;
+      // Lateral offset → Y index
+      const yi = Math.floor(((lateralOffset - volume.origin[1]) / extLateral) * resLateral);
+      if (yi < 0 || yi >= resLateral) continue;
 
-      // Z-outer (depth), Y-middle (track), X-inner (lateral)
-      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
+      // Z-outer (depth), Y-middle (lateral), X-inner (track)
+      const voxelIdx = di * resLateral * resTrack + yi * resTrack + frameSliceIndex;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         const w = gaussWeight * weight;
         volume.data[voxelIdx] += intensity * w;

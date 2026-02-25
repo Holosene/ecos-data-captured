@@ -136,10 +136,11 @@ function renderSlice(
 
 // ─── Axis label mapping ──────────────────────────────────────────────
 
+// Axes: X = track, Y = lateral, Z = depth
 const AXIS_LABEL_KEYS: Record<string, { h: TranslationKey; v: TranslationKey }> = {
-  x: { h: 'v2.slices.axisDistance', v: 'v2.slices.axisDepth' },    // Y×Z = track × depth
-  y: { h: 'v2.slices.axisWidth',   v: 'v2.slices.axisDepth' },    // X×Z = lateral × depth
-  z: { h: 'v2.slices.axisWidth',   v: 'v2.slices.axisDistance' },  // X×Y = lateral × track
+  x: { h: 'v2.slices.axisWidth',    v: 'v2.slices.axisDepth' },    // Y×Z = lateral × depth
+  y: { h: 'v2.slices.axisDistance',  v: 'v2.slices.axisDepth' },    // X×Z = track × depth
+  z: { h: 'v2.slices.axisDistance',  v: 'v2.slices.axisWidth' },    // X×Y = track × lateral
 };
 
 // ─── Single axis slice view ─────────────────────────────────────────────
@@ -277,29 +278,29 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         </div>
       </div>
 
-      {/* 2-column layout: plan view + cross-section */}
+      {/* 2-column layout: plan view (track×lateral) + cross-section (lateral×depth) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
         <SliceView
           volumeData={volumeData}
           dimensions={dimensions}
-          axis="y"
+          axis="z"
           label={t('v2.slices.planView')}
           preset={preset}
         />
         <SliceView
           volumeData={volumeData}
           dimensions={dimensions}
-          axis="z"
+          axis="x"
           label={t('v2.slices.crossSection')}
           preset={preset}
         />
       </div>
 
-      {/* Full-width: longitudinal */}
+      {/* Full-width: longitudinal (track×depth) */}
       <SliceView
         volumeData={volumeData}
         dimensions={dimensions}
-        axis="x"
+        axis="y"
         label={t('v2.slices.longitudinal')}
         preset={preset}
       />
