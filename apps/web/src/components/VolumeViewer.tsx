@@ -219,21 +219,13 @@ export function VolumeViewer({
 
   // Initialize renderer
   useEffect(() => {
-    if (!containerRef.current) {
-      console.warn('[VolumeViewer] init: no container ref!');
-      return;
-    }
-
-    const w = containerRef.current.clientWidth;
-    const h = containerRef.current.clientHeight;
-    console.log('[VolumeViewer] init: container', w, 'x', h);
+    if (!containerRef.current) return;
 
     const renderer = new VolumeRenderer(containerRef.current, settings, calibration);
     rendererRef.current = renderer;
 
     const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
     renderer.setCameraPreset(defaultPreset);
-    console.log('[VolumeViewer] renderer created, preset:', defaultPreset);
 
     return () => {
       renderer.dispose();
@@ -244,33 +236,11 @@ export function VolumeViewer({
 
   // Upload static volume data (Mode B or non-temporal Mode A)
   useEffect(() => {
-    console.log('[VolumeViewer] upload effect:', {
-      hasRenderer: !!rendererRef.current,
-      hasVolumeData: !!volumeData,
-      dataLen: volumeData?.length ?? 0,
-      dimensions,
-      extent,
-      isTemporalMode,
-      mode,
-      hasFrames: !!frames,
-      framesLen: frames?.length ?? 0,
-    });
-    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) {
-      console.warn('[VolumeViewer] upload skipped —',
-        !rendererRef.current ? 'no renderer' :
-        !volumeData ? 'no volumeData' :
-        volumeData.length === 0 ? 'empty volumeData' :
-        'isTemporalMode');
-      return;
-    }
-    console.log('[VolumeViewer] uploading volume:', dimensions, 'extent:', extent, 'data range:',
-      Math.min(...volumeData.slice(0, 1000)), '→', Math.max(...volumeData.slice(0, 1000)));
+    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
     rendererRef.current.uploadVolume(volumeData, dimensions, extent);
-    console.log('[VolumeViewer] upload done');
 
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
-      console.log('[VolumeViewer] auto threshold:', threshold);
       updateSetting('threshold', threshold);
     }
   }, [volumeData, dimensions, extent, isTemporalMode]);

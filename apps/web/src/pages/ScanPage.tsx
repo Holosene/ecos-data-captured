@@ -189,15 +189,6 @@ export function ScanPage() {
       try {
         const buffer = await file.arrayBuffer();
         const snap = deserializeVolume(buffer);
-        console.log('[ECHOS-VOL] deserialized:', {
-          dims: snap.dimensions,
-          extent: snap.extent,
-          dataLen: snap.data.length,
-          byteOffset: snap.data.byteOffset,
-          min: Math.min(...snap.data.slice(0, 1000)),
-          max: Math.max(...snap.data.slice(0, 1000)),
-          nonZero: snap.data.slice(0, 10000).filter(v => v > 0).length,
-        });
         setVolumeData(snap.data);
         setVolumeDims(snap.dimensions);
         setVolumeExtent(snap.extent);
