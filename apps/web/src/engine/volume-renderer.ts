@@ -31,6 +31,7 @@ export interface CalibrationConfig {
     depth: 'x' | 'y' | 'z';
     track: 'x' | 'y' | 'z';
   };
+  beamAxis: 'x' | 'y' | 'z';
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -42,6 +43,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
   axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
+  beamAxis: 'y',
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -76,6 +78,7 @@ export class VolumeRenderer {
   private volumeMesh: THREE.Mesh | null = null;
   private material: THREE.RawShaderMaterial | null = null;
   private beamGroup: THREE.Group;
+  private lastBeamParams: { halfAngleDeg: number; depthMax: number } | null = null;
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
@@ -223,6 +226,11 @@ export class VolumeRenderer {
     // Camera FOV
     this.camera.fov = config.camera.fov;
     this.camera.updateProjectionMatrix();
+
+    // Refresh beam geometry if parameters were set
+    if (this.lastBeamParams) {
+      this.updateBeamGeometry(this.lastBeamParams.halfAngleDeg, this.lastBeamParams.depthMax);
+    }
   }
 
   getCalibration(): CalibrationConfig {
@@ -545,6 +553,7 @@ void main() {
   // ─── Beam wireframe ───────────────────────────────────────────────────
 
   updateBeamGeometry(halfAngleDeg: number, depthMax: number): void {
+    this.lastBeamParams = { halfAngleDeg, depthMax };
     this.beamGroup.clear();
 
     if (!this.settings.showBeam) return;
@@ -562,8 +571,21 @@ void main() {
     });
 
     const cone = new THREE.Mesh(coneGeom, wireframeMat);
-    cone.rotation.x = Math.PI;
-    cone.position.y = -depthMax / 2;
+
+    // Orient cone along the calibrated beam axis (default: -Y)
+    const axis = this.calibration.beamAxis;
+    if (axis === 'x') {
+      cone.rotation.z = Math.PI / 2;
+      cone.position.x = -depthMax / 2;
+    } else if (axis === 'z') {
+      cone.rotation.x = -Math.PI / 2;
+      cone.position.z = -depthMax / 2;
+    } else {
+      // Default: Y axis (cone points down -Y)
+      cone.rotation.x = Math.PI;
+      cone.position.y = -depthMax / 2;
+    }
+
     this.beamGroup.add(cone);
 
     if (this.material) {

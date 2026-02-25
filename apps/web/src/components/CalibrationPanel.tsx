@@ -8,6 +8,7 @@
 
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
+import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 import type { CalibrationConfig } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
@@ -248,6 +249,10 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
+      {/* Beam */}
+      <Section title="Beam" />
+      <AxisSelect label="Cone axis" value={config.beamAxis} onChange={(v) => update('beamAxis', v)} />
+
       {/* Camera */}
       <Section title="Camera" />
       <Row label="Dist" value={config.camera.dist} min={0.5} max={5} step={0.1} onChange={(v) => update('camera.dist', v)} />
@@ -304,12 +309,13 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
   );
 }
 
-/** Load calibration from localStorage */
+/** Load calibration from localStorage (merges with defaults for forward-compatibility) */
 export function loadCalibration(): CalibrationConfig | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as CalibrationConfig;
+    const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
+    return { ...DEFAULT_CALIBRATION, ...saved } as CalibrationConfig;
   } catch {
     return null;
   }
