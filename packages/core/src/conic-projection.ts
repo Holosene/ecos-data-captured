@@ -235,20 +235,22 @@ export function buildInstrumentVolume(
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
-  const extentY = beam.depthMaxM;  // Depth axis (vertical)
-  const extentZ = beam.depthMaxM * 1.5; // Time/track axis (forward)
+  // Use depth-proportional extent for Y so the volume has a sensible aspect ratio
+  // (frame count made Y dominate enormously, producing an invisible thin slab)
+  const extentY = beam.depthMaxM * 1.5;
+  const extentZ = beam.depthMaxM;
 
-  // Adjust Z resolution to match frame count (time axis is now Z)
+  // Adjust Y resolution to match frame count
   const adjustedGrid: VolumeGridSettings = {
     ...grid,
-    resZ: Math.min(grid.resZ, frames.length),
+    resY: Math.min(grid.resY, frames.length),
   };
 
   const volume = createEmptyVolume(adjustedGrid, extentX, extentY, extentZ);
 
   for (let i = 0; i < frames.length; i++) {
-    const zi = Math.floor((i / frames.length) * adjustedGrid.resZ);
-    projectFrameIntoCone(frames[i], volume, beam, zi);
+    const yi = Math.floor((i / frames.length) * adjustedGrid.resY);
+    projectFrameIntoCone(frames[i], volume, beam, yi);
     onProgress?.(i + 1, frames.length);
   }
 
@@ -269,7 +271,7 @@ export function buildInstrumentVolume(
  * the frames around `centerIndex` (±windowHalf) into a fresh cone volume.
  * Recent frames are weighted more heavily for a natural "live sonar" feel.
  *
- * Axis convention:  X = lateral,  Y = depth (down),  Z = time/track.
+ * The Z axis maps to frames within the window (time thickness).
  */
 export function projectFrameWindow(
   frames: PreprocessedFrame[],
@@ -291,23 +293,23 @@ export function projectFrameWindow(
 
   const windowGrid: VolumeGridSettings = {
     resX: grid.resX,
-    resY: grid.resY,
-    resZ: Math.min(grid.resZ, Math.max(1, windowFrames)),
+    resY: Math.min(grid.resY, Math.max(1, windowFrames)),
+    resZ: grid.resZ,
   };
 
   const volume = createEmptyVolume(windowGrid, extentX, extentY, extentZ);
 
   for (let i = startIdx; i <= endIdx; i++) {
     const localIdx = i - startIdx;
-    const zi = windowFrames > 1
-      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resZ - 1))
-      : Math.floor(windowGrid.resZ / 2);
+    const yi = windowFrames > 1
+      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resY - 1))
+      : Math.floor(windowGrid.resY / 2);
 
     // Recency weight: frames closer to center are stronger
     const distFromCenter = Math.abs(i - centerIndex) / Math.max(1, halfWin);
     const recencyWeight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
 
-    projectFrameIntoConeWeighted(frames[i], volume, beam, zi, recencyWeight);
+    projectFrameIntoConeWeighted(frames[i], volume, beam, yi, recencyWeight);
   }
 
   const normalized = normalizeVolume(volume);
@@ -320,7 +322,6 @@ export function projectFrameWindow(
 
 /**
  * Same as projectFrameIntoCone but with an extra weight multiplier.
- * Axis convention:  X = lateral,  Y = depth (down),  Z = time/track.
  */
 function projectFrameIntoConeWeighted(
   frame: PreprocessedFrame,

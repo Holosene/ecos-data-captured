@@ -51,7 +51,7 @@
   --topbar-bg:
     radial-gradient(ellipse 260px 80px at 24px 100%, rgba(138, 124, 255, 0.08), transparent 70%),
     radial-gradient(ellipse 180px 60px at 85% 0%, rgba(138, 124, 255, 0.05), transparent 70%),
-    linear-gradient(180deg, rgba(28, 28, 36, 0.88) 0%, rgba(20, 20, 28, 0.84) 100%);
+    linear-gradient(180deg, rgba(28, 28, 36, 0.72) 0%, rgba(20, 20, 28, 0.68) 100%);
   --topbar-border: rgba(255, 255, 255, 0.10);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.06);
 
@@ -88,7 +88,7 @@
   --topbar-bg:
     radial-gradient(ellipse 260px 80px at 24px 100%, rgba(66, 33, 206, 0.06), transparent 70%),
     radial-gradient(ellipse 180px 60px at 85% 0%, rgba(66, 33, 206, 0.03), transparent 70%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 248, 252, 0.82) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(248, 248, 252, 0.66) 100%);
   --topbar-border: rgba(0, 0, 0, 0.07);
   --topbar-glass-highlight: rgba(255, 255, 255, 0.6);
 
@@ -286,6 +286,16 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 .echos-loading-dots::after {
   content: '.';
   animation: echos-dots 1.2s steps(1) infinite;
+}
+
+/* Processing completion animations */
+@keyframes echos-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes echos-scale-in {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 /* Gallery card — flex-based hover zoom */

@@ -8,7 +8,7 @@
  *   - Rendering controls (opacity, threshold, density, etc.)
  *   - Adaptive threshold (auto percentile-based)
  *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets
+ *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=lateral, Y=track, Z=depth)
  *   - Export panel (NRRD, PNG, CSV)
  */
 
@@ -48,7 +48,8 @@ const WINDOW_SIZE = 12;
 // This gives full pixel resolution for 2D slice views instead of the
 // low-res conic projection grid (128×12×128).
 // Layout: data[z * dimY * dimX + y * dimX + x]
-//   X = pixel col (lateral), Y = pixel row (depth), Z = frame index (track)
+//   X = pixel col (lateral), Y = frame index (track/time), Z = pixel row (depth)
+// This matches the conic projection layout: [lateral, track, depth].
 
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
@@ -56,18 +57,18 @@ function buildSliceVolumeFromFrames(
   if (!frameList || frameList.length === 0) return null;
 
   const dimX = frameList[0].width;   // lateral (beam columns)
-  const dimY = frameList[0].height;  // depth (sonar rows)
-  const dimZ = frameList.length;     // frames (track/time)
+  const dimY = frameList.length;     // frames (track/time)
+  const dimZ = frameList[0].height;  // depth (sonar rows)
 
-  if (dimX === 0 || dimY === 0) return null;
+  if (dimX === 0 || dimZ === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  for (let z = 0; z < dimZ; z++) {
-    const frame = frameList[z];
-    for (let y = 0; y < dimY; y++) {
+  for (let y = 0; y < dimY; y++) {
+    const frame = frameList[y];
+    for (let z = 0; z < dimZ; z++) {
       for (let x = 0; x < dimX; x++) {
-        data[z * dimY * dimX + y * dimX + x] = frame.intensity[y * dimX + x] ?? 0;
+        data[z * dimY * dimX + y * dimX + x] = frame.intensity[z * dimX + x] ?? 0;
       }
     }
   }
@@ -138,109 +139,7 @@ export function VolumeViewer({
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>(mode === 'instrument' ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
-
-  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
-  const [calibrationOpen, setCalibrationOpen] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
-  const [calibrationSaved, setCalibrationSaved] = useState(false);
-  const bPressCountRef = useRef(0);
-  const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // "b" x5 toggle + Ctrl+S save
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      // Ctrl+S / Cmd+S — save calibration
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
-        e.preventDefault();
-        const cal = rendererRef.current?.getCalibration() ?? calibration;
-        saveCalibration(cal);
-        downloadCalibration(cal);
-        setCalibrationSaved(true);
-        setTimeout(() => setCalibrationSaved(false), 2000);
-        return;
-      }
-
-      // Press "b" 5 times within 2 seconds
-      if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        bPressCountRef.current += 1;
-        if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
-        bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
-        if (bPressCountRef.current >= 5) {
-          bPressCountRef.current = 0;
-          setCalibrationOpen((prev) => !prev);
-        }
-      }
-
-      // Escape closes calibration
-      if (e.key === 'Escape' && calibrationOpen) {
-        setCalibrationOpen(false);
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration]);
-
-  // Apply calibration to renderer when it changes
-  const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
-    setCalibration(cal);
-    setCalibrationSaved(false);
-    rendererRef.current?.setCalibration(cal);
-  }, []);
-
-  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
-  const [calibrationOpen, setCalibrationOpen] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
-  const [calibrationSaved, setCalibrationSaved] = useState(false);
-  const bPressCountRef = useRef(0);
-  const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // "b" x5 toggle + Ctrl+S save
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      // Ctrl+S / Cmd+S — save calibration
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
-        e.preventDefault();
-        const cal = rendererRef.current?.getCalibration() ?? calibration;
-        saveCalibration(cal);
-        downloadCalibration(cal);
-        setCalibrationSaved(true);
-        setTimeout(() => setCalibrationSaved(false), 2000);
-        return;
-      }
-
-      // Press "b" 5 times within 2 seconds
-      if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        bPressCountRef.current += 1;
-        if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
-        bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
-        if (bPressCountRef.current >= 5) {
-          bPressCountRef.current = 0;
-          setCalibrationOpen((prev) => !prev);
-        }
-      }
-
-      // Escape closes calibration
-      if (e.key === 'Escape' && calibrationOpen) {
-        setCalibrationOpen(false);
-      }
-    };
-    document.addEventListener('keydown', handleKey);
-    return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration]);
-
-  // Sync renderer background color with theme
-  useEffect(() => {
-    if (!rendererRef.current) return;
-    const bgColor = theme === 'light' ? '#fafafa' : '#111111';
-    rendererRef.current.setCalibration({ ...calibration, bgColor });
-  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Apply calibration to renderer when it changes
-  const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
-    setCalibration(cal);
-    setCalibrationSaved(false);
-    rendererRef.current?.setCalibration(cal);
-  }, []);
+  const { theme } = useTheme();
 
   // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -471,9 +370,14 @@ export function VolumeViewer({
   const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* Volume viewer title */}
+      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
+        {t('v2.viewer.title')}
+      </h3>
+
       {/* Main row: 3D viewport + controls */}
-      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 180px)', minHeight: '400px' }}>
+      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 190px)', minHeight: '400px' }}>
         {/* 3D viewport */}
         <div
           ref={containerRef}
@@ -482,7 +386,7 @@ export function VolumeViewer({
             borderRadius: '12px',
             overflow: 'hidden',
             border: `1px solid ${colors.border}`,
-            background: '#0a0a0f',
+            background: theme === 'light' ? '#fafafa' : '#111111',
             position: 'relative',
           }}
         >
@@ -569,8 +473,6 @@ export function VolumeViewer({
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
-            overflowY: 'auto',
-            scrollbarWidth: 'thin',
           }}
         >
           {calibrationOpen ? (
@@ -722,13 +624,16 @@ export function VolumeViewer({
 
       {/* Orthogonal slice panels — v1-style with inline presets */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <SlicePanel
-          volumeData={sliceVolumeData}
-          dimensions={sliceDimensions}
-        />
+        <div style={{ marginTop: '32px' }}>
+          <SlicePanel
+            volumeData={sliceVolumeData}
+            dimensions={sliceDimensions}
+          />
+        </div>
       )}
 
-      {/* Export panel — prominent, at bottom */}
+      {/* Export panel — at bottom */}
+      <div style={{ marginTop: '32px' }} />
       <ExportPanel
         volumeData={sliceVolumeData}
         dimensions={sliceDimensions}
