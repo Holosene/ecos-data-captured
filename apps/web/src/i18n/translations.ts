@@ -198,7 +198,34 @@ export const translations = {
     // V2 Scan
     'v2.scan.title': 'Nouveau scan volumétrique',
     'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
-    'v2.scan.configure': 'Configurer & Générer',
+    'v2.scan.configure': 'Analyser & Configurer',
+    'v2.scan.next': 'Suivant : Recadrage',
+    'v2.scan.nextSettings': 'Suivant : Réglages',
+
+    // V2 Settings
+    'v2.settings.title': 'Réglages',
+    'v2.settings.desc': 'Choisissez le mode de visualisation et la profondeur max. Les autres paramètres sont pré-configurés automatiquement.',
+    'v2.settings.depth': 'Profondeur maximale',
+    'v2.settings.autoDepth': 'Profondeur auto',
+    'v2.settings.detectedDepth': 'Profondeur détectée',
+    'v2.settings.depthNotDetected': 'Impossible de détecter automatiquement la profondeur. Réglez-la manuellement ci-dessous.',
+    'v2.settings.depthHint': 'Réglez la profondeur max affichée sur votre sonar (vérifiez vos réglages sonar).',
+    'v2.settings.summary': 'Résumé',
+    'v2.settings.cropSize': 'Zone crop',
+
+    // V2 Preview
+    'v2.preview.title': 'Aperçu & Configuration',
+    'v2.preview.desc': 'La zone sonar a été détectée automatiquement. Choisissez votre mode de visualisation et la profondeur max, puis générez.',
+    'v2.preview.analyzing': 'Analyse automatique de la vidéo\u2026',
+    'v2.preview.autoCrop': 'Zone sonar détectée',
+    'v2.preview.autoCropHint': 'La zone de l\u2019écho sonar a été détectée automatiquement. Ajustez dans les réglages avancés si besoin.',
+    'v2.preview.depthSetting': 'Profondeur',
+    'v2.preview.depthHint': 'Réglez la profondeur max affichée sur votre sonar (vérifiez vos réglages sonar).',
+    'v2.preview.fps': 'Extraction',
+    'v2.preview.frames': 'Frames estimées',
+    'v2.preview.distance': 'Distance parcours',
+    'v2.preview.advanced': 'Réglages avancés',
+    'v2.preview.cropManual': 'Rognage manuel',
 
     // V2 Config
     'v2.config.title': 'Configuration du volume',
@@ -461,7 +488,34 @@ export const translations = {
     // V2 Scan
     'v2.scan.title': 'New Volumetric Scan',
     'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX). Preprocessing and conic projection will run automatically.',
-    'v2.scan.configure': 'Configure & Generate',
+    'v2.scan.configure': 'Analyze & Configure',
+    'v2.scan.next': 'Next: Crop',
+    'v2.scan.nextSettings': 'Next: Settings',
+
+    // V2 Settings
+    'v2.settings.title': 'Settings',
+    'v2.settings.desc': 'Choose the visualization mode and max depth. Other parameters are auto-configured.',
+    'v2.settings.depth': 'Maximum Depth',
+    'v2.settings.autoDepth': 'Auto depth',
+    'v2.settings.detectedDepth': 'Detected depth',
+    'v2.settings.depthNotDetected': 'Could not auto-detect depth. Set it manually below.',
+    'v2.settings.depthHint': 'Set the max depth shown on your sonar screen (check your sonar settings).',
+    'v2.settings.summary': 'Summary',
+    'v2.settings.cropSize': 'Crop area',
+
+    // V2 Preview
+    'v2.preview.title': 'Preview & Configuration',
+    'v2.preview.desc': 'The sonar region was auto-detected. Choose your visualization mode and max depth, then generate.',
+    'v2.preview.analyzing': 'Auto-analyzing video\u2026',
+    'v2.preview.autoCrop': 'Detected sonar region',
+    'v2.preview.autoCropHint': 'The sonar echo region was auto-detected from the video. Adjust in advanced settings if needed.',
+    'v2.preview.depthSetting': 'Depth',
+    'v2.preview.depthHint': 'Set the max depth shown on your sonar screen (check your sonar settings).',
+    'v2.preview.fps': 'Extraction',
+    'v2.preview.frames': 'Estimated frames',
+    'v2.preview.distance': 'Track distance',
+    'v2.preview.advanced': 'Advanced settings',
+    'v2.preview.cropManual': 'Manual crop',
 
     // V2 Config
     'v2.config.title': 'Volume Configuration',

@@ -27,7 +27,7 @@ export function FileDropZone({
       setDragOver(false);
       if (disabled) return;
       const file = e.dataTransfer.files[0];
-      if (file) onFile(file);
+      if (file && typeof onFile === 'function') onFile(file);
     },
     [onFile, disabled],
   );
@@ -35,13 +35,17 @@ export function FileDropZone({
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
-      if (file) onFile(file);
+      if (file && typeof onFile === 'function') onFile(file);
+      // Reset input value so selecting the same file again triggers onChange
+      if (e.target) e.target.value = '';
     },
     [onFile],
   );
 
   return (
     <div
+      role="button"
+      tabIndex={disabled ? -1 : 0}
       onDragOver={(e) => {
         e.preventDefault();
         if (!disabled) setDragOver(true);
@@ -49,6 +53,12 @@ export function FileDropZone({
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
       onClick={() => !disabled && inputRef.current?.click()}
+      onKeyDown={(e) => {
+        if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
       style={{
         border: `1px dashed ${dragOver ? colors.accent : colors.borderHover}`,
         borderRadius: radius.md,
@@ -58,6 +68,7 @@ export function FileDropZone({
         opacity: disabled ? 0.4 : 1,
         background: dragOver ? colors.accentMuted : 'transparent',
         transition: `all ${transitions.normal}`,
+        WebkitTapHighlightColor: 'transparent',
       }}
     >
       <input
@@ -66,6 +77,7 @@ export function FileDropZone({
         accept={accept}
         onChange={handleChange}
         style={{ display: 'none' }}
+        tabIndex={-1}
       />
       {icon && <div style={{ marginBottom: '12px', fontSize: '28px', opacity: 0.7 }}>{icon}</div>}
       <div style={{ fontSize: '14px', fontWeight: 500, color: colors.text1, marginBottom: '4px' }}>

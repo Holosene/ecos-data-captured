@@ -234,7 +234,9 @@ export function buildInstrumentVolume(
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
-  const extentY = frames.length; // 1 unit per frame (time)
+  // Use depth-proportional extent for Y so the volume has a sensible aspect ratio
+  // (frame count made Y dominate enormously, producing an invisible thin slab)
+  const extentY = beam.depthMaxM * 1.5;
   const extentZ = beam.depthMaxM;
 
   // Adjust Y resolution to match frame count
@@ -257,6 +259,27 @@ export function buildInstrumentVolume(
     dimensions: volume.dimensions,
     extent: volume.extent,
   };
+}
+
+// ─── Frame window projection (Mode A playback) ──────────────────────────────
+
+/**
+ * Project a window of frames around a center index into a conic volume.
+ * Used for Mode A temporal playback and static instrument volume export.
+ */
+export function projectFrameWindow(
+  frames: PreprocessedFrame[],
+  centerIndex: number,
+  windowSize: number,
+  beam: BeamSettings,
+  grid: VolumeGridSettings,
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
+  const half = Math.floor(windowSize / 2);
+  const start = Math.max(0, centerIndex - half);
+  const end = Math.min(frames.length, start + windowSize);
+  const windowFrames = frames.slice(start, end);
+
+  return buildInstrumentVolume(windowFrames, beam, grid);
 }
 
 // ─── Estimate memory ────────────────────────────────────────────────────────
