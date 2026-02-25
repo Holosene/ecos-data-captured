@@ -22,23 +22,16 @@ import { generateLUT } from './transfer-function.js';
 
 // ─── Calibration config ─────────────────────────────────────────────────────
 
-export type TexAxisOrder = 'UVW' | 'UWV' | 'VUW' | 'VWU' | 'WUV' | 'WVU';
+export type DataDim = 'lateral' | 'track' | 'depth';
 
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number }; // degrees
   scale: { x: number; y: number; z: number };
-  axisMapping: {
-    lateral: 'x' | 'y' | 'z';
-    depth: 'x' | 'y' | 'z';
-    track: 'x' | 'y' | 'z';
-  };
-  dataAxes: {
-    order: TexAxisOrder;
-    flipU: boolean;
-    flipV: boolean;
-    flipW: boolean;
-  };
+  /** Which data dimension appears on each box axis (shader-only, never touches box shape) */
+  dataMapping: { x: DataDim; y: DataDim; z: DataDim };
+  /** Flip data on each box axis */
+  flipData: { x: boolean; y: boolean; z: boolean };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -49,53 +42,37 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 180, y: 0, z: 0 },
   scale: { x: 3, y: 1, z: 1 },
-  axisMapping: { track: 'x', depth: 'y', lateral: 'z' },
-  dataAxes: { order: 'UVW', flipU: false, flipV: false, flipW: false },
+  dataMapping: { x: 'track', y: 'depth', z: 'lateral' },
+  flipData: { x: false, y: false, z: false },
   camera: { dist: 1.6, fov: 40 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
   bgColor: '#111111',
 };
 
-const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
 const DEG2RAD = Math.PI / 180;
 
-/** Permutation indices for each TexAxisOrder.
- *  E.g. 'VWU' means: result.x = src[V=1], result.y = src[W=2], result.z = src[U=0] */
-const TEX_ORDER_MAP: Record<TexAxisOrder, [number, number, number]> = {
-  UVW: [0, 1, 2],
-  UWV: [0, 2, 1],
-  VUW: [1, 0, 2],
-  VWU: [1, 2, 0],
-  WUV: [2, 0, 1],
-  WVU: [2, 1, 0],
-};
+/** Texture dimension indices: lateral=U(0), track=V(1), depth=W(2) */
+const DATA_DIM_IDX: Record<DataDim, number> = { lateral: 0, track: 1, depth: 2 };
 
-/** Build a 3×3 permutation+flip matrix for data axis reordering.
- *  Operates on texture coords centered at 0.5 — the shader does:
- *    texCoord = uDataAxes * (texCoord - 0.5) + 0.5
- *  This guarantees coordinates stay in [0,1]³.  */
-function buildDataAxesMatrix(cfg: CalibrationConfig['dataAxes']): THREE.Matrix3 {
-  const perm = TEX_ORDER_MAP[cfg?.order ?? 'UVW'] ?? [0, 1, 2];
-  const flip = [cfg?.flipU ? -1 : 1, cfg?.flipV ? -1 : 1, cfg?.flipW ? -1 : 1];
+/** Build a single 3×3 permutation+flip matrix for data mapping.
+ *  Maps box-space UVW → texture-space UVW.
+ *  Box shape is NEVER affected — only which data appears on each face.
+ *  Operates centered at 0.5 in the shader to keep coords in [0,1]³. */
+function buildDataMappingMatrix(
+  mapping: CalibrationConfig['dataMapping'],
+  flip: CalibrationConfig['flipData'],
+): THREE.Matrix3 {
   // Column-major: e[col*3 + row]
+  // For each box axis (col), set the row corresponding to the target texture dim
   const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  // row i reads from source component perm[i], with optional sign flip
-  for (let i = 0; i < 3; i++) {
-    e[perm[i] * 3 + i] = flip[i];
+  const axes: ('x' | 'y' | 'z')[] = ['x', 'y', 'z'];
+  for (let col = 0; col < 3; col++) {
+    const dim = mapping[axes[col]];     // which data dim this box axis shows
+    const row = DATA_DIM_IDX[dim];      // texture coordinate index
+    const sign = flip[axes[col]] ? -1 : 1;
+    e[col * 3 + row] = sign;
   }
-  const mat = new THREE.Matrix3();
-  mat.fromArray(e);
-  return mat;
-}
-
-/** Build a 3×3 permutation matrix that remaps box-space UVW → texture-space UVW */
-function buildAxisRemapMatrix(mapping: CalibrationConfig['axisMapping']): THREE.Matrix3 {
-  // Column-major: e[col*3 + row]
-  const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  e[AXIS_IDX[mapping.lateral] * 3 + 0] = 1; // tex U (lateral) ← world axis
-  e[AXIS_IDX[mapping.track] * 3 + 1] = 1;   // tex V (track)   ← world axis
-  e[AXIS_IDX[mapping.depth] * 3 + 2] = 1;   // tex W (depth)   ← world axis
   const mat = new THREE.Matrix3();
   mat.fromArray(e);
   return mat;
@@ -211,20 +188,17 @@ export class VolumeRenderer {
   // ─── Calibration ──────────────────────────────────────────────────────
 
   /** Compute volume scale from extent + calibration stretch.
-   *  Each world axis gets the physical extent of whichever data dimension is
-   *  mapped to it via axisMapping, multiplied by the corresponding scale factor.
-   *  scale.x = lateral stretch, scale.y = depth stretch, scale.z = track stretch.
-   *  This keeps the box shape consistent with the data shown on each face. */
+   *  Box shape = extent × scale. No permutation — dataMapping only affects the shader. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
+    if (maxExtent === 0) return new THREE.Vector3(1, 1, 1);
     const cal = this.calibration;
-    const map = cal.axisMapping;
-    // extent = [lateral, track, depth]
-    const s: Record<string, number> = { x: 1, y: 1, z: 1 };
-    s[map.lateral] = (this.extent[0] / maxExtent) * cal.scale.x;
-    s[map.track]   = (this.extent[1] / maxExtent) * cal.scale.z;
-    s[map.depth]   = (this.extent[2] / maxExtent) * cal.scale.y;
-    return new THREE.Vector3(s.x, s.y, s.z);
+    // extent = [lateral, track, depth] → box X, Y, Z directly
+    return new THREE.Vector3(
+      (this.extent[0] / maxExtent) * cal.scale.x,
+      (this.extent[1] / maxExtent) * cal.scale.y,
+      (this.extent[2] / maxExtent) * cal.scale.z,
+    );
   }
 
   /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
@@ -247,8 +221,9 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-      this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
-      this.material.uniforms.uDataAxes.value.copy(buildDataAxesMatrix(config.dataAxes));
+      this.material.uniforms.uDataMapping.value.copy(
+        buildDataMappingMatrix(config.dataMapping, config.flipData),
+      );
     }
 
     // Scene helpers
@@ -393,8 +368,7 @@ export class VolumeRenderer {
         uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
-        uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
-        uDataAxes: { value: buildDataAxesMatrix(this.calibration.dataAxes) },
+        uDataMapping: { value: buildDataMappingMatrix(this.calibration.dataMapping, this.calibration.flipData) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -459,8 +433,7 @@ uniform vec3 uCameraPos;
 uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
-uniform mat3 uAxisRemap;
-uniform mat3 uDataAxes;
+uniform mat3 uDataMapping;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -526,10 +499,8 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Remap box space → texture space via calibrated permutation matrix
-      vec3 texCoord = uAxisRemap * uvw;
-      // Permute/flip data axes independently (stays in [0,1]³)
-      texCoord = uDataAxes * (texCoord - 0.5) + 0.5;
+      // Remap box UVW → texture UVW (permutation + flip, box shape untouched)
+      vec3 texCoord = uDataMapping * (uvw - 0.5) + 0.5;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
