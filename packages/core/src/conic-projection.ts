@@ -51,12 +51,16 @@ export function createEmptyVolume(
   extentZ: number,
 ): ProbabilisticVolume {
   const total = grid.resX * grid.resY * grid.resZ;
+  // dims/extent order: [lateral(X), depth(Y), track(Z)] — direct texture mapping
+  const dims: [number, number, number] = [grid.resX, grid.resZ, grid.resY];
+  const ext: [number, number, number] = [extentX, extentZ, extentY];
+  console.log('[ECHOS] createEmptyVolume — grid:', JSON.stringify(grid),
+    '→ dims [lat,depth,track]:', dims, '→ extent:', ext);
   return {
     data: new Float32Array(total),
     weights: new Float32Array(total),
-    // dims/extent order: [lateral(X), depth(Y), track(Z)] — direct texture mapping
-    dimensions: [grid.resX, grid.resZ, grid.resY],
-    extent: [extentX, extentZ, extentY],
+    dimensions: dims,
+    extent: ext,
     origin: [-extentX / 2, 0, 0],
   };
 }
@@ -80,6 +84,11 @@ export function projectFrameIntoCone(
   const extX = volume.extent[0];
   const extDepth = volume.extent[1];
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+
+  if (frameSliceIndex === 0) {
+    console.log('[ECHOS] projectFrameIntoCone — resX(lat):', resX, 'resDepth:', resDepth,
+      'resTrack:', resTrack, '— index formula: track*%d + depth*%d + lat', resDepth * resX, resX);
+  }
 
   for (let row = 0; row < frame.height; row++) {
     const depth = (row / frame.height) * beam.depthMaxM;

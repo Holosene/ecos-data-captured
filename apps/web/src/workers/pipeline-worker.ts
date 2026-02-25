@@ -111,7 +111,8 @@ self.onmessage = (e: MessageEvent) => {
       } else {
         // ── Mode A: no static volume — frames are used for live playback ──
         normalizedData = new Float32Array(0);
-        dims = [grid.resX, grid.resY, grid.resZ];
+        // dims order: [lateral, depth, track] — matches conic projection output
+        dims = [grid.resX, grid.resZ, grid.resY];
         ext = [1, 1, 1];
       }
 
