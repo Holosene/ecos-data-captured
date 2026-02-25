@@ -195,13 +195,8 @@ export class VolumeRenderer {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Mesh transform
-    if (this.volumeMesh) {
-      const r = config.rotation;
-      this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-      this.volumeMesh.position.set(config.position.x, config.position.y, config.position.z);
-      this.volumeMesh.updateMatrixWorld(true);
-    }
+    // Mesh transform (user rotation + beamAxis redirect)
+    this.applyMeshTransform();
 
     // Recompute scale + axis remap
     if (this.material) {
@@ -231,6 +226,48 @@ export class VolumeRenderer {
     if (this.lastBeamParams) {
       this.updateBeamGeometry(this.lastBeamParams.halfAngleDeg, this.lastBeamParams.depthMax);
     }
+  }
+
+  /**
+   * Get additional rotation quaternion to redirect the data cone from its default
+   * orientation (-Y) to the target beamAxis direction.
+   */
+  private getBeamAxisRotation(): THREE.Quaternion {
+    const q = new THREE.Quaternion();
+    switch (this.calibration.beamAxis) {
+      case 'x':
+        // Rotate cone from -Y to -X: -90° around Z
+        q.setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2));
+        break;
+      case 'z':
+        // Rotate cone from -Y to -Z: +90° around X
+        q.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+        break;
+      case 'y':
+      default:
+        // No additional rotation — cone already points -Y
+        break;
+    }
+    return q;
+  }
+
+  /** Apply combined mesh rotation: user calibration rotation + beamAxis redirect */
+  private applyMeshTransform(): void {
+    if (!this.volumeMesh) return;
+    const r = this.calibration.rotation;
+    const p = this.calibration.position;
+
+    // User's manual rotation
+    const userQ = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD),
+    );
+    // Beam axis redirect (applied after user rotation)
+    const beamQ = this.getBeamAxisRotation();
+
+    // Final = beamQ * userQ (apply user rotation first, then redirect cone axis)
+    this.volumeMesh.quaternion.multiplyQuaternions(beamQ, userQ);
+    this.volumeMesh.position.set(p.x, p.y, p.z);
+    this.volumeMesh.updateMatrixWorld(true);
   }
 
   getCalibration(): CalibrationConfig {
@@ -380,14 +417,10 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Calibrated orientation
-    const r = this.calibration.rotation;
-    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-    const p = this.calibration.position;
-    this.volumeMesh.position.set(p.x, p.y, p.z);
+    // Calibrated orientation (user rotation + beamAxis redirect)
+    this.applyMeshTransform();
 
     this.scene.add(this.volumeMesh);
-    this.volumeMesh.updateMatrixWorld(true);
 
     // Set camera on first mesh creation only (preserve user rotation during playback)
     if (!this.meshCreated) {
@@ -556,38 +589,7 @@ void main() {
     this.lastBeamParams = { halfAngleDeg, depthMax };
     this.beamGroup.clear();
 
-    if (!this.settings.showBeam) return;
-
     const halfAngle = (halfAngleDeg * Math.PI) / 180;
-    const segments = 32;
-    const radius = depthMax * Math.tan(halfAngle);
-
-    const coneGeom = new THREE.ConeGeometry(radius, depthMax, segments, 1, true);
-    const wireframeMat = new THREE.MeshBasicMaterial({
-      color: 0x4488ff,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-    });
-
-    const cone = new THREE.Mesh(coneGeom, wireframeMat);
-
-    // Orient cone along the calibrated beam axis (default: -Y)
-    const axis = this.calibration.beamAxis;
-    if (axis === 'x') {
-      cone.rotation.z = Math.PI / 2;
-      cone.position.x = -depthMax / 2;
-    } else if (axis === 'z') {
-      cone.rotation.x = -Math.PI / 2;
-      cone.position.z = -depthMax / 2;
-    } else {
-      // Default: Y axis (cone points down -Y)
-      cone.rotation.x = Math.PI;
-      cone.position.y = -depthMax / 2;
-    }
-
-    this.beamGroup.add(cone);
-
     if (this.material) {
       this.material.uniforms.uBeamAngle.value = halfAngle;
     }
