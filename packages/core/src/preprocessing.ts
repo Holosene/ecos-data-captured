@@ -225,25 +225,17 @@ export function autoDetectCropRegion(
 ): { x: number; y: number; width: number; height: number } {
   const { data, width, height } = imageData;
 
-  // Step 1: Aggressively skip mobile UI chrome.
-  // Phone screen recordings typically have:
-  //   - Status bar (~5%) + app toolbar (~10%) at top = ~15%
-  //   - Bottom nav bar + controls (~10-12%) at bottom
-  const statusBarH = Math.ceil(height * 0.15); // top 15%: status bar + app toolbar
-  const bottomNavH = Math.ceil(height * 0.12); // bottom 12%: nav bar + controls
+  // Step 1: Skip mobile status bar and bottom nav
+  const statusBarH = Math.ceil(height * 0.07); // ~7% top for status bar
+  const bottomNavH = Math.ceil(height * 0.04); // ~4% bottom for nav bar
   const safeTop = statusBarH;
   const safeBottom = height - bottomNavH;
 
-  // Step 2: Use finer blocks (8×8) for more precise detection
-  const blockSize = 8;
+  // Step 2: Divide the safe area into blocks and compute variance per block
+  const blockSize = 16;
   const blocksW = Math.floor(width / blockSize);
   const blocksH = Math.floor((safeBottom - safeTop) / blockSize);
-  if (blocksW < 2 || blocksH < 2) {
-    return { x: 0, y: safeTop, width, height: safeBottom - safeTop };
-  }
-
   const blockVariance = new Float32Array(blocksW * blocksH);
-  const blockBrightness = new Float32Array(blocksW * blocksH);
 
   for (let by = 0; by < blocksH; by++) {
     for (let bx = 0; bx < blocksW; bx++) {
@@ -267,46 +259,22 @@ export function autoDetectCropRegion(
       const mean = sum / count;
       const variance = sumSq / count - mean * mean;
       blockVariance[by * blocksW + bx] = variance;
-      blockBrightness[by * blocksW + bx] = mean;
     }
   }
 
-  // Step 3: Detect sonar area vs UI.
-  // Sonar display: dark background with scattered bright echoes = moderate-to-high variance + low-to-medium brightness.
-  // UI elements (toolbars, buttons, text): either very uniform (low variance) or bright with icons.
-  // Strategy: look for blocks that have sonar-like characteristics.
+  // Step 3: Find the high-variance threshold (sonar echo has high variance)
+  // Use percentile-based threshold: the sonar area should be >30% of the frame
   const sortedVariances = Array.from(blockVariance).sort((a, b) => a - b);
-  const medianVariance = sortedVariances[Math.floor(sortedVariances.length * 0.5)] || 0;
+  const p60 = sortedVariances[Math.floor(sortedVariances.length * 0.4)] || 0;
+  const varianceThreshold = Math.max(p60, 100); // at least 100
 
-  // Use 30th percentile as threshold — sonar area should cover a significant portion
-  const p30 = sortedVariances[Math.floor(sortedVariances.length * 0.3)] || 0;
-  const varianceThreshold = Math.max(p30, 50); // lowered from 100 for better sensitivity
-
-  // Also detect rows/columns that are uniformly colored (UI bars):
-  // compute per-row average brightness variance to find solid-colored horizontal bars
-  const rowUniformity = new Float32Array(blocksH);
-  for (let by = 0; by < blocksH; by++) {
-    let brightnessSum = 0;
-    let brightnessSqSum = 0;
-    for (let bx = 0; bx < blocksW; bx++) {
-      const b = blockBrightness[by * blocksW + bx];
-      brightnessSum += b;
-      brightnessSqSum += b * b;
-    }
-    const mean = brightnessSum / blocksW;
-    rowUniformity[by] = brightnessSqSum / blocksW - mean * mean;
-  }
-
-  // Step 4: Find the bounding box of high-variance blocks (sonar content)
+  // Step 4: Find the bounding box of high-variance blocks
   let bTop = blocksH;
   let bBottom = 0;
   let bLeft = blocksW;
   let bRight = 0;
 
   for (let by = 0; by < blocksH; by++) {
-    // Skip rows that are very uniform across the width (likely UI bars)
-    if (rowUniformity[by] < 20) continue;
-
     for (let bx = 0; bx < blocksW; bx++) {
       if (blockVariance[by * blocksW + bx] >= varianceThreshold) {
         if (by < bTop) bTop = by;
@@ -317,12 +285,8 @@ export function autoDetectCropRegion(
     }
   }
 
-  // No valid blocks found — fallback
-  if (bTop >= bBottom || bLeft >= bRight) {
-    return { x: 0, y: safeTop, width, height: safeBottom - safeTop };
-  }
-
-  // Step 5: Refine — trim edges with sparse sonar content
+  // Step 5: Refine — look for the largest contiguous high-variance rectangle
+  // Count high-variance blocks per column to detect UI panels on the sides
   const colHighCount = new Float32Array(blocksW);
   for (let bx = 0; bx < blocksW; bx++) {
     let count = 0;
@@ -332,10 +296,11 @@ export function autoDetectCropRegion(
     colHighCount[bx] = count / (bBottom - bTop + 1);
   }
 
-  // Trim columns with less than 40% coverage (likely side UI panels / depth ruler)
-  while (bLeft < bRight && colHighCount[bLeft] < 0.4) bLeft++;
-  while (bRight > bLeft && colHighCount[bRight] < 0.4) bRight--;
+  // Trim columns where less than 30% of rows have high variance (likely UI panels)
+  while (bLeft < bRight && colHighCount[bLeft] < 0.3) bLeft++;
+  while (bRight > bLeft && colHighCount[bRight] < 0.3) bRight--;
 
+  // Same for rows
   const rowHighCount = new Float32Array(blocksH);
   for (let by = 0; by < blocksH; by++) {
     let count = 0;
@@ -345,59 +310,8 @@ export function autoDetectCropRegion(
     rowHighCount[by] = count / (bRight - bLeft + 1);
   }
 
-  // Trim rows with less than 40% coverage (UI bars at edges of sonar area)
-  while (bTop < bBottom && rowHighCount[bTop] < 0.4) bTop++;
-  while (bBottom > bTop && rowHighCount[bBottom] < 0.4) bBottom--;
-
-  // Step 6: Additional refinement — detect and remove side panels
-  // Check if left or right 15% of detected area has very different brightness (depth ruler)
-  const detectedW = bRight - bLeft + 1;
-  const sideCheckBlocks = Math.max(1, Math.floor(detectedW * 0.12));
-
-  // Check left side
-  let leftAvgBrightness = 0;
-  let centerAvgBrightness = 0;
-  const centerStart = bLeft + sideCheckBlocks;
-  const centerEnd = bRight - sideCheckBlocks;
-
-  if (centerStart < centerEnd) {
-    let leftCount = 0;
-    let centerCount = 0;
-
-    for (let by = bTop; by <= bBottom; by++) {
-      for (let bx = bLeft; bx < bLeft + sideCheckBlocks; bx++) {
-        leftAvgBrightness += blockBrightness[by * blocksW + bx];
-        leftCount++;
-      }
-      for (let bx = centerStart; bx <= centerEnd; bx++) {
-        centerAvgBrightness += blockBrightness[by * blocksW + bx];
-        centerCount++;
-      }
-    }
-
-    leftAvgBrightness /= Math.max(1, leftCount);
-    centerAvgBrightness /= Math.max(1, centerCount);
-
-    // If left panel is significantly brighter (UI/ruler), trim it
-    if (leftAvgBrightness > centerAvgBrightness * 1.8) {
-      bLeft += sideCheckBlocks;
-    }
-
-    // Check right side
-    let rightAvgBrightness = 0;
-    let rightCount = 0;
-    for (let by = bTop; by <= bBottom; by++) {
-      for (let bx = bRight - sideCheckBlocks + 1; bx <= bRight; bx++) {
-        rightAvgBrightness += blockBrightness[by * blocksW + bx];
-        rightCount++;
-      }
-    }
-    rightAvgBrightness /= Math.max(1, rightCount);
-
-    if (rightAvgBrightness > centerAvgBrightness * 1.8) {
-      bRight -= sideCheckBlocks;
-    }
-  }
+  while (bTop < bBottom && rowHighCount[bTop] < 0.3) bTop++;
+  while (bBottom > bTop && rowHighCount[bBottom] < 0.3) bBottom--;
 
   // Convert block coordinates to pixel coordinates
   let cropX = bLeft * blockSize;
@@ -411,17 +325,17 @@ export function autoDetectCropRegion(
   cropW = Math.min(width - cropX, cropW);
   cropH = Math.min(height - cropY, cropH);
 
-  // Safety: ensure minimum crop size (at least 25% of original)
-  const minW = Math.floor(width * 0.25);
-  const minH = Math.floor(height * 0.25);
+  // Safety: ensure minimum crop size (at least 30% of original)
+  const minW = Math.floor(width * 0.3);
+  const minH = Math.floor(height * 0.3);
 
   if (cropW < minW || cropH < minH) {
-    // Fallback: use frame minus generous UI margins
+    // Fallback: use full frame minus status bar
     return {
       x: 0,
-      y: safeTop,
+      y: statusBarH,
       width,
-      height: safeBottom - safeTop,
+      height: safeBottom - statusBarH,
     };
   }
 

@@ -84,9 +84,9 @@ export {
   createEmptyVolume,
   projectFrameIntoCone,
   projectFramesSpatial,
+  projectFrameWindow,
   normalizeVolume,
   buildInstrumentVolume,
-  projectFrameWindow,
   estimateVolumeMemoryMB,
 } from './conic-projection.js';
 
@@ -102,6 +102,7 @@ export { createSession, serializeSession, deserializeSession, sessionToBlob } fr
 
 export { generateQcReport, qcReportToBlob } from './qc-report.js';
 
-// ─── Adaptive Threshold ─────────────────────────────────────────────────────
+// ─── Volume Snapshot (.echos-vol) ───────────────────────────────────────────
 
-export { computeAutoThreshold, computeVolumeStats } from './adaptive-threshold.js';
+export { serializeVolume, deserializeVolume, volumeSnapshotToBlob } from './volume-snapshot.js';
+export type { VolumeSnapshot } from './volume-snapshot.js';

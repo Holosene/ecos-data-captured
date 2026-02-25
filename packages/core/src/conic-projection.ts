@@ -54,7 +54,6 @@ export function createEmptyVolume(
   return {
     data: new Float32Array(total),
     weights: new Float32Array(total),
-    // dims/extent order: [lateral(X), track(Y), depth(Z)] — matches renderer expectations
     dimensions: [grid.resX, grid.resY, grid.resZ],
     extent: [extentX, extentY, extentZ],
     origin: [-extentX / 2, 0, 0],
@@ -65,23 +64,21 @@ export function createEmptyVolume(
 
 /**
  * Project a single frame into a conic volume (Mode A: Instrument).
- * The volume represents the cone itself — no GPS, time axis = Z.
+ * The volume represents the cone itself — no GPS, time axis = Y.
  */
 export function projectFrameIntoCone(
   frame: PreprocessedFrame,
   volume: ProbabilisticVolume,
   beam: BeamSettings,
-  frameSliceIndex: number,
+  ySliceIndex: number,
 ): void {
-  // dims = [lateral, track, depth], extent = [lateral, track, depth]
-  const resX = volume.dimensions[0];
-  const resTrack = volume.dimensions[1];
-  const resDepth = volume.dimensions[2];
-  const extX = volume.extent[0];
-  const extDepth = volume.extent[2];
+  const [resX, _resY, resZ] = volume.dimensions;
+  const [extX, , extZ] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+  const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
 
   for (let row = 0; row < frame.height; row++) {
+    // Depth mapped from pixel row
     const depth = (row / frame.height) * beam.depthMaxM;
     if (depth < beam.nearFieldM) continue;
 
@@ -89,29 +86,34 @@ export function projectFrameIntoCone(
     const sigma = beam.lateralFalloffSigma * radiusAtDepth;
     const sigma2x2 = 2 * sigma * sigma;
 
-    // Map depth to Z voxel (outermost axis)
-    const di = Math.floor((depth / extDepth) * resDepth);
-    if (di < 0 || di >= resDepth) continue;
+    // Map depth to Z voxel
+    const zi = Math.floor((depth / extZ) * resZ);
+    if (zi < 0 || zi >= resZ) continue;
 
     for (let col = 0; col < frame.width; col++) {
       const intensity = frame.intensity[row * frame.width + col];
       if (intensity < 0.001) continue;
 
-      const normalizedCol = (col / frame.width - 0.5) * 2;
+      // Angular position within beam
+      const normalizedCol = (col / frame.width - 0.5) * 2; // -1 to 1
       const lateralOffset = normalizedCol * radiusAtDepth;
 
+      // Gaussian weight based on lateral distance from center
       const lateralDist2 = lateralOffset * lateralOffset;
       const gaussWeight = sigma2x2 > 0
         ? Math.exp(-lateralDist2 / sigma2x2)
         : 1.0;
 
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
+      // Map lateral offset to X voxel
+      const xWorld = lateralOffset;
+      const xi = Math.floor(((xWorld - volume.origin[0]) / extX) * resX);
       if (xi < 0 || xi >= resX) continue;
 
-      // Z-outer (depth), Y-middle (track/frame), X-inner (lateral)
-      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
+      // Accumulate
+      const voxelIdx = zi * volume.dimensions[1] * resX + ySliceIndex * resX + xi;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
-        volume.data[voxelIdx] += intensity * gaussWeight;
+        const weightedIntensity = intensity * gaussWeight;
+        volume.data[voxelIdx] += weightedIntensity;
         volume.weights[voxelIdx] += gaussWeight;
       }
     }
@@ -122,7 +124,7 @@ export function projectFrameIntoCone(
 
 /**
  * Project all frames into a spatial volume (Mode B: Spatial Trace).
- * Frames are positioned along the Z axis according to GPS distance.
+ * Frames are positioned along the Y axis according to GPS distance.
  */
 export function projectFramesSpatial(
   frames: PreprocessedFrame[],
@@ -131,9 +133,8 @@ export function projectFramesSpatial(
   beam: BeamSettings,
   onProgress?: (current: number, total: number) => void,
 ): void {
-  // dims = [lateral, track, depth], extent = [lateral, track, depth]
-  const [resX, resTrack, resDepth] = volume.dimensions;
-  const [extX, extTrack, extDepth] = volume.extent;
+  const [resX, resY, resZ] = volume.dimensions;
+  const [extX, extY, extZ] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
 
   // Find distance range
@@ -147,10 +148,10 @@ export function projectFramesSpatial(
     const mapping = mappings[fi];
     if (!mapping) continue;
 
-    // Track position → Y axis (middle)
-    const tNorm = (mapping.distanceM - minDist) / distRange;
-    const ti = Math.floor(tNorm * (resTrack - 1));
-    if (ti < 0 || ti >= resTrack) continue;
+    // Y position in volume based on distance
+    const yNorm = (mapping.distanceM - minDist) / distRange;
+    const yi = Math.floor(yNorm * (resY - 1));
+    if (yi < 0 || yi >= resY) continue;
 
     for (let row = 0; row < frame.height; row++) {
       const depth = (row / frame.height) * beam.depthMaxM;
@@ -160,9 +161,8 @@ export function projectFramesSpatial(
       const sigma = beam.lateralFalloffSigma * radiusAtDepth;
       const sigma2x2 = 2 * sigma * sigma;
 
-      // Depth → Z axis (outermost)
-      const di = Math.floor((depth / extDepth) * resDepth);
-      if (di < 0 || di >= resDepth) continue;
+      const zi = Math.floor((depth / extZ) * resZ);
+      if (zi < 0 || zi >= resZ) continue;
 
       for (let col = 0; col < frame.width; col++) {
         const intensity = frame.intensity[row * frame.width + col];
@@ -178,8 +178,7 @@ export function projectFramesSpatial(
         const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
         if (xi < 0 || xi >= resX) continue;
 
-        // Z-outer (depth), Y-middle (track), X-inner (lateral)
-        const voxelIdx = di * resTrack * resX + ti * resX + xi;
+        const voxelIdx = zi * resY * resX + yi * resX + xi;
         if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
           volume.data[voxelIdx] += intensity * gaussWeight;
           volume.weights[voxelIdx] += gaussWeight;
@@ -224,7 +223,7 @@ export function normalizeVolume(volume: ProbabilisticVolume): Float32Array {
 
 /**
  * Build a conic instrument volume from frames.
- * All frames are stacked along Z axis (time/track axis).
+ * All frames are stacked along Y axis (time axis).
  */
 export function buildInstrumentVolume(
   frames: PreprocessedFrame[],
@@ -262,16 +261,11 @@ export function buildInstrumentVolume(
   };
 }
 
-// ─── Instrument mode: temporal window projection ─────────────────────────────
+// ─── Frame window projection (Mode A playback) ──────────────────────────────
 
 /**
- * Project a sliding window of frames into a cone volume (Mode A temporal).
- *
- * Instead of baking all frames into one static volume, this projects only
- * the frames around `centerIndex` (±windowHalf) into a fresh cone volume.
- * Recent frames are weighted more heavily for a natural "live sonar" feel.
- *
- * The Z axis maps to frames within the window (time thickness).
+ * Project a window of frames around a center index into a conic volume.
+ * Used for Mode A temporal playback and static instrument volume export.
  */
 export function projectFrameWindow(
   frames: PreprocessedFrame[],
@@ -280,100 +274,12 @@ export function projectFrameWindow(
   beam: BeamSettings,
   grid: VolumeGridSettings,
 ): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
-  const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
-  const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
-  const extentX = maxRadius * 2.5;
-  const extentY = beam.depthMaxM * 0.5; // Thin Y — this is a live slice, not full track
-  const extentZ = beam.depthMaxM;
+  const half = Math.floor(windowSize / 2);
+  const start = Math.max(0, centerIndex - half);
+  const end = Math.min(frames.length, start + windowSize);
+  const windowFrames = frames.slice(start, end);
 
-  const halfWin = Math.floor(windowSize / 2);
-  const startIdx = Math.max(0, centerIndex - halfWin);
-  const endIdx = Math.min(frames.length - 1, centerIndex + halfWin);
-  const windowFrames = endIdx - startIdx + 1;
-
-  const windowGrid: VolumeGridSettings = {
-    resX: grid.resX,
-    resY: Math.min(grid.resY, Math.max(1, windowFrames)),
-    resZ: grid.resZ,
-  };
-
-  const volume = createEmptyVolume(windowGrid, extentX, extentY, extentZ);
-
-  for (let i = startIdx; i <= endIdx; i++) {
-    const localIdx = i - startIdx;
-    const yi = windowFrames > 1
-      ? Math.floor((localIdx / (windowFrames - 1)) * (windowGrid.resY - 1))
-      : Math.floor(windowGrid.resY / 2);
-
-    // Recency weight: frames closer to center are stronger
-    const distFromCenter = Math.abs(i - centerIndex) / Math.max(1, halfWin);
-    const recencyWeight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
-
-    projectFrameIntoConeWeighted(frames[i], volume, beam, yi, recencyWeight);
-  }
-
-  const normalized = normalizeVolume(volume);
-  return {
-    normalized,
-    dimensions: volume.dimensions,
-    extent: volume.extent,
-  };
-}
-
-/**
- * Same as projectFrameIntoCone but with an extra weight multiplier.
- */
-function projectFrameIntoConeWeighted(
-  frame: PreprocessedFrame,
-  volume: ProbabilisticVolume,
-  beam: BeamSettings,
-  frameSliceIndex: number,
-  weight: number,
-): void {
-  // dims = [lateral, track, depth], extent = [lateral, track, depth]
-  const resX = volume.dimensions[0];
-  const resTrack = volume.dimensions[1];
-  const resDepth = volume.dimensions[2];
-  const extX = volume.extent[0];
-  const extDepth = volume.extent[2];
-  const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
-
-  for (let row = 0; row < frame.height; row++) {
-    const depth = (row / frame.height) * beam.depthMaxM;
-    if (depth < beam.nearFieldM) continue;
-
-    const radiusAtDepth = coneRadiusAtDepth(depth, halfAngle);
-    const sigma = beam.lateralFalloffSigma * radiusAtDepth;
-    const sigma2x2 = 2 * sigma * sigma;
-
-    // Depth → Z voxel (outermost axis)
-    const di = Math.floor((depth / extDepth) * resDepth);
-    if (di < 0 || di >= resDepth) continue;
-
-    for (let col = 0; col < frame.width; col++) {
-      const intensity = frame.intensity[row * frame.width + col];
-      if (intensity < 0.001) continue;
-
-      const normalizedCol = (col / frame.width - 0.5) * 2;
-      const lateralOffset = normalizedCol * radiusAtDepth;
-
-      const lateralDist2 = lateralOffset * lateralOffset;
-      const gaussWeight = sigma2x2 > 0
-        ? Math.exp(-lateralDist2 / sigma2x2)
-        : 1.0;
-
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
-      if (xi < 0 || xi >= resX) continue;
-
-      // Z-outer (depth), Y-middle (track/frame), X-inner (lateral)
-      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
-      if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
-        const w = gaussWeight * weight;
-        volume.data[voxelIdx] += intensity * w;
-        volume.weights[voxelIdx] += w;
-      }
-    }
-  }
+  return buildInstrumentVolume(windowFrames, beam, grid);
 }
 
 // ─── Estimate memory ────────────────────────────────────────────────────────
