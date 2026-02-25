@@ -51,18 +51,6 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
 const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
 const DEG2RAD = Math.PI / 180;
 
-/** Build a 3×3 permutation matrix that remaps box-space UVW → texture-space UVW */
-function buildAxisRemapMatrix(mapping: CalibrationConfig['axisMapping']): THREE.Matrix3 {
-  // Column-major: e[col*3 + row]
-  const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  e[AXIS_IDX[mapping.lateral] * 3 + 0] = 1; // tex U (lateral) ← world axis
-  e[AXIS_IDX[mapping.track] * 3 + 1] = 1;   // tex V (track)   ← world axis
-  e[AXIS_IDX[mapping.depth] * 3 + 2] = 1;   // tex W (depth)   ← world axis
-  const mat = new THREE.Matrix3();
-  mat.fromArray(e);
-  return mat;
-}
-
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
 export class VolumeRenderer {
@@ -208,7 +196,6 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-      this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
     }
 
     // Scene helpers
@@ -353,7 +340,6 @@ export class VolumeRenderer {
         uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
-        uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -418,7 +404,6 @@ uniform vec3 uCameraPos;
 uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
-uniform mat3 uAxisRemap;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -484,9 +469,7 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Remap box space → texture space via calibrated permutation matrix
-      vec3 texCoord = uAxisRemap * uvw;
-      float rawVal = sampleVolume(texCoord);
+      float rawVal = sampleVolume(uvw);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 
