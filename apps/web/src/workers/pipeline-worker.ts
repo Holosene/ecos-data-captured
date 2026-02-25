@@ -18,6 +18,7 @@ import { preprocessFrame } from '@echos/core';
 import {
   createEmptyVolume,
   projectFramesSpatial,
+  projectFrameWindow,
   normalizeVolume,
 } from '@echos/core';
 import type {
@@ -109,10 +110,15 @@ self.onmessage = (e: MessageEvent) => {
         dims = volume.dimensions;
         ext = volume.extent;
       } else {
-        // ── Mode A: no static volume — frames are used for live playback ──
-        normalizedData = new Float32Array(0);
-        dims = [grid.resX, grid.resY, grid.resZ];
-        ext = [1, 1, 1];
+        // ── Mode A: project all frames into one static conic volume ──
+        // Used for .echos-vol export and as fallback for non-temporal viewing.
+        // Live playback still uses per-window projection in VolumeViewer.
+        self.postMessage({ type: 'stage', stage: 'projecting' });
+        const center = Math.floor(frames.length / 2);
+        const result = projectFrameWindow(frames, center, frames.length, beam, grid);
+        normalizedData = result.normalized;
+        dims = result.dimensions;
+        ext = result.extent;
       }
 
       // Transfer all buffers (zero-copy back to main thread)
