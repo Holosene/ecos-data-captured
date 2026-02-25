@@ -18,7 +18,6 @@ import { preprocessFrame } from '@echos/core';
 import {
   createEmptyVolume,
   projectFramesSpatial,
-  buildInstrumentVolume,
   normalizeVolume,
 } from '@echos/core';
 import type {
@@ -110,16 +109,10 @@ self.onmessage = (e: MessageEvent) => {
         dims = volume.dimensions;
         ext = volume.extent;
       } else {
-        // ── Mode A: buildInstrumentVolume — same as ff97375 ScanPage ──
-        // All frames stacked along Y axis with extentY = depthMaxM * 1.5.
-        // This is the exact pipeline that ff97375 used for correct axis reading.
-        self.postMessage({ type: 'stage', stage: 'projecting' });
-        const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
-          self.postMessage({ type: 'projection-progress', current, total });
-        });
-        normalizedData = result.normalized;
-        dims = result.dimensions;
-        ext = result.extent;
+        // ── Mode A: no static volume — frames are used for live playback ──
+        normalizedData = new Float32Array(0);
+        dims = [grid.resX, grid.resY, grid.resZ];
+        ext = [1, 1, 1];
       }
 
       // Transfer all buffers (zero-copy back to main thread)
