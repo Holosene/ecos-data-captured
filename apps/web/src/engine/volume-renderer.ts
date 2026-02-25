@@ -98,6 +98,7 @@ export class VolumeRenderer {
   private animationId: number = 0;
   private disposed = false;
   private currentPreset: CameraPreset = 'frontal';
+  private _frameLogCount = 0;
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
   private calibration: CalibrationConfig;
@@ -299,6 +300,15 @@ export class VolumeRenderer {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
+    console.log('[VolumeRenderer] uploadVolume:', {
+      dims: dimensions,
+      extent,
+      dataLen: data.length,
+      byteOffset: data.byteOffset,
+      expectedLen: dimensions[0] * dimensions[1] * dimensions[2],
+      meshCreated: this.meshCreated,
+    });
+
     const dimsChanged =
       this.dimensions[0] !== dimensions[0] ||
       this.dimensions[1] !== dimensions[1] ||
@@ -316,6 +326,7 @@ export class VolumeRenderer {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
+    console.log('[VolumeRenderer] creating Data3DTexture:', dimX, 'x', dimY, 'x', dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -329,10 +340,12 @@ export class VolumeRenderer {
     // If mesh exists and dimensions/extent haven't changed, just update the texture
     // (prevents camera reset during Mode A temporal playback)
     if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
+      console.log('[VolumeRenderer] updating existing texture only');
       this.material.uniforms.uVolume.value = this.volumeTexture;
       return;
     }
 
+    console.log('[VolumeRenderer] creating new mesh (dimsChanged:', dimsChanged, 'extentChanged:', extentChanged, ')');
     this.createVolumeMesh();
   }
 
@@ -354,6 +367,7 @@ export class VolumeRenderer {
     this.volumeScale = scale;
 
     const halfScale = scale.clone().multiplyScalar(0.5);
+    console.log('[VolumeRenderer] createVolumeMesh — scale:', scale.toArray(), 'halfScale:', halfScale.toArray(), 'extent:', this.extent, 'dims:', this.dimensions);
 
     const geometry = new THREE.BoxGeometry(2, 2, 2);
 
@@ -401,6 +415,7 @@ export class VolumeRenderer {
       this.setCameraPreset(this.currentPreset);
       this.meshCreated = true;
     }
+    console.log('[VolumeRenderer] mesh added to scene, camera pos:', this.camera.position.toArray(), 'meshCreated:', this.meshCreated);
   }
 
   private buildVertexShader(): string {
@@ -605,6 +620,15 @@ void main() {
       const camLocal = this.camera.position.clone();
       this.volumeMesh.worldToLocal(camLocal);
       this.material.uniforms.uCameraPos.value.copy(camLocal);
+
+      if (this._frameLogCount < 3) {
+        this._frameLogCount++;
+        const gl = this.renderer.getContext();
+        const err = gl.getError();
+        console.log('[VolumeRenderer] frame', this._frameLogCount, '— camLocal:', camLocal.toArray().map(v => +v.toFixed(3)),
+          'canvas:', this.renderer.domElement.width, 'x', this.renderer.domElement.height,
+          'glError:', err, 'programInfo:', this.renderer.info.programs?.length ?? 0, 'programs');
+      }
     }
 
     this.renderer.render(this.scene, this.camera);
