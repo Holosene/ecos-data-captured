@@ -297,7 +297,7 @@ export class VolumeRenderer {
     const [dimX, dimY, dimZ] = dimensions;
     console.log('[ECHOS] uploadVolume — dimX (lateral):', dimX, 'dimY (depth):', dimY, 'dimZ (track):', dimZ);
     console.log('[ECHOS] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
-    this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
+    this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimZ, dimY);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
     this.volumeTexture.minFilter = THREE.LinearFilter;
