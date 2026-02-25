@@ -308,8 +308,8 @@ export class VolumeRenderer {
 
     const maxExtent = Math.max(...this.extent);
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,   // X = track
-      this.extent[1] / maxExtent,   // Y = lateral
+      this.extent[0] / maxExtent,   // X = lateral
+      this.extent[1] / maxExtent,   // Y = track
       this.extent[2] / maxExtent,   // Z = depth
     );
     this.volumeScale = scale;

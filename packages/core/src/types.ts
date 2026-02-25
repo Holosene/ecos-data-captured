@@ -105,7 +105,7 @@ export interface VolumeMetadata {
   depthMaxM: number;
   /** Number of source frames */
   sourceFrameCount: number;
-  /** Number of resampled slices (X = track) */
+  /** Number of resampled slices (Y) */
   resampledSliceCount: number;
 }
 
