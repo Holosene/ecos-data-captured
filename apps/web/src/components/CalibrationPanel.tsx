@@ -249,10 +249,6 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
-      {/* Cone orientation */}
-      <Section title="Cone" />
-      <AxisSelect label="Cone axis" value={config.beamAxis} onChange={(v) => update('beamAxis', v)} />
-
       {/* Camera */}
       <Section title="Camera" />
       <Row label="Dist" value={config.camera.dist} min={0.5} max={5} step={0.1} onChange={(v) => update('camera.dist', v)} />
