@@ -50,20 +50,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   bgColor: '#111111',
 };
 
-const AXIS_IDX = { x: 0, y: 1, z: 2 } as const;
 const DEG2RAD = Math.PI / 180;
-
-/** Build a 3×3 permutation matrix that remaps box-space UVW → texture-space UVW */
-function buildAxisRemapMatrix(mapping: CalibrationConfig['axisMapping']): THREE.Matrix3 {
-  // Column-major: e[col*3 + row]
-  const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
-  e[AXIS_IDX[mapping.lateral] * 3 + 0] = 1; // tex U (lateral) ← world axis
-  e[AXIS_IDX[mapping.track] * 3 + 1] = 1;   // tex V (track)   ← world axis
-  e[AXIS_IDX[mapping.depth] * 3 + 2] = 1;   // tex W (depth)   ← world axis
-  const mat = new THREE.Matrix3();
-  mat.fromArray(e);
-  return mat;
-}
 
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
@@ -175,20 +162,16 @@ export class VolumeRenderer {
 
   // ─── Calibration ──────────────────────────────────────────────────────
 
-  /** Compute volume scale from extent + calibration axis mapping + stretch */
+  /** Compute volume scale from extent + calibration stretch.
+   *  extent = [lateral, depth, track] → direct mapping to Box [X, Y, Z]. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
-    const s = [0, 0, 0];
-    // Map each data extent to its calibrated 3D axis
-    s[AXIS_IDX[cal.axisMapping.lateral]] = this.extent[0] / maxExtent; // lateral
-    s[AXIS_IDX[cal.axisMapping.track]] = this.extent[1] / maxExtent;   // track
-    s[AXIS_IDX[cal.axisMapping.depth]] = this.extent[2] / maxExtent;   // depth
-    // Apply calibration stretch factors
-    s[0] *= cal.scale.x;
-    s[1] *= cal.scale.y;
-    s[2] *= cal.scale.z;
-    return new THREE.Vector3(s[0], s[1], s[2]);
+    return new THREE.Vector3(
+      (this.extent[0] / maxExtent) * cal.scale.x,  // lateral → X
+      (this.extent[1] / maxExtent) * cal.scale.y,  // depth   → Y
+      (this.extent[2] / maxExtent) * cal.scale.z,  // track   → Z
+    );
   }
 
   /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
@@ -206,7 +189,6 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-      this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
     }
 
     // Scene helpers
@@ -398,7 +380,6 @@ export class VolumeRenderer {
         uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
-        uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -459,7 +440,6 @@ uniform vec3 uCameraPos;
 uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
-uniform mat3 uAxisRemap;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -525,9 +505,7 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Remap box space → texture space via calibrated permutation matrix
-      vec3 texCoord = uAxisRemap * uvw;
-      float rawVal = sampleVolume(texCoord);
+      float rawVal = sampleVolume(uvw);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 

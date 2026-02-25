@@ -137,9 +137,9 @@ function renderSlice(
 // ─── Axis label mapping ──────────────────────────────────────────────
 
 const AXIS_LABEL_KEYS: Record<string, { h: TranslationKey; v: TranslationKey }> = {
-  x: { h: 'v2.slices.axisDistance', v: 'v2.slices.axisDepth' },
-  y: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDepth' },
-  z: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDistance' },
+  x: { h: 'v2.slices.axisDepth', v: 'v2.slices.axisDistance' },
+  y: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDistance' },
+  z: { h: 'v2.slices.axisWidth', v: 'v2.slices.axisDepth' },
 };
 
 // ─── Single axis slice view ─────────────────────────────────────────────

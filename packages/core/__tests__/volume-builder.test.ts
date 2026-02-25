@@ -36,9 +36,9 @@ describe('buildVolume', () => {
 
     const volume = buildVolume({ frames, mappings, calibration });
 
-    expect(volume.metadata.dimensions[0]).toBe(width);
-    expect(volume.metadata.dimensions[2]).toBe(height);
-    expect(volume.metadata.dimensions[1]).toBeGreaterThan(0);
+    expect(volume.metadata.dimensions[0]).toBe(width);   // lateral
+    expect(volume.metadata.dimensions[1]).toBe(height);  // depth
+    expect(volume.metadata.dimensions[2]).toBeGreaterThan(0); // track
     expect(volume.data.length).toBe(
       volume.metadata.dimensions[0] *
       volume.metadata.dimensions[1] *
@@ -84,17 +84,17 @@ describe('buildVolume', () => {
 describe('estimateVolume', () => {
   it('estimates dimensions correctly', () => {
     const result = estimateVolume(200, 100, 50, 0.1, 1.0);
-    expect(result.dimX).toBe(200);
-    expect(result.dimZ).toBe(100);
-    expect(result.dimY).toBe(501); // 50/0.1 + 1
+    expect(result.dimX).toBe(200);   // lateral
+    expect(result.dimY).toBe(100);   // depth
+    expect(result.dimZ).toBe(501);   // track: 50/0.1 + 1
     expect(result.estimatedMB).toBeGreaterThan(0);
   });
 
   it('applies downscale factor', () => {
     const full = estimateVolume(200, 100, 50, 0.1, 1.0);
     const half = estimateVolume(200, 100, 50, 0.1, 0.5);
-    expect(half.dimX).toBe(100);
-    expect(half.dimZ).toBe(50);
+    expect(half.dimX).toBe(100);  // lateral
+    expect(half.dimY).toBe(50);   // depth
     expect(half.estimatedMB).toBeLessThan(full.estimatedMB);
   });
 });
