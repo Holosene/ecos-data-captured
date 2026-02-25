@@ -4,10 +4,11 @@
  * Main 3D viewer wrapping the WebGL ray marching engine.
  * Provides:
  *   - 3D ray-marched volume
+ *   - Camera presets (frontal, horizontal, vertical, free)
  *   - Rendering controls (opacity, threshold, density, etc.)
  *   - Adaptive threshold (auto percentile-based)
  *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=lateral, Y=track, Z=depth)
+ *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets
  *   - Export panel (NRRD, PNG, CSV)
  */
 
@@ -15,12 +16,14 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer } from '../engine/volume-renderer.js';
+import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
+import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
+import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
-import { useTheme } from '../theme/index.js';
+import type { TranslationKey } from '../i18n/translations.js';
 
 interface VolumeViewerProps {
   /** Static volume data (Mode B spatial, or fallback) */
@@ -44,8 +47,7 @@ const WINDOW_SIZE = 12;
 // This gives full pixel resolution for 2D slice views instead of the
 // low-res conic projection grid (128×12×128).
 // Layout: data[z * dimY * dimX + y * dimX + x]
-//   X = pixel col (lateral), Y = frame index (track/time), Z = pixel row (depth)
-// This matches the conic projection layout: [lateral, track, depth].
+//   X = pixel col (lateral), Y = pixel row (depth), Z = frame index (track)
 
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
@@ -53,24 +55,65 @@ function buildSliceVolumeFromFrames(
   if (!frameList || frameList.length === 0) return null;
 
   const dimX = frameList[0].width;   // lateral (beam columns)
-  const dimY = frameList.length;     // frames (track/time)
-  const dimZ = frameList[0].height;  // depth (sonar rows)
+  const dimY = frameList[0].height;  // depth (sonar rows)
+  const dimZ = frameList.length;     // frames (track/time)
 
-  if (dimX === 0 || dimZ === 0) return null;
+  if (dimX === 0 || dimY === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  for (let y = 0; y < dimY; y++) {
-    const frame = frameList[y];
-    for (let z = 0; z < dimZ; z++) {
+  for (let z = 0; z < dimZ; z++) {
+    const frame = frameList[z];
+    for (let y = 0; y < dimY; y++) {
       for (let x = 0; x < dimX; x++) {
-        data[z * dimY * dimX + y * dimX + x] = frame.intensity[z * dimX + x] ?? 0;
+        data[z * dimY * dimX + y * dimX + x] = frame.intensity[y * dimX + x] ?? 0;
       }
     }
   }
 
   return { data, dimensions: [dimX, dimY, dimZ] };
 }
+
+// ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
+
+const IconFrontal = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="1" />
+    <line x1="8" y1="2" x2="8" y2="14" opacity="0.4" />
+    <line x1="2" y1="8" x2="14" y2="8" opacity="0.4" />
+  </svg>
+);
+
+const IconHorizontal = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12L6 4H14L10 12H2Z" />
+    <line x1="8" y1="4" x2="6" y2="12" opacity="0.4" />
+  </svg>
+);
+
+const IconVertical = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="1" width="6" height="14" rx="1" />
+    <line x1="8" y1="1" x2="8" y2="15" opacity="0.4" />
+  </svg>
+);
+
+const IconFree = () => (
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 12L2 7L8 4L14 7L12 12H4Z" />
+    <path d="M8 4V1" />
+    <path d="M8 4L14 7" />
+    <path d="M8 4L2 7" />
+    <path d="M8 9L8 12" opacity="0.4" />
+  </svg>
+);
+
+const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] = [
+  { key: 'frontal', labelKey: 'v2.camera.frontal', Icon: IconFrontal },
+  { key: 'horizontal', labelKey: 'v2.camera.horizontal', Icon: IconHorizontal },
+  { key: 'vertical', labelKey: 'v2.camera.vertical', Icon: IconVertical },
+  { key: 'free', labelKey: 'v2.camera.free', Icon: IconFree },
+];
 
 export function VolumeViewer({
   volumeData,
@@ -91,9 +134,57 @@ export function VolumeViewer({
     showBeam: mode === 'instrument',
     ghostEnhancement: mode === 'spatial' ? 0.5 : 0,
   });
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>(mode === 'instrument' ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
-  const { theme } = useTheme();
+
+  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
+  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
+  const [calibrationSaved, setCalibrationSaved] = useState(false);
+  const bPressCountRef = useRef(0);
+  const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // "b" x5 toggle + Ctrl+S save
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      // Ctrl+S / Cmd+S — save calibration
+      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
+        e.preventDefault();
+        const cal = rendererRef.current?.getCalibration() ?? calibration;
+        saveCalibration(cal);
+        downloadCalibration(cal);
+        setCalibrationSaved(true);
+        setTimeout(() => setCalibrationSaved(false), 2000);
+        return;
+      }
+
+      // Press "b" 5 times within 2 seconds
+      if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        bPressCountRef.current += 1;
+        if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
+        bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
+        if (bPressCountRef.current >= 5) {
+          bPressCountRef.current = 0;
+          setCalibrationOpen((prev) => !prev);
+        }
+      }
+
+      // Escape closes calibration
+      if (e.key === 'Escape' && calibrationOpen) {
+        setCalibrationOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [calibrationOpen, calibration]);
+
+  // Apply calibration to renderer when it changes
+  const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
+    setCalibration(cal);
+    setCalibrationSaved(false);
+    rendererRef.current?.setCalibration(cal);
+  }, []);
 
   // Temporal playback state (Mode A)
   const isTemporalMode = mode === 'instrument' && frames && frames.length > 0 && beam && grid;
@@ -120,8 +211,11 @@ export function VolumeViewer({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderer = new VolumeRenderer(containerRef.current, settings);
+    const renderer = new VolumeRenderer(containerRef.current, settings, calibration);
     rendererRef.current = renderer;
+
+    const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
+    renderer.setCameraPreset(defaultPreset);
 
     return () => {
       renderer.dispose();
@@ -130,18 +224,16 @@ export function VolumeViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Upload static volume data — ALWAYS, like ff97375.
-  // buildInstrumentVolume (pipeline-worker) produces the correct extents.
-  // Temporal playback will update the texture via the fast path afterwards.
+  // Upload static volume data (Mode B or non-temporal Mode A)
   useEffect(() => {
-    if (!rendererRef.current || !volumeData || volumeData.length === 0) return;
+    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
     rendererRef.current.uploadVolume(volumeData, dimensions, extent);
 
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
       updateSetting('threshold', threshold);
     }
-  }, [volumeData, dimensions, extent]);
+  }, [volumeData, dimensions, extent, isTemporalMode]);
 
   // Set slice data: use full-frame volume (v1-style stacking) when frames are
   // available (both Mode A and Mode B), fall back to projected volume otherwise.
@@ -243,6 +335,12 @@ export function VolumeViewer({
     [onSettingsChange],
   );
 
+  // Camera preset
+  const handleCameraPreset = useCallback((preset: CameraPreset) => {
+    setCameraPreset(preset);
+    rendererRef.current?.setCameraPreset(preset);
+  }, []);
+
   // Auto threshold toggle
   const handleAutoThreshold = useCallback((enabled: boolean) => {
     setAutoThreshold(enabled);
@@ -262,14 +360,9 @@ export function VolumeViewer({
   const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* Volume viewer title */}
-      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
-        {t('v2.viewer.title')}
-      </h3>
-
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {/* Main row: 3D viewport + controls */}
-      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 190px)', minHeight: '400px' }}>
+      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 180px)', minHeight: '400px' }}>
         {/* 3D viewport */}
         <div
           ref={containerRef}
@@ -278,7 +371,7 @@ export function VolumeViewer({
             borderRadius: '12px',
             overflow: 'hidden',
             border: `1px solid ${colors.border}`,
-            background: theme === 'light' ? '#fafafa' : '#111111',
+            background: '#0a0a0f',
             position: 'relative',
           }}
         >
@@ -302,6 +395,42 @@ export function VolumeViewer({
             {mode === 'instrument' ? `Mode A — ${t('v2.mode.instrument')}` : `Mode B — ${t('v2.mode.spatial')}`}
           </div>
 
+          {/* Camera preset buttons */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              display: 'flex',
+              gap: '4px',
+              zIndex: 10,
+            }}
+          >
+            {CAMERA_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => handleCameraPreset(p.key)}
+                title={t(p.labelKey as TranslationKey)}
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '8px',
+                  border: `1px solid ${cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.12)'}`,
+                  background: cameraPreset === p.key ? 'rgba(68,136,255,0.2)' : 'rgba(10,10,15,0.7)',
+                  color: cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.5)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backdropFilter: 'blur(8px)',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                <p.Icon />
+              </button>
+            ))}
+          </div>
+
           {!volumeData && !isTemporalMode && (
             <div
               style={{
@@ -319,7 +448,7 @@ export function VolumeViewer({
           )}
         </div>
 
-        {/* Controls panel */}
+        {/* Controls / Calibration panel */}
         <div
           className="echos-controls-panel"
           style={{
@@ -329,84 +458,95 @@ export function VolumeViewer({
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
+            overflowY: 'auto',
+            scrollbarWidth: 'thin',
           }}
         >
-          <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-            <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-              {t('v2.controls.title')}
-            </h3>
+          {calibrationOpen ? (
+            <CalibrationPanel
+              config={calibration}
+              onChange={handleCalibrationChange}
+              onClose={() => setCalibrationOpen(false)}
+              saved={calibrationSaved}
+            />
+          ) : (
+            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+                {t('v2.controls.title')}
+              </h3>
 
-            {/* Chromatic mode — pill buttons in a row */}
-            <div>
-              <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
-                {t('v2.controls.palette')}
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                {chromaticModes.map((m: ChromaticMode) => (
-                  <button
-                    key={m}
-                    onClick={() => updateSetting('chromaticMode', m)}
-                    style={{
-                      padding: '5px 11px',
-                      borderRadius: '20px',
-                      border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                      background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                      color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                      fontSize: '12px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      transition: 'all 150ms ease',
-                    }}
-                  >
-                    {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Two-column layout for sliders to reduce height */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-              <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
-
-              {/* Threshold with auto toggle */}
+              {/* Chromatic mode — pill buttons in a row */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-                  <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <input
-                      type="checkbox"
-                      checked={autoThreshold}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
-                      style={{ width: '12px', height: '12px' }}
-                    />
-                    {t('v2.controls.auto')}
-                  </label>
+                <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+                  {t('v2.controls.palette')}
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                  {chromaticModes.map((m: ChromaticMode) => (
+                    <button
+                      key={m}
+                      onClick={() => updateSetting('chromaticMode', m)}
+                      style={{
+                        padding: '5px 11px',
+                        borderRadius: '20px',
+                        border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                        background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                        color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+                    </button>
+                  ))}
                 </div>
-                <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
               </div>
 
-              <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
-              <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
+              {/* Two-column layout for sliders to reduce height */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+                <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
 
-              {mode === 'spatial' && (
-                <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
+                {/* Threshold with auto toggle */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+                    <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="checkbox"
+                        checked={autoThreshold}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
+                        style={{ width: '12px', height: '12px' }}
+                      />
+                      {t('v2.controls.auto')}
+                    </label>
+                  </div>
+                  <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
+                </div>
+
+                <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
+                <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
+
+                {mode === 'spatial' && (
+                  <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
+                )}
+
+                <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
+              </div>
+
+              {mode === 'instrument' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
+                  {t('v2.controls.showBeam')}
+                </label>
               )}
 
-              <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
-            </div>
-
-            {mode === 'instrument' && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-                <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                {t('v2.controls.showBeam')}
-              </label>
-            )}
-
-            {isTemporalMode && (
-              <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-            )}
-          </GlassPanel>
+              {isTemporalMode && (
+                <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
+              )}
+            </GlassPanel>
+          )}
         </div>
       </div>
 
@@ -471,16 +611,13 @@ export function VolumeViewer({
 
       {/* Orthogonal slice panels — v1-style with inline presets */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <div style={{ marginTop: '32px' }}>
-          <SlicePanel
-            volumeData={sliceVolumeData}
-            dimensions={sliceDimensions}
-          />
-        </div>
+        <SlicePanel
+          volumeData={sliceVolumeData}
+          dimensions={sliceDimensions}
+        />
       )}
 
-      {/* Export panel — at bottom */}
-      <div style={{ marginTop: '32px' }} />
+      {/* Export panel — prominent, at bottom */}
       <ExportPanel
         volumeData={sliceVolumeData}
         dimensions={sliceDimensions}
