@@ -87,7 +87,9 @@ export function deserializeVolume(buffer: ArrayBuffer): VolumeSnapshot {
     );
   }
 
-  const data = new Float32Array(buffer, HEADER_SIZE, voxelCount);
+  // IMPORTANT: copy into a fresh Float32Array (byteOffset=0).
+  // A view with byteOffset>0 causes issues in Three.js Data3DTexture upload.
+  const data = new Float32Array(buffer.slice(HEADER_SIZE, HEADER_SIZE + voxelCount * 4));
 
   return {
     data,
