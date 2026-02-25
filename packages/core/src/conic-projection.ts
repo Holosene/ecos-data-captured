@@ -366,8 +366,8 @@ function projectFrameIntoConeWeighted(
       const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
       if (xi < 0 || xi >= resX) continue;
 
-      // Z-outer (track), Y-middle (depth), X-inner (lateral)
-      const voxelIdx = frameSliceIndex * resDepth * resX + di * resX + xi;
+      // Z-outer (depth), Y-middle (track), X-inner (lateral)
+      const voxelIdx = di * resTrack * resX + frameSliceIndex * resX + xi;
       if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
         const w = gaussWeight * weight;
         volume.data[voxelIdx] += intensity * w;
