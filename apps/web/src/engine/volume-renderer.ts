@@ -24,13 +24,7 @@ import { generateLUT } from './transfer-function.js';
 
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number }; // degrees
   scale: { x: number; y: number; z: number };
-  axisMapping: {
-    lateral: 'x' | 'y' | 'z';
-    depth: 'x' | 'y' | 'z';
-    track: 'x' | 'y' | 'z';
-  };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -39,16 +33,12 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
-  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
   bgColor: '#111111',
 };
-
-const DEG2RAD = Math.PI / 180;
 
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
@@ -160,27 +150,24 @@ export class VolumeRenderer {
 
   // ─── Calibration ──────────────────────────────────────────────────────
 
-  /** Compute volume scale from extent — direct proportional, no stretch.
-   *  extent = [lateral(X), track(Y), depth(Z)] → direct mapping to Box [X, Y, Z]. */
-  private computeVolumeScale(): THREE.Vector3 {
-    const maxExtent = Math.max(...this.extent);
-    return new THREE.Vector3(
-      this.extent[0] / maxExtent,
-      this.extent[1] / maxExtent,
-      this.extent[2] / maxExtent,
-    );
-  }
-
   /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Mesh transform
-    this.applyMeshTransform();
+    // Position only — no rotation on mesh (Règle 4)
+    if (this.volumeMesh) {
+      const p = config.position;
+      this.volumeMesh.position.set(p.x, p.y, p.z);
+    }
 
-    // Recompute scale + axis remap
+    // Recompute scale — direct from extent (Règle 5)
     if (this.material) {
-      const scale = this.computeVolumeScale();
+      const maxExtent = Math.max(...this.extent);
+      const scale = new THREE.Vector3(
+        this.extent[0] / maxExtent,   // X = lateral
+        this.extent[1] / maxExtent,   // Y = track
+        this.extent[2] / maxExtent,   // Z = depth
+      );
       this.volumeScale = scale;
       const halfScale = scale.clone().multiplyScalar(0.5);
       this.material.uniforms.volumeScale.value.copy(scale);
@@ -205,17 +192,6 @@ export class VolumeRenderer {
     if (this.lastBeamParams) {
       this.updateBeamGeometry(this.lastBeamParams.halfAngleDeg, this.lastBeamParams.depthMax);
     }
-  }
-
-  /** Apply mesh transform from calibration rotation */
-  private applyMeshTransform(): void {
-    if (!this.volumeMesh) return;
-    const r = this.calibration.rotation;
-    const p = this.calibration.position;
-
-    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-    this.volumeMesh.position.set(p.x, p.y, p.z);
-    this.volumeMesh.updateMatrixWorld(true);
   }
 
   getCalibration(): CalibrationConfig {
@@ -330,9 +306,14 @@ export class VolumeRenderer {
       this.volumeMesh.geometry.dispose();
     }
 
-    const scale = this.computeVolumeScale();
+    const maxExtent = Math.max(...this.extent);
+    const scale = new THREE.Vector3(
+      this.extent[0] / maxExtent,   // X = lateral
+      this.extent[1] / maxExtent,   // Y = track
+      this.extent[2] / maxExtent,   // Z = depth
+    );
     this.volumeScale = scale;
-    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(depth):', scale.y, 'Z(track):', scale.z);
+    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 
@@ -366,6 +347,11 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
+
+    // Position only — no rotation on mesh (Règle 4)
+    const p = this.calibration.position;
+    this.volumeMesh.position.set(p.x, p.y, p.z);
+
     this.scene.add(this.volumeMesh);
 
     // Set camera on first mesh creation only (preserve user rotation during playback)
@@ -553,10 +539,8 @@ void main() {
 
     this.controls.update();
 
-    if (this.material && this.volumeMesh) {
-      const camLocal = this.camera.position.clone();
-      this.volumeMesh.worldToLocal(camLocal);
-      this.material.uniforms.uCameraPos.value.copy(camLocal);
+    if (this.material) {
+      this.material.uniforms.uCameraPos.value.copy(this.camera.position);
     }
 
     this.renderer.render(this.scene, this.camera);
