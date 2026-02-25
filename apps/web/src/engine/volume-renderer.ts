@@ -39,8 +39,8 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 180, y: 180, z: 90 },
-  scale: { x: 1, y: 2, z: 1 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
   axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
@@ -160,15 +160,14 @@ export class VolumeRenderer {
 
   // ─── Calibration ──────────────────────────────────────────────────────
 
-  /** Compute volume scale from extent + calibration stretch.
-   *  extent = [lateral, depth, track] → direct mapping to Box [X, Y, Z]. */
+  /** Compute volume scale from extent — direct proportional, no stretch.
+   *  extent = [lateral(X), track(Y), depth(Z)] → direct mapping to Box [X, Y, Z]. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
-    const cal = this.calibration;
     return new THREE.Vector3(
-      (this.extent[0] / maxExtent) * cal.scale.x,  // lateral → X
-      (this.extent[1] / maxExtent) * cal.scale.y,  // depth   → Y
-      (this.extent[2] / maxExtent) * cal.scale.z,  // track   → Z
+      this.extent[0] / maxExtent,
+      this.extent[1] / maxExtent,
+      this.extent[2] / maxExtent,
     );
   }
 
@@ -297,7 +296,7 @@ export class VolumeRenderer {
     const [dimX, dimY, dimZ] = dimensions;
     console.log('[ECHOS] uploadVolume — dimX (lateral):', dimX, 'dimY (depth):', dimY, 'dimZ (track):', dimZ);
     console.log('[ECHOS] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
-    this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimZ, dimY);
+    this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
     this.volumeTexture.minFilter = THREE.LinearFilter;
@@ -367,10 +366,6 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
-
-    // Calibrated orientation
-    this.applyMeshTransform();
-
     this.scene.add(this.volumeMesh);
 
     // Set camera on first mesh creation only (preserve user rotation during playback)
