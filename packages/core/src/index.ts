@@ -101,8 +101,3 @@ export { createSession, serializeSession, deserializeSession, sessionToBlob } fr
 // ─── QC Report ──────────────────────────────────────────────────────────────
 
 export { generateQcReport, qcReportToBlob } from './qc-report.js';
-
-// ─── Volume Snapshot (.echos-vol) ───────────────────────────────────────────
-
-export { serializeVolume, deserializeVolume, volumeSnapshotToBlob } from './volume-snapshot.js';
-export type { VolumeSnapshot } from './volume-snapshot.js';
