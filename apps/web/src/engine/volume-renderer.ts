@@ -270,7 +270,7 @@ export class VolumeRenderer {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
-    console.log('[ECHOS] uploadVolume — dimX (lateral):', dimX, 'dimY (track):', dimY, 'dimZ (depth):', dimZ);
+    console.log('[ECHOS] uploadVolume — dimX (track):', dimX, 'dimY (depth):', dimY, 'dimZ (frames):', dimZ);
     console.log('[ECHOS] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
@@ -308,12 +308,12 @@ export class VolumeRenderer {
 
     const maxExtent = Math.max(...this.extent);
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,   // X = lateral
-      this.extent[1] / maxExtent,   // Y = track
-      this.extent[2] / maxExtent,   // Z = depth
+      this.extent[0] / maxExtent,   // X = track
+      this.extent[1] / maxExtent,   // Y = depth (vertical)
+      this.extent[2] / maxExtent,   // Z = frames
     );
     this.volumeScale = scale;
-    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
+    console.log('[ECHOS] createVolumeMesh — scale X(track):', scale.x, 'Y(depth):', scale.y, 'Z(frames):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 

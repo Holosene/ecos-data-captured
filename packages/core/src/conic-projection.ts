@@ -273,10 +273,10 @@ export function buildInstrumentVolume(
  *   - frame cols  = track   (each column is one ping / time step)
  *   - frame index = track   (successive captures along the boat's path)
  *
- * Volume layout (matches CLAUDE.md convention):
+ * Volume layout — Three.js axis convention (Y = vertical):
  *   - X = frame columns (track within one frame)    — downsampled to grid.resX
- *   - Y = frame index   (track between frames)      — windowSize frames
- *   - Z = frame rows    (depth)                      — downsampled to grid.resZ
+ *   - Y = frame rows    (depth, vertical in Three.js) — downsampled to grid.resZ
+ *   - Z = frame index   (track between frames)      — windowSize frames
  *   - data[z * dimY * dimX + y * dimX + x]
  *
  * No cone projection: the data is stacked directly as a rectangular prism.
@@ -305,22 +305,23 @@ export function projectFrameWindow(
   const frameH = frames[startIdx].height;
 
   // Downsample to grid resolution
+  // X = track within frame, Y = depth (vertical in Three.js), Z = frame index
   const dimX = Math.min(grid.resX, frameW);    // track within frame
-  const dimY = windowFrameCount;                // frames in window
-  const dimZ = Math.min(grid.resZ, frameH);     // depth
+  const dimY = Math.min(grid.resZ, frameH);     // depth (vertical)
+  const dimZ = windowFrameCount;                // frames in window
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
-  for (let yi = 0; yi < dimY; yi++) {
-    const frame = frames[startIdx + yi];
+  for (let zi = 0; zi < dimZ; zi++) {
+    const frame = frames[startIdx + zi];
     if (!frame) continue;
 
     // Recency weight: center frame is strongest
-    const distFromCenter = Math.abs((startIdx + yi) - centerIndex) / Math.max(1, halfWin);
+    const distFromCenter = Math.abs((startIdx + zi) - centerIndex) / Math.max(1, halfWin);
     const weight = 1.0 - distFromCenter * 0.6; // 1.0 at center, 0.4 at edges
 
-    for (let zi = 0; zi < dimZ; zi++) {
-      const srcRow = Math.floor(zi * frameH / dimZ);
+    for (let yi = 0; yi < dimY; yi++) {
+      const srcRow = Math.floor(yi * frameH / dimY);
       for (let xi = 0; xi < dimX; xi++) {
         const srcCol = Math.floor(xi * frameW / dimX);
         const srcIdx = srcRow * frameW + srcCol;
@@ -342,10 +343,10 @@ export function projectFrameWindow(
     }
   }
 
-  // Physical extents: Z = depth (known), X = proportional to frame aspect ratio
-  const extentZ = beam.depthMaxM;
+  // Physical extents: Y = depth (vertical), X = track width, Z = temporal window
+  const extentY = beam.depthMaxM;
   const extentX = beam.depthMaxM * (frameW / frameH);
-  const extentY = extentX * (windowFrameCount / frameW);
+  const extentZ = extentX * (windowFrameCount / frameW);
 
   return {
     normalized: data,
