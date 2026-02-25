@@ -128,7 +128,7 @@ export const INITIAL_STATE: AppState = {
   crop: { x: 0, y: 0, width: 640, height: 480 },
   cropConfirmed: false,
   calibration: { ...DEFAULT_CALIBRATION },
-  sync: { offsetS: 0, videoStartEpochMs: 0, videoEndEpochMs: 0, trimStartS: 0, trimEndS: 0 },
+  sync: { offsetS: 0, videoStartEpochMs: 0, videoEndEpochMs: 0 },
 
   quickPreview: false,
   processing: false,

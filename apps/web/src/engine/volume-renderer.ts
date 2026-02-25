@@ -10,48 +10,15 @@
  *   - Transfer function LUT
  *   - Real-time interactive controls
  *   - Beam wireframe overlay
- *   - Camera presets (frontal, horizontal, vertical, free)
- *   - Live calibration via CalibrationConfig
- *
- * IMPORTANT: The volumetric generation pipeline (conic-projection.ts) is
- * NOT touched here. Data flows in as-is, no axis permutation in shader.
+ *   - Dynamic resolution scaling
  */
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { RendererSettings, ChromaticMode } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
+import { volumeVertexShader, volumeFragmentShader } from './shaders.js';
 import { generateLUT } from './transfer-function.js';
-
-// ─── Calibration config ─────────────────────────────────────────────────────
-
-export interface CalibrationConfig {
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number }; // degrees
-  scale: { x: number; y: number; z: number };
-  camera: { dist: number; fov: number };
-  grid: { y: number };
-  axes: { size: number };
-  bgColor: string;
-}
-
-/**
- * SAFE defaults — identity orientation, no axis permutation, no rotation.
- * This prevents the axis bug that was present in earlier versions.
- */
-export const DEFAULT_CALIBRATION: CalibrationConfig = {
-  position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
-  scale: { x: 1, y: 1, z: 1 },
-  camera: { dist: 1.6, fov: 40 },
-  grid: { y: -0.5 },
-  axes: { size: 0.8 },
-  bgColor: '#111111',
-};
-
-const DEG2RAD = Math.PI / 180;
-
-export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
 
 export class VolumeRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -70,20 +37,9 @@ export class VolumeRenderer {
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
-  private currentPreset: CameraPreset = 'frontal';
-  private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
-  private meshCreated = false;
-  private calibration: CalibrationConfig;
-  private gridHelper: THREE.GridHelper;
-  private axesHelper: THREE.AxesHelper;
 
-  constructor(
-    container: HTMLElement,
-    initialSettings?: Partial<RendererSettings>,
-    initialCalibration?: CalibrationConfig,
-  ) {
+  constructor(container: HTMLElement, initialSettings?: Partial<RendererSettings>) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
-    this.calibration = initialCalibration ?? { ...DEFAULT_CALIBRATION };
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -93,7 +49,7 @@ export class VolumeRenderer {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
+    this.renderer.setClearColor(0x0a0a0f, 1);
     container.appendChild(this.renderer.domElement);
 
     // Scene
@@ -101,11 +57,13 @@ export class VolumeRenderer {
 
     // Camera
     this.camera = new THREE.PerspectiveCamera(
-      this.calibration.camera.fov,
+      50,
       container.clientWidth / container.clientHeight,
-      0.1,
+      0.01,
       100,
     );
+    this.camera.position.set(2, 1.5, 2);
+    this.camera.lookAt(0, 0, 0);
 
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -113,7 +71,7 @@ export class VolumeRenderer {
     this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.8;
 
-    // Transfer function texture (1D: 256x1 RGBA)
+    // Transfer function texture (1D: 256×1 RGBA)
     const lutData = generateLUT(this.settings.chromaticMode);
     this.tfTexture = new THREE.DataTexture(
       lutData,
@@ -131,24 +89,15 @@ export class VolumeRenderer {
     this.beamGroup = new THREE.Group();
     this.scene.add(this.beamGroup);
 
-    // Axes helper
-    const axesBaseSize = 0.3;
-    this.axesHelper = new THREE.AxesHelper(axesBaseSize);
-    this.axesHelper.scale.setScalar(this.calibration.axes.size / axesBaseSize);
-    this.axesHelper.position.set(
-      -this.calibration.axes.size,
-      -this.calibration.axes.size,
-      -this.calibration.axes.size,
-    );
-    this.scene.add(this.axesHelper);
+    // Axes helper (subtle)
+    const axes = new THREE.AxesHelper(0.3);
+    axes.position.set(-0.6, -0.6, -0.6);
+    this.scene.add(axes);
 
     // Grid helper
-    this.gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
-    this.gridHelper.position.y = this.calibration.grid.y;
-    this.scene.add(this.gridHelper);
-
-    // Default camera
-    this.setCameraPreset('frontal');
+    const grid = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+    grid.position.y = -0.5;
+    this.scene.add(grid);
 
     // Start render loop
     this.animate();
@@ -158,132 +107,25 @@ export class VolumeRenderer {
     ro.observe(container);
   }
 
-  // ─── Calibration ──────────────────────────────────────────────────────
-
-  /** Compute volume scale from extent + calibration stretch. */
-  private computeVolumeScale(): THREE.Vector3 {
-    const maxExtent = Math.max(...this.extent);
-    if (maxExtent === 0) return new THREE.Vector3(1, 1, 1);
-    const cal = this.calibration;
-    return new THREE.Vector3(
-      (this.extent[0] / maxExtent) * cal.scale.x,
-      (this.extent[1] / maxExtent) * cal.scale.y,
-      (this.extent[2] / maxExtent) * cal.scale.z,
-    );
-  }
-
-  /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
-  setCalibration(config: CalibrationConfig): void {
-    this.calibration = config;
-
-    // Mesh transform
-    if (this.volumeMesh) {
-      const r = config.rotation;
-      this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-      this.volumeMesh.position.set(config.position.x, config.position.y, config.position.z);
-      this.volumeMesh.updateMatrixWorld(true);
-    }
-
-    // Recompute scale
-    if (this.material) {
-      const scale = this.computeVolumeScale();
-      this.volumeScale = scale;
-      const halfScale = scale.clone().multiplyScalar(0.5);
-      this.material.uniforms.volumeScale.value.copy(scale);
-      this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
-      this.material.uniforms.uVolumeMax.value.copy(halfScale);
-    }
-
-    // Scene helpers
-    const axesBaseSize = 0.3;
-    this.axesHelper.scale.setScalar(config.axes.size / axesBaseSize);
-    this.axesHelper.position.set(-config.axes.size, -config.axes.size, -config.axes.size);
-    this.gridHelper.position.y = config.grid.y;
-
-    // Background color
-    this.renderer.setClearColor(new THREE.Color(config.bgColor), 1);
-
-    // Camera FOV
-    this.camera.fov = config.camera.fov;
-    this.camera.updateProjectionMatrix();
-  }
-
-  getCalibration(): CalibrationConfig {
-    return JSON.parse(JSON.stringify(this.calibration));
-  }
-
-  // ─── Camera Presets ─────────────────────────────────────────────────────
-
-  setCameraPreset(preset: CameraPreset): void {
-    this.currentPreset = preset;
-    const s = this.volumeScale;
-    const maxDim = Math.max(s.x, s.y, s.z) || 1;
-    const distMul = this.calibration.camera.dist;
-
-    switch (preset) {
-      case 'frontal': {
-        const dist = maxDim * distMul;
-        this.camera.position.set(0, 0, dist);
-        this.camera.up.set(0, 1, 0);
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-      case 'horizontal': {
-        const dist = maxDim * (distMul * 0.94);
-        const angle25 = (25 * Math.PI) / 180;
-        this.camera.position.set(
-          dist * 0.3,
-          dist * Math.sin(angle25),
-          dist * Math.cos(angle25),
-        );
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-      case 'vertical': {
-        const dist = maxDim * distMul;
-        this.camera.position.set(dist, 0, 0);
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-      case 'free': {
-        const dist = maxDim * (distMul * 0.75);
-        this.camera.position.set(dist, dist * 0.7, dist);
-        this.controls.target.set(0, 0, 0);
-        break;
-      }
-    }
-
-    this.controls.update();
-  }
-
-  getCameraPreset(): CameraPreset {
-    return this.currentPreset;
-  }
-
   // ─── Volume data upload ─────────────────────────────────────────────────
 
+  /**
+   * Upload a normalized Float32Array volume to GPU as a 3D texture.
+   */
   uploadVolume(
     data: Float32Array,
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
-    const dimsChanged =
-      this.dimensions[0] !== dimensions[0] ||
-      this.dimensions[1] !== dimensions[1] ||
-      this.dimensions[2] !== dimensions[2];
-    const extentChanged =
-      this.extent[0] !== extent[0] ||
-      this.extent[1] !== extent[1] ||
-      this.extent[2] !== extent[2];
-
     this.dimensions = dimensions;
     this.extent = extent;
+    const [dimX, dimY, dimZ] = dimensions;
 
+    // Create 3D texture
     if (this.volumeTexture) {
       this.volumeTexture.dispose();
     }
 
-    const [dimX, dimY, dimZ] = dimensions;
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -294,23 +136,11 @@ export class VolumeRenderer {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
-    // If mesh exists and dimensions/extent haven't changed, just update the texture
-    // (prevents camera reset during Mode A temporal playback)
-    if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
-      this.material.uniforms.uVolume.value = this.volumeTexture;
-      return;
-    }
-
+    // Create/update volume mesh
     this.createVolumeMesh();
   }
 
-  getVolumeDimensions(): [number, number, number] {
-    return [...this.dimensions];
-  }
-
-  getVolumeExtent(): [number, number, number] {
-    return [...this.extent];
-  }
+  private meshCreated = false;
 
   private createVolumeMesh(): void {
     if (this.volumeMesh) {
@@ -318,10 +148,17 @@ export class VolumeRenderer {
       this.volumeMesh.geometry.dispose();
     }
 
-    const scale = this.computeVolumeScale();
-    this.volumeScale = scale;
+    // Normalized scale
+    const maxExtent = Math.max(...this.extent);
+    const scale = new THREE.Vector3(
+      this.extent[0] / maxExtent,
+      this.extent[1] / maxExtent,
+      this.extent[2] / maxExtent,
+    );
+
     const halfScale = scale.clone().multiplyScalar(0.5);
 
+    // Unit cube geometry [-1, 1]³
     const geometry = new THREE.BoxGeometry(2, 2, 2);
 
     this.material = new THREE.RawShaderMaterial({
@@ -343,7 +180,7 @@ export class VolumeRenderer {
         uStepCount: { value: this.settings.stepCount },
         uGhostEnhancement: { value: this.settings.ghostEnhancement },
         uShowBeam: { value: this.settings.showBeam },
-        uBeamAngle: { value: 0.175 },
+        uBeamAngle: { value: 0.175 }, // ~10 degrees
         uTimeSlice: { value: 0.5 },
       },
       side: THREE.BackSide,
@@ -352,24 +189,23 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
-
-    // Calibrated orientation
-    const r = this.calibration.rotation;
-    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-    const p = this.calibration.position;
-    this.volumeMesh.position.set(p.x, p.y, p.z);
-
     this.scene.add(this.volumeMesh);
-    this.volumeMesh.updateMatrixWorld(true);
 
-    // Set camera on first mesh creation only (preserve user rotation during playback)
+    // Auto-fit camera only on first mesh creation (don't reset during playback)
     if (!this.meshCreated) {
-      this.setCameraPreset(this.currentPreset);
       this.meshCreated = true;
+      this.camera.position.set(
+        scale.x * 2,
+        scale.y * 1.2,
+        scale.z * 2,
+      );
+      this.controls.target.set(0, 0, 0);
+      this.controls.update();
     }
   }
 
   private buildVertexShader(): string {
+    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
     return `precision highp float;
 
 uniform mat4 modelViewMatrix;
@@ -390,8 +226,7 @@ void main() {
   }
 
   private buildFragmentShader(): string {
-    // NOTE: No dataMapping matrix — data flows through as-is from conic-projection.
-    // This prevents the axis permutation bug from earlier versions.
+    // Note: #version 300 es is injected by Three.js when glslVersion = GLSL3
     return `precision highp float;
 precision highp sampler3D;
 
@@ -525,6 +360,7 @@ void main() {
   // ─── Beam wireframe ───────────────────────────────────────────────────
 
   updateBeamGeometry(halfAngleDeg: number, depthMax: number): void {
+    // Clear existing
     this.beamGroup.clear();
 
     if (!this.settings.showBeam) return;
@@ -533,6 +369,7 @@ void main() {
     const segments = 32;
     const radius = depthMax * Math.tan(halfAngle);
 
+    // Cone wireframe
     const coneGeom = new THREE.ConeGeometry(radius, depthMax, segments, 1, true);
     const wireframeMat = new THREE.MeshBasicMaterial({
       color: 0x4488ff,
@@ -542,20 +379,13 @@ void main() {
     });
 
     const cone = new THREE.Mesh(coneGeom, wireframeMat);
-    cone.rotation.x = Math.PI;
+    cone.rotation.x = Math.PI; // Point downward
     cone.position.y = -depthMax / 2;
     this.beamGroup.add(cone);
 
     if (this.material) {
       this.material.uniforms.uBeamAngle.value = halfAngle;
     }
-  }
-
-  // ─── Snapshot for export ──────────────────────────────────────────────
-
-  captureScreenshot(): string {
-    this.renderer.render(this.scene, this.camera);
-    return this.renderer.domElement.toDataURL('image/png');
   }
 
   // ─── Render loop ──────────────────────────────────────────────────────
@@ -566,10 +396,14 @@ void main() {
 
     this.controls.update();
 
-    if (this.material && this.volumeMesh) {
-      const camLocal = this.camera.position.clone();
-      this.volumeMesh.worldToLocal(camLocal);
-      this.material.uniforms.uCameraPos.value.copy(camLocal);
+    // Update camera position uniform
+    if (this.material) {
+      // Camera position in volume local space
+      const camPos = this.camera.position.clone();
+      if (this.volumeMesh) {
+        this.volumeMesh.worldToLocal(camPos);
+      }
+      this.material.uniforms.uCameraPos.value.copy(this.camera.position);
     }
 
     this.renderer.render(this.scene, this.camera);

@@ -195,24 +195,6 @@ export const translations = {
     // V2 Nav
     'nav.map': 'Carte',
 
-    // V2 Steps
-    'v2.step.import': 'Importer',
-    'v2.step.crop': 'Recadrer',
-    'v2.step.settings': 'Configurer',
-    'v2.step.viewer': 'Visualiser',
-
-    // V2 Sync
-    'v2.sync.title': 'Synchronisation',
-    'v2.sync.videoDuration': 'Durée vidéo',
-    'v2.sync.gpxDuration': 'Durée GPX',
-    'v2.sync.totalDist': 'Distance totale',
-    'v2.sync.avgSpeed': 'Vitesse moyenne',
-    'v2.sync.distOverTime': 'Distance dans le temps (GPX)',
-    'v2.sync.trimStart': 'Trim début',
-    'v2.sync.trimEnd': 'Trim fin',
-    'v2.sync.trimStartTooltip': 'Couper le début de l\u2019enregistrement (secondes)',
-    'v2.sync.trimEndTooltip': 'Couper la fin de l\u2019enregistrement (secondes)',
-
     // V2 Scan
     'v2.scan.title': 'Nouveau scan volumétrique',
     'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
@@ -502,24 +484,6 @@ export const translations = {
 
     // V2 Nav
     'nav.map': 'Map',
-
-    // V2 Steps
-    'v2.step.import': 'Import',
-    'v2.step.crop': 'Crop',
-    'v2.step.settings': 'Configure',
-    'v2.step.viewer': 'View',
-
-    // V2 Sync
-    'v2.sync.title': 'Synchronization',
-    'v2.sync.videoDuration': 'Video Duration',
-    'v2.sync.gpxDuration': 'GPX Duration',
-    'v2.sync.totalDist': 'Total Distance',
-    'v2.sync.avgSpeed': 'Avg Speed',
-    'v2.sync.distOverTime': 'Distance over time (GPX)',
-    'v2.sync.trimStart': 'Trim Start',
-    'v2.sync.trimEnd': 'Trim End',
-    'v2.sync.trimStartTooltip': 'Cut the beginning of the recording (seconds)',
-    'v2.sync.trimEndTooltip': 'Cut the end of the recording (seconds)',
 
     // V2 Scan
     'v2.scan.title': 'New Volumetric Scan',
