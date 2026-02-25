@@ -8,12 +8,10 @@
 
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
-import type { CalibrationConfig, TexAxisOrder } from '../engine/volume-renderer.js';
+import type { CalibrationConfig, DataDim } from '../engine/volume-renderer.js';
 import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
-
-type Axis = 'x' | 'y' | 'z';
 
 interface CalibrationPanelProps {
   config: CalibrationConfig;
@@ -80,16 +78,16 @@ function Row({
   );
 }
 
-// ─── Axis dropdown ──────────────────────────────────────────────────────────
+// ─── Data dimension dropdown ─────────────────────────────────────────────────
 
-function AxisSelect({
+function DataDimSelect({
   label,
   value,
   onChange,
 }: {
   label: string;
-  value: Axis;
-  onChange: (v: Axis) => void;
+  value: DataDim;
+  onChange: (v: DataDim) => void;
 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
@@ -98,7 +96,7 @@ function AxisSelect({
       </span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value as Axis)}
+        onChange={(e) => onChange(e.target.value as DataDim)}
         style={{
           flex: 1,
           fontSize: '10px',
@@ -111,9 +109,9 @@ function AxisSelect({
           cursor: 'pointer',
         }}
       >
-        <option value="x">X</option>
-        <option value="y">Y</option>
-        <option value="z">Z</option>
+        <option value="lateral">Lateral</option>
+        <option value="track">Track</option>
+        <option value="depth">Depth</option>
       </select>
     </div>
   );
@@ -237,49 +235,32 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Ry" value={config.rotation.y} min={0} max={360} step={1} onChange={(v) => update('rotation.y', v)} />
       <Row label="Rz" value={config.rotation.z} min={0} max={360} step={1} onChange={(v) => update('rotation.z', v)} />
 
-      {/* Scale */}
-      <Section title="Scale" />
-      <Row label="Sx" value={config.scale.x} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.x', v)} />
-      <Row label="Sy" value={config.scale.y} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.y', v)} />
-      <Row label="Sz" value={config.scale.z} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.z', v)} />
+      {/* Scale (box shape only — never affected by data mapping) */}
+      <Section title="Scale (box shape)" />
+      <Row label="Sx" value={config.scale.x} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.x', v)} />
+      <Row label="Sy" value={config.scale.y} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.y', v)} />
+      <Row label="Sz" value={config.scale.z} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.z', v)} />
 
-      {/* Axis Mapping */}
-      <Section title="Axis Mapping" />
-      <AxisSelect label="Lateral" value={config.axisMapping.lateral} onChange={(v) => update('axisMapping.lateral', v)} />
-      <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
-      <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
+      {/* Data Mapping — which data appears on each box axis (box shape stays fixed) */}
+      <Section title="Data Mapping (shader only)" />
+      <DataDimSelect label="Box X" value={config.dataMapping?.x ?? 'lateral'} onChange={(v) => update('dataMapping.x', v)} />
+      <DataDimSelect label="Box Y" value={config.dataMapping?.y ?? 'track'} onChange={(v) => update('dataMapping.y', v)} />
+      <DataDimSelect label="Box Z" value={config.dataMapping?.z ?? 'depth'} onChange={(v) => update('dataMapping.z', v)} />
 
-      {/* Data Axes — reorder/flip data inside the volume independently */}
-      <Section title="Data Axes" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
-        <span style={{ width: '48px', fontSize: '10px', color: colors.text3, flexShrink: 0 }}>Order</span>
-        <select
-          value={config.dataAxes?.order ?? 'UVW'}
-          onChange={(e) => update('dataAxes.order', e.target.value as TexAxisOrder)}
-          style={{
-            flex: 1, fontSize: '10px', fontFamily: 'monospace',
-            background: 'rgba(255,255,255,0.05)', border: `1px solid ${colors.border}`,
-            borderRadius: '4px', color: colors.text1, padding: '2px 4px', cursor: 'pointer',
-          }}
-        >
-          {(['UVW', 'UWV', 'VUW', 'VWU', 'WUV', 'WVU'] as TexAxisOrder[]).map((o) => (
-            <option key={o} value={o}>{o}</option>
-          ))}
-        </select>
-      </div>
-      {(['flipU', 'flipV', 'flipW'] as const).map((key) => (
-        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', fontSize: '10px', color: colors.text3, cursor: 'pointer' }}>
+      {/* Flip Data */}
+      {(['x', 'y', 'z'] as const).map((axis) => (
+        <label key={axis} style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', fontSize: '10px', color: colors.text3, cursor: 'pointer' }}>
           <input
             type="checkbox"
-            checked={config.dataAxes?.[key] ?? false}
+            checked={config.flipData?.[axis] ?? false}
             onChange={(e) => {
               const next = JSON.parse(JSON.stringify(config)) as CalibrationConfig;
-              next.dataAxes = { ...DEFAULT_CALIBRATION.dataAxes, ...next.dataAxes, [key]: e.target.checked };
+              next.flipData = { ...DEFAULT_CALIBRATION.flipData, ...next.flipData, [axis]: e.target.checked };
               onChange(next);
             }}
             style={{ width: '12px', height: '12px' }}
           />
-          {key}
+          Flip {axis.toUpperCase()}
         </label>
       ))}
 
@@ -345,15 +326,14 @@ export function loadCalibration(): CalibrationConfig | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
-    // Deep-merge with defaults so new fields (e.g. dataAxes) are always present
     return {
       ...DEFAULT_CALIBRATION,
       ...saved,
       position: { ...DEFAULT_CALIBRATION.position, ...saved.position },
       rotation: { ...DEFAULT_CALIBRATION.rotation, ...saved.rotation },
       scale: { ...DEFAULT_CALIBRATION.scale, ...saved.scale },
-      axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...saved.axisMapping },
-      dataAxes: { ...DEFAULT_CALIBRATION.dataAxes, ...saved.dataAxes },
+      dataMapping: { ...DEFAULT_CALIBRATION.dataMapping, ...saved.dataMapping },
+      flipData: { ...DEFAULT_CALIBRATION.flipData, ...saved.flipData },
       camera: { ...DEFAULT_CALIBRATION.camera, ...saved.camera },
     };
   } catch {
