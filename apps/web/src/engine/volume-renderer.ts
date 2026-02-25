@@ -2,16 +2,17 @@
  * ECHOS V2 — WebGL2 Ray Marching Volume Renderer
  *
  * Uses Three.js for scene management, camera controls, and WebGL2 3D textures.
- * Custom ShaderMaterial for GPU ray marching.
+ * Custom RawShaderMaterial for GPU ray marching.
  *
- * Supports:
- *   - 3D Float32/Half-float texture upload
- *   - Single-pass front-to-back ray accumulation
- *   - Transfer function LUT
- *   - Real-time interactive controls
- *   - Beam wireframe overlay
- *   - Camera presets (frontal, horizontal, vertical, free)
- *   - Live calibration via CalibrationConfig
+ * Data orientation:
+ *   Volume data arrives as [lateral(X), track(Y), depth(Z)].
+ *   The dataMapping matrix permutes this in the shader so that:
+ *     Box X (wide, ×3) → track   (time / survey distance)
+ *     Box Y (vertical) → depth   (surface at top, seabed at bottom via flipData.y)
+ *     Box Z (into screen) → lateral (beam width)
+ *
+ *   The box shape is ALWAYS driven by the raw extent — dataMapping only
+ *   changes which data dimension appears on each visual axis.
  */
 
 import * as THREE from 'three';
@@ -20,57 +21,43 @@ import type { RendererSettings, ChromaticMode } from '@echos/core';
 import { DEFAULT_RENDERER } from '@echos/core';
 import { generateLUT } from './transfer-function.js';
 
-// ─── Calibration config ─────────────────────────────────────────────────────
+// ─── Data axis mapping ──────────────────────────────────────────────────────
 
 export type DataDim = 'lateral' | 'track' | 'depth';
-
-export interface CalibrationConfig {
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number }; // degrees
-  scale: { x: number; y: number; z: number };
-  /** Which data dimension appears on each box axis (shader-only, never touches box shape) */
-  dataMapping: { x: DataDim; y: DataDim; z: DataDim };
-  /** Flip data on each box axis */
-  flipData: { x: boolean; y: boolean; z: boolean };
-  camera: { dist: number; fov: number };
-  grid: { y: number };
-  axes: { size: number };
-  bgColor: string;
-}
-
-export const DEFAULT_CALIBRATION: CalibrationConfig = {
-  position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 180, y: 0, z: 0 },
-  scale: { x: 3, y: 1, z: 1 },
-  dataMapping: { x: 'track', y: 'depth', z: 'lateral' },
-  flipData: { x: false, y: false, z: false },
-  camera: { dist: 1.6, fov: 40 },
-  grid: { y: -0.5 },
-  axes: { size: 0.8 },
-  bgColor: '#111111',
-};
-
-const DEG2RAD = Math.PI / 180;
 
 /** Texture dimension indices: lateral=U(0), track=V(1), depth=W(2) */
 const DATA_DIM_IDX: Record<DataDim, number> = { lateral: 0, track: 1, depth: 2 };
 
-/** Build a single 3×3 permutation+flip matrix for data mapping.
+/**
+ * Axis mapping: which data dimension appears on each box axis.
+ * This is THE key mechanism — no mesh rotation needed.
+ */
+const DATA_MAPPING: { x: DataDim; y: DataDim; z: DataDim } = {
+  x: 'track',   // box X (wide) shows track/time
+  y: 'depth',   // box Y (vertical) shows depth
+  z: 'lateral', // box Z (into screen) shows lateral/beam width
+};
+
+/**
+ * Flip data on each box axis.
+ * y=true flips depth so surface is at top, seabed at bottom.
+ */
+const FLIP_DATA: { x: boolean; y: boolean; z: boolean } = {
+  x: false,
+  y: true,  // depth: surface (0) at top → flip
+  z: false,
+};
+
+/** Build a 3×3 permutation+flip matrix for the shader.
  *  Maps box-space UVW → texture-space UVW.
- *  Box shape is NEVER affected — only which data appears on each face.
- *  Operates centered at 0.5 in the shader to keep coords in [0,1]³. */
-function buildDataMappingMatrix(
-  mapping: CalibrationConfig['dataMapping'],
-  flip: CalibrationConfig['flipData'],
-): THREE.Matrix3 {
-  // Column-major: e[col*3 + row]
-  // For each box axis (col), set the row corresponding to the target texture dim
+ *  Operates centered at 0.5 to keep coords in [0,1]³. */
+function buildDataMappingMatrix(): THREE.Matrix3 {
   const e = [0, 0, 0, 0, 0, 0, 0, 0, 0];
   const axes: ('x' | 'y' | 'z')[] = ['x', 'y', 'z'];
   for (let col = 0; col < 3; col++) {
-    const dim = mapping[axes[col]];     // which data dim this box axis shows
-    const row = DATA_DIM_IDX[dim];      // texture coordinate index
-    const sign = flip[axes[col]] ? -1 : 1;
+    const dim = DATA_MAPPING[axes[col]];
+    const row = DATA_DIM_IDX[dim];
+    const sign = FLIP_DATA[axes[col]] ? -1 : 1;
     e[col * 3 + row] = sign;
   }
   const mat = new THREE.Matrix3();
@@ -78,7 +65,29 @@ function buildDataMappingMatrix(
   return mat;
 }
 
+// ─── Calibration config (simplified — dev tuning only) ──────────────────────
+
+export interface CalibrationConfig {
+  scale: { x: number; y: number; z: number };
+  camera: { dist: number; fov: number };
+  grid: { y: number };
+  axes: { size: number };
+  bgColor: string;
+}
+
+export const DEFAULT_CALIBRATION: CalibrationConfig = {
+  scale: { x: 3, y: 1, z: 1 },
+  camera: { dist: 1.6, fov: 40 },
+  grid: { y: -0.5 },
+  axes: { size: 0.8 },
+  bgColor: '#111111',
+};
+
+// ─── Camera presets ─────────────────────────────────────────────────────────
+
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
+
+// ─── Volume Renderer ────────────────────────────────────────────────────────
 
 export class VolumeRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -98,12 +107,12 @@ export class VolumeRenderer {
   private animationId: number = 0;
   private disposed = false;
   private currentPreset: CameraPreset = 'frontal';
-  private _frameLogCount = 0;
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
   private calibration: CalibrationConfig;
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
+  private dataMappingMatrix: THREE.Matrix3;
 
   constructor(
     container: HTMLElement,
@@ -112,6 +121,7 @@ export class VolumeRenderer {
   ) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
     this.calibration = initialCalibration ?? { ...DEFAULT_CALIBRATION };
+    this.dataMappingMatrix = buildDataMappingMatrix();
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -124,7 +134,7 @@ export class VolumeRenderer {
     this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
     container.appendChild(this.renderer.domElement);
 
-    // Scene (no fog — clean rendering)
+    // Scene
     this.scene = new THREE.Scene();
 
     // Camera
@@ -141,14 +151,10 @@ export class VolumeRenderer {
     this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.8;
 
-    // Transfer function texture (1D: 256x1 RGBA)
+    // Transfer function texture (1D: 256×1 RGBA)
     const lutData = generateLUT(this.settings.chromaticMode);
     this.tfTexture = new THREE.DataTexture(
-      lutData,
-      256,
-      1,
-      THREE.RGBAFormat,
-      THREE.UnsignedByteType,
+      lutData, 256, 1, THREE.RGBAFormat, THREE.UnsignedByteType,
     );
     this.tfTexture.needsUpdate = true;
     this.tfTexture.minFilter = THREE.LinearFilter;
@@ -186,15 +192,13 @@ export class VolumeRenderer {
     ro.observe(container);
   }
 
-  // ─── Calibration ──────────────────────────────────────────────────────
+  // ─── Calibration (dev tuning) ────────────────────────────────────────────
 
-  /** Compute volume scale from extent + calibration stretch.
-   *  Box shape = extent × scale. No permutation — dataMapping only affects the shader. */
+  /** Box shape = extent × calibration scale. dataMapping is baked. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     if (maxExtent === 0) return new THREE.Vector3(1, 1, 1);
     const cal = this.calibration;
-    // extent = [lateral, track, depth] → box X, Y, Z directly
     return new THREE.Vector3(
       (this.extent[0] / maxExtent) * cal.scale.x,
       (this.extent[1] / maxExtent) * cal.scale.y,
@@ -202,19 +206,10 @@ export class VolumeRenderer {
     );
   }
 
-  /** Apply calibration config — updates mesh, uniforms, scene helpers in real-time */
+  /** Apply calibration — updates scale, camera FOV, scene helpers. */
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Mesh transform
-    if (this.volumeMesh) {
-      const r = config.rotation;
-      this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-      this.volumeMesh.position.set(config.position.x, config.position.y, config.position.z);
-      this.volumeMesh.updateMatrixWorld(true);
-    }
-
-    // Recompute scale + axis remap
     if (this.material) {
       const scale = this.computeVolumeScale();
       this.volumeScale = scale;
@@ -222,9 +217,6 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-      this.material.uniforms.uDataMapping.value.copy(
-        buildDataMappingMatrix(config.dataMapping, config.flipData),
-      );
     }
 
     // Scene helpers
@@ -300,15 +292,6 @@ export class VolumeRenderer {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
-    console.log('[VolumeRenderer] uploadVolume:', {
-      dims: dimensions,
-      extent,
-      dataLen: data.length,
-      byteOffset: data.byteOffset,
-      expectedLen: dimensions[0] * dimensions[1] * dimensions[2],
-      meshCreated: this.meshCreated,
-    });
-
     const dimsChanged =
       this.dimensions[0] !== dimensions[0] ||
       this.dimensions[1] !== dimensions[1] ||
@@ -326,7 +309,6 @@ export class VolumeRenderer {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
-    console.log('[VolumeRenderer] creating Data3DTexture:', dimX, 'x', dimY, 'x', dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -337,15 +319,13 @@ export class VolumeRenderer {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
-    // If mesh exists and dimensions/extent haven't changed, just update the texture
+    // Fast path: only update texture if mesh already exists with same dims/extent
     // (prevents camera reset during Mode A temporal playback)
     if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
-      console.log('[VolumeRenderer] updating existing texture only');
       this.material.uniforms.uVolume.value = this.volumeTexture;
       return;
     }
 
-    console.log('[VolumeRenderer] creating new mesh (dimsChanged:', dimsChanged, 'extentChanged:', extentChanged, ')');
     this.createVolumeMesh();
   }
 
@@ -365,9 +345,7 @@ export class VolumeRenderer {
 
     const scale = this.computeVolumeScale();
     this.volumeScale = scale;
-
     const halfScale = scale.clone().multiplyScalar(0.5);
-    console.log('[VolumeRenderer] createVolumeMesh — scale:', scale.toArray(), 'halfScale:', halfScale.toArray(), 'extent:', this.extent, 'dims:', this.dimensions);
 
     const geometry = new THREE.BoxGeometry(2, 2, 2);
 
@@ -382,7 +360,7 @@ export class VolumeRenderer {
         uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
-        uDataMapping: { value: buildDataMappingMatrix(this.calibration.dataMapping, this.calibration.flipData) },
+        uDataMapping: { value: this.dataMappingMatrix },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -400,23 +378,18 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
-
-    // Calibrated orientation
-    const r = this.calibration.rotation;
-    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
-    const p = this.calibration.position;
-    this.volumeMesh.position.set(p.x, p.y, p.z);
-
+    // No rotation — dataMapping + flipData handle orientation entirely
     this.scene.add(this.volumeMesh);
     this.volumeMesh.updateMatrixWorld(true);
 
-    // Set camera on first mesh creation only (preserve user rotation during playback)
+    // Set camera on first mesh creation only (preserve user orbit during playback)
     if (!this.meshCreated) {
       this.setCameraPreset(this.currentPreset);
       this.meshCreated = true;
     }
-    console.log('[VolumeRenderer] mesh added to scene, camera pos:', this.camera.position.toArray(), 'meshCreated:', this.meshCreated);
   }
+
+  // ─── Shaders ────────────────────────────────────────────────────────────
 
   private buildVertexShader(): string {
     return `precision highp float;
@@ -514,7 +487,7 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Remap box UVW → texture UVW (permutation + flip, box shape untouched)
+      // Remap box UVW → texture UVW via dataMapping (permutation + flip)
       vec3 texCoord = uDataMapping * (uvw - 0.5) + 0.5;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
@@ -620,15 +593,6 @@ void main() {
       const camLocal = this.camera.position.clone();
       this.volumeMesh.worldToLocal(camLocal);
       this.material.uniforms.uCameraPos.value.copy(camLocal);
-
-      if (this._frameLogCount < 3) {
-        this._frameLogCount++;
-        const gl = this.renderer.getContext();
-        const err = gl.getError();
-        console.log('[VolumeRenderer] frame', this._frameLogCount, '— camLocal:', camLocal.toArray().map(v => +v.toFixed(3)),
-          'canvas:', this.renderer.domElement.width, 'x', this.renderer.domElement.height,
-          'glError:', err, 'programInfo:', this.renderer.info.programs?.length ?? 0, 'programs');
-      }
     }
 
     this.renderer.render(this.scene, this.camera);

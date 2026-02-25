@@ -2,16 +2,19 @@
  * ECHOS — Calibration Panel (hidden dev tool)
  *
  * Activated by pressing "b" 5 times in the volume viewer.
- * Provides real-time sliders for all calibration parameters.
+ * Provides real-time sliders for scale, camera, and scene tuning.
  * Ctrl+S saves to localStorage + downloads JSON.
+ *
+ * Note: dataMapping and flipData are now baked into the engine.
+ * This panel only exposes scale, camera, and scene parameters.
  */
 
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
-import type { CalibrationConfig, DataDim } from '../engine/volume-renderer.js';
+import type { CalibrationConfig } from '../engine/volume-renderer.js';
 import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 
-const STORAGE_KEY = 'echos-calibration-v2';
+const STORAGE_KEY = 'echos-calibration-v3';
 
 interface CalibrationPanelProps {
   config: CalibrationConfig;
@@ -78,45 +81,6 @@ function Row({
   );
 }
 
-// ─── Data dimension dropdown ─────────────────────────────────────────────────
-
-function DataDimSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: DataDim;
-  onChange: (v: DataDim) => void;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
-      <span style={{ width: '48px', fontSize: '10px', color: colors.text3, flexShrink: 0 }}>
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as DataDim)}
-        style={{
-          flex: 1,
-          fontSize: '10px',
-          fontFamily: 'monospace',
-          background: 'rgba(255,255,255,0.05)',
-          border: `1px solid ${colors.border}`,
-          borderRadius: '4px',
-          color: colors.text1,
-          padding: '2px 4px',
-          cursor: 'pointer',
-        }}
-      >
-        <option value="lateral">Lateral</option>
-        <option value="track">Track</option>
-        <option value="depth">Depth</option>
-      </select>
-    </div>
-  );
-}
-
 // ─── Section header ─────────────────────────────────────────────────────────
 
 function Section({ title }: { title: string }) {
@@ -159,7 +123,7 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
   const handleCopyJSON = useCallback(() => {
     const json = JSON.stringify(
       {
-        _version: 'echos-calibration-v2',
+        _version: 'echos-calibration-v3',
         _timestamp: new Date().toISOString(),
         ...config,
       },
@@ -220,49 +184,14 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       </div>
 
       <div style={{ fontSize: '9px', color: colors.text3, marginBottom: '4px' }}>
-        b x5 toggle | Ctrl+S save
+        b x5 toggle | Ctrl+S save | dataMapping baked: X=track Y=depth Z=lateral
       </div>
 
-      {/* Position */}
-      <Section title="Position" />
-      <Row label="X" value={config.position.x} min={-2} max={2} step={0.01} onChange={(v) => update('position.x', v)} />
-      <Row label="Y" value={config.position.y} min={-2} max={2} step={0.01} onChange={(v) => update('position.y', v)} />
-      <Row label="Z" value={config.position.z} min={-2} max={2} step={0.01} onChange={(v) => update('position.z', v)} />
-
-      {/* Rotation */}
-      <Section title="Rotation" />
-      <Row label="Rx" value={config.rotation.x} min={0} max={360} step={1} onChange={(v) => update('rotation.x', v)} />
-      <Row label="Ry" value={config.rotation.y} min={0} max={360} step={1} onChange={(v) => update('rotation.y', v)} />
-      <Row label="Rz" value={config.rotation.z} min={0} max={360} step={1} onChange={(v) => update('rotation.z', v)} />
-
-      {/* Scale (box shape only — never affected by data mapping) */}
+      {/* Scale (box shape) */}
       <Section title="Scale (box shape)" />
       <Row label="Sx" value={config.scale.x} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.x', v)} />
       <Row label="Sy" value={config.scale.y} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.y', v)} />
       <Row label="Sz" value={config.scale.z} min={0.1} max={5} step={0.01} onChange={(v) => update('scale.z', v)} />
-
-      {/* Data Mapping — which data appears on each box axis (box shape stays fixed) */}
-      <Section title="Data Mapping (shader only)" />
-      <DataDimSelect label="Box X" value={config.dataMapping?.x ?? 'lateral'} onChange={(v) => update('dataMapping.x', v)} />
-      <DataDimSelect label="Box Y" value={config.dataMapping?.y ?? 'track'} onChange={(v) => update('dataMapping.y', v)} />
-      <DataDimSelect label="Box Z" value={config.dataMapping?.z ?? 'depth'} onChange={(v) => update('dataMapping.z', v)} />
-
-      {/* Flip Data */}
-      {(['x', 'y', 'z'] as const).map((axis) => (
-        <label key={axis} style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px', fontSize: '10px', color: colors.text3, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={config.flipData?.[axis] ?? false}
-            onChange={(e) => {
-              const next = JSON.parse(JSON.stringify(config)) as CalibrationConfig;
-              next.flipData = { ...DEFAULT_CALIBRATION.flipData, ...next.flipData, [axis]: e.target.checked };
-              onChange(next);
-            }}
-            style={{ width: '12px', height: '12px' }}
-          />
-          Flip {axis.toUpperCase()}
-        </label>
-      ))}
 
       {/* Camera */}
       <Section title="Camera" />
@@ -329,11 +258,7 @@ export function loadCalibration(): CalibrationConfig | null {
     return {
       ...DEFAULT_CALIBRATION,
       ...saved,
-      position: { ...DEFAULT_CALIBRATION.position, ...saved.position },
-      rotation: { ...DEFAULT_CALIBRATION.rotation, ...saved.rotation },
       scale: { ...DEFAULT_CALIBRATION.scale, ...saved.scale },
-      dataMapping: { ...DEFAULT_CALIBRATION.dataMapping, ...saved.dataMapping },
-      flipData: { ...DEFAULT_CALIBRATION.flipData, ...saved.flipData },
       camera: { ...DEFAULT_CALIBRATION.camera, ...saved.camera },
     };
   } catch {
@@ -350,7 +275,7 @@ export function saveCalibration(config: CalibrationConfig): void {
 export function downloadCalibration(config: CalibrationConfig): void {
   const json = JSON.stringify(
     {
-      _version: 'echos-calibration-v2',
+      _version: 'echos-calibration-v3',
       _timestamp: new Date().toISOString(),
       ...config,
     },
