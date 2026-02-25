@@ -207,6 +207,7 @@ export class VolumeRenderer {
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
       this.material.uniforms.uAxisRemap.value.copy(buildAxisRemapMatrix(config.axisMapping));
+      this.material.uniforms.uBeamAxisInverse.value.copy(this.buildBeamAxisInverseMatrix());
     }
 
     // Scene helpers
@@ -268,6 +269,19 @@ export class VolumeRenderer {
     this.volumeMesh.quaternion.multiplyQuaternions(beamQ, userQ);
     this.volumeMesh.position.set(p.x, p.y, p.z);
     this.volumeMesh.updateMatrixWorld(true);
+  }
+
+  /**
+   * Build mat3 that INVERTS the beamAxis rotation in the shader.
+   * Applied to uvw coordinates before texture sampling so data reading
+   * stays in the original orientation even when the mesh is rotated.
+   */
+  private buildBeamAxisInverseMatrix(): THREE.Matrix3 {
+    const beamQ = this.getBeamAxisRotation();
+    beamQ.invert(); // inverse of the mesh rotation
+    const mat4 = new THREE.Matrix4().makeRotationFromQuaternion(beamQ);
+    const mat3 = new THREE.Matrix3().setFromMatrix4(mat4);
+    return mat3;
   }
 
   getCalibration(): CalibrationConfig {
@@ -399,6 +413,7 @@ export class VolumeRenderer {
         uVolumeMax: { value: halfScale.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
         uAxisRemap: { value: buildAxisRemapMatrix(this.calibration.axisMapping) },
+        uBeamAxisInverse: { value: this.buildBeamAxisInverseMatrix() },
         volumeScale: { value: scale },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
@@ -460,6 +475,7 @@ uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
 uniform mat3 uAxisRemap;
+uniform mat3 uBeamAxisInverse;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -525,8 +541,12 @@ void main() {
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
+      // Counter-rotate uvw around box center to undo beamAxis mesh rotation
+      // This keeps data reading stable when only the cone orientation changes
+      vec3 uvw_corrected = uBeamAxisInverse * (uvw - 0.5) + 0.5;
+
       // Remap box space → texture space via calibrated permutation matrix
-      vec3 texCoord = uAxisRemap * uvw;
+      vec3 texCoord = uAxisRemap * uvw_corrected;
       float rawVal = sampleVolume(texCoord);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
