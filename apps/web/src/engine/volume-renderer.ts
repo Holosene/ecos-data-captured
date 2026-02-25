@@ -140,6 +140,8 @@ export class VolumeRenderer {
     this.createVolumeMesh();
   }
 
+  private meshCreated = false;
+
   private createVolumeMesh(): void {
     if (this.volumeMesh) {
       this.scene.remove(this.volumeMesh);
@@ -189,14 +191,17 @@ export class VolumeRenderer {
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
     this.scene.add(this.volumeMesh);
 
-    // Auto-fit camera
-    this.camera.position.set(
-      scale.x * 2,
-      scale.y * 1.2,
-      scale.z * 2,
-    );
-    this.controls.target.set(0, 0, 0);
-    this.controls.update();
+    // Auto-fit camera only on first mesh creation (don't reset during playback)
+    if (!this.meshCreated) {
+      this.meshCreated = true;
+      this.camera.position.set(
+        scale.x * 2,
+        scale.y * 1.2,
+        scale.z * 2,
+      );
+      this.controls.target.set(0, 0, 0);
+      this.controls.update();
+    }
   }
 
   private buildVertexShader(): string {
