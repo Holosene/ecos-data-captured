@@ -8,7 +8,7 @@
  *   - Rendering controls (opacity, threshold, density, etc.)
  *   - Adaptive threshold (auto percentile-based)
  *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=lateral, Y=track, Z=depth)
+ *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=track, Y=lateral, Z=depth)
  *   - Export panel (NRRD, PNG, CSV)
  */
 
