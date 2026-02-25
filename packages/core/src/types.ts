@@ -61,6 +61,10 @@ export interface SyncSettings {
   videoStartEpochMs: number;
   /** Video end time (epoch ms) */
   videoEndEpochMs: number;
+  /** Trim seconds from the start of recording */
+  trimStartS: number;
+  /** Trim seconds from the end of recording */
+  trimEndS: number;
 }
 
 // ─── Frame ──────────────────────────────────────────────────────────────────
