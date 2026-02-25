@@ -15,7 +15,7 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
+import { VolumeRenderer } from '../engine/volume-renderer.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
@@ -120,7 +120,7 @@ export function VolumeViewer({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderer = new VolumeRenderer(containerRef.current, settings, DEFAULT_CALIBRATION);
+    const renderer = new VolumeRenderer(containerRef.current, settings);
     rendererRef.current = renderer;
 
     return () => {
@@ -130,16 +130,18 @@ export function VolumeViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Upload static volume data (Mode B or non-temporal Mode A)
+  // Upload static volume data — ALWAYS, like ff97375.
+  // buildInstrumentVolume (pipeline-worker) produces the correct extents.
+  // Temporal playback will update the texture via the fast path afterwards.
   useEffect(() => {
-    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
+    if (!rendererRef.current || !volumeData || volumeData.length === 0) return;
     rendererRef.current.uploadVolume(volumeData, dimensions, extent);
 
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
       updateSetting('threshold', threshold);
     }
-  }, [volumeData, dimensions, extent, isTemporalMode]);
+  }, [volumeData, dimensions, extent]);
 
   // Set slice data: use full-frame volume (v1-style stacking) when frames are
   // available (both Mode A and Mode B), fall back to projected volume otherwise.

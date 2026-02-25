@@ -18,7 +18,7 @@ import { preprocessFrame } from '@echos/core';
 import {
   createEmptyVolume,
   projectFramesSpatial,
-  projectFrameWindow,
+  buildInstrumentVolume,
   normalizeVolume,
 } from '@echos/core';
 import type {
@@ -110,12 +110,13 @@ self.onmessage = (e: MessageEvent) => {
         dims = volume.dimensions;
         ext = volume.extent;
       } else {
-        // ── Mode A: project all frames into one static conic volume ──
-        // Used for .echos-vol export and as fallback for non-temporal viewing.
-        // Live playback still uses per-window projection in VolumeViewer.
+        // ── Mode A: buildInstrumentVolume — same as ff97375 ScanPage ──
+        // All frames stacked along Y axis with extentY = depthMaxM * 1.5.
+        // This is the exact pipeline that ff97375 used for correct axis reading.
         self.postMessage({ type: 'stage', stage: 'projecting' });
-        const center = Math.floor(frames.length / 2);
-        const result = projectFrameWindow(frames, center, frames.length, beam, grid);
+        const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
+          self.postMessage({ type: 'projection-progress', current, total });
+        });
         normalizedData = result.normalized;
         dims = result.dimensions;
         ext = result.extent;
