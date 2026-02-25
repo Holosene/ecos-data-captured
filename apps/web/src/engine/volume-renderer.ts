@@ -26,7 +26,11 @@ export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number }; // degrees
   scale: { x: number; y: number; z: number };
-  beamAxis: 'x' | 'y' | 'z';
+  axisMapping: {
+    lateral: 'x' | 'y' | 'z';
+    depth: 'x' | 'y' | 'z';
+    track: 'x' | 'y' | 'z';
+  };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -35,10 +39,10 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
-  scale: { x: 3, y: 1, z: 1 },
-  beamAxis: 'z',
-  camera: { dist: 1.6, fov: 40 },
+  rotation: { x: 180, y: 180, z: 90 },
+  scale: { x: 1, y: 2, z: 1 },
+  axisMapping: { lateral: 'x', depth: 'y', track: 'z' },
+  camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
   bgColor: '#111111',
@@ -157,14 +161,14 @@ export class VolumeRenderer {
   // ─── Calibration ──────────────────────────────────────────────────────
 
   /** Compute volume scale from extent + calibration stretch.
-   *  extent = [lateral, track, depth] → direct mapping to Box [X, Y, Z]. */
+   *  extent = [lateral, depth, track] → direct mapping to Box [X, Y, Z]. */
   private computeVolumeScale(): THREE.Vector3 {
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
     return new THREE.Vector3(
       (this.extent[0] / maxExtent) * cal.scale.x,  // lateral → X
-      (this.extent[1] / maxExtent) * cal.scale.y,  // track   → Y
-      (this.extent[2] / maxExtent) * cal.scale.z,  // depth   → Z
+      (this.extent[1] / maxExtent) * cal.scale.y,  // depth   → Y
+      (this.extent[2] / maxExtent) * cal.scale.z,  // track   → Z
     );
   }
 
@@ -172,7 +176,7 @@ export class VolumeRenderer {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Mesh transform (user rotation + beamAxis redirect)
+    // Mesh transform
     this.applyMeshTransform();
 
     // Recompute scale + axis remap
@@ -204,44 +208,13 @@ export class VolumeRenderer {
     }
   }
 
-  /**
-   * Get additional rotation quaternion to redirect the data cone from its default
-   * orientation (-Y) to the target beamAxis direction.
-   */
-  private getBeamAxisRotation(): THREE.Quaternion {
-    const q = new THREE.Quaternion();
-    switch (this.calibration.beamAxis) {
-      case 'x':
-        // Rotate cone from -Y to -X: -90° around Z
-        q.setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2));
-        break;
-      case 'z':
-        // Rotate cone from -Y to -Z: +90° around X
-        q.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
-        break;
-      case 'y':
-      default:
-        // No additional rotation — cone already points -Y
-        break;
-    }
-    return q;
-  }
-
-  /** Apply combined mesh rotation: user calibration rotation + beamAxis redirect */
+  /** Apply mesh transform from calibration rotation */
   private applyMeshTransform(): void {
     if (!this.volumeMesh) return;
     const r = this.calibration.rotation;
     const p = this.calibration.position;
 
-    // User's manual rotation
-    const userQ = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD),
-    );
-    // Beam axis redirect (applied after user rotation)
-    const beamQ = this.getBeamAxisRotation();
-
-    // Final = beamQ * userQ (apply user rotation first, then redirect cone axis)
-    this.volumeMesh.quaternion.multiplyQuaternions(beamQ, userQ);
+    this.volumeMesh.rotation.set(r.x * DEG2RAD, r.y * DEG2RAD, r.z * DEG2RAD);
     this.volumeMesh.position.set(p.x, p.y, p.z);
     this.volumeMesh.updateMatrixWorld(true);
   }
@@ -322,6 +295,8 @@ export class VolumeRenderer {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
+    console.log('[ECHOS] uploadVolume — dimX (lateral):', dimX, 'dimY (depth):', dimY, 'dimZ (track):', dimZ);
+    console.log('[ECHOS] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -358,6 +333,7 @@ export class VolumeRenderer {
 
     const scale = this.computeVolumeScale();
     this.volumeScale = scale;
+    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(depth):', scale.y, 'Z(track):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 
@@ -392,7 +368,7 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Calibrated orientation (user rotation + beamAxis redirect)
+    // Calibrated orientation
     this.applyMeshTransform();
 
     this.scene.add(this.volumeMesh);

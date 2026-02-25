@@ -243,9 +243,11 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Sy" value={config.scale.y} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.y', v)} />
       <Row label="Sz" value={config.scale.z} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.z', v)} />
 
-      {/* Cone orientation */}
-      <Section title="Cone" />
-      <AxisSelect label="Cone axis" value={config.beamAxis} onChange={(v) => update('beamAxis', v)} />
+      {/* Axis Mapping */}
+      <Section title="Axis Mapping" />
+      <AxisSelect label="Lateral" value={config.axisMapping.lateral} onChange={(v) => update('axisMapping.lateral', v)} />
+      <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
+      <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
       {/* Camera */}
       <Section title="Camera" />
