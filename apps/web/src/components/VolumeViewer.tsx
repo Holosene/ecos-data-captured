@@ -1,18 +1,17 @@
 /**
- * ECHOS V2 — Volume Viewer Component (Multi-mode)
+ * ECHOS V2 — Volume Viewer Component (Redesigned)
  *
- * Displays all 3 render modes simultaneously:
+ * Marketing-style presentation of 3 render modes:
  *   - Cône (Instrument): static stacked cone volume
- *   - Trace (Spatial): GPS-mapped spatial volume with temporal playback
+ *   - Trace (Spatial): spatial volume (GPS or synthetic distance)
  *   - Projection (Classic): windowed conic projection with temporal playback
  *
- * Layout:
- *   - 3 viewports side by side
- *   - Mini-map overlay (top-left) showing GPS trace
- *   - Grid/axes only in "manipulation" mode (toggle button)
+ * Design principles:
+ *   - Volumes presented as clean, borderless 3D elements
+ *   - Controls hidden by default — "Éditer" button reveals per-volume settings
+ *   - Grid/axes only visible in edit mode
+ *   - Leaflet-based interactive map for GPS visualization
  *   - Calibration panel via "bbbbb" shortcut
- *   - Shared controls panel on the right
- *   - Poster button at bottom
  */
 
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
@@ -29,13 +28,15 @@ import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
 import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface VolumeViewerProps {
   /** Mode A (Instrument) data — always present */
   volumeData: Float32Array | null;
   dimensions: [number, number, number];
   extent: [number, number, number];
-  /** Mode B (Spatial) data — null when no GPS */
+  /** Mode B (Spatial) data — always present */
   spatialData?: Float32Array | null;
   spatialDimensions?: [number, number, number];
   spatialExtent?: [number, number, number];
@@ -43,7 +44,7 @@ interface VolumeViewerProps {
   frames?: PreprocessedFrame[];
   beam?: BeamSettings;
   grid?: VolumeGridSettings;
-  /** GPX track for mini-map */
+  /** GPX track for map */
   gpxTrack?: { points: Array<{ lat: number; lon: number }>; totalDistanceM: number; durationS: number };
   onSettingsChange?: (settings: RendererSettings) => void;
   onReconfigure?: () => void;
@@ -75,38 +76,7 @@ function buildSliceVolumeFromFrames(
   return { data, dimensions: [dimX, dimY, dimZ] };
 }
 
-// ─── Rendu B: windowed volume for temporal playback ────────────────────────
-function buildWindowVolume(
-  allFrames: PreprocessedFrame[],
-  centerIndex: number,
-  windowSize: number,
-): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
-  const half = Math.floor(windowSize / 2);
-  const start = Math.max(0, centerIndex - half);
-  const end = Math.min(allFrames.length, start + windowSize);
-  const windowFrames = allFrames.slice(start, end);
-  if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
-    return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
-  }
-  const dimX = windowFrames[0].width;
-  const dimY = windowFrames.length;
-  const dimZ = windowFrames[0].height;
-  const data = new Float32Array(dimX * dimY * dimZ);
-  for (let yi = 0; yi < dimY; yi++) {
-    const frame = windowFrames[yi];
-    for (let zi = 0; zi < dimZ; zi++) {
-      for (let xi = 0; xi < dimX; xi++) {
-        const srcIdx = zi * dimX + xi;
-        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
-        data[dstIdx] = frame.intensity[srcIdx] ?? 0;
-      }
-    }
-  }
-  const aspect = dimX / dimZ;
-  return { normalized: data, dimensions: [dimX, dimY, dimZ], extent: [aspect, 0.5, 1] };
-}
-
-// ─── SVG View Icons ──────────────────────────────────────────────────────
+// ─── SVG Icons ──────────────────────────────────────────────────────────
 const IconFrontal = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="12" height="12" rx="1" />
@@ -133,6 +103,17 @@ const IconFree = () => (
     <path d="M8 9L8 12" opacity="0.4" />
   </svg>
 );
+const IconEdit = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+const IconClose = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
 
 const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] = [
   { key: 'frontal', labelKey: 'v2.camera.frontal', Icon: IconFrontal },
@@ -141,70 +122,250 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
   { key: 'free', labelKey: 'v2.camera.free', Icon: IconFree },
 ];
 
-// Mode definitions — short names based on rendering method
+// Mode definitions — clean labels, no color coding
 const MODE_DEFS = [
-  { key: 'instrument' as const, label: 'Cône', desc: 'Empilement statique', color: '#4488ff' },
-  { key: 'spatial' as const, label: 'Trace', desc: 'Déroulé GPS', color: '#ff8844' },
-  { key: 'classic' as const, label: 'Projection', desc: 'Fenêtre temporelle', color: '#22cc88' },
+  { key: 'instrument' as const, label: 'Cône', desc: 'Empilement statique' },
+  { key: 'spatial' as const, label: 'Trace', desc: 'Déroulé spatial' },
+  { key: 'classic' as const, label: 'Projection', desc: 'Fenêtre temporelle' },
 ] as const;
 
-// ─── Mini-map component (canvas-based GPS trace) ─────────────────────────
-function MiniMap({ points, size = 120 }: { points: Array<{ lat: number; lon: number }>; size?: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+// ─── Leaflet Map component ─────────────────────────────────────────────────
+function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>; theme: string }) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || points.length < 2) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+    if (points.length < 2) return;
 
-    const pad = 12;
-    const lats = points.map((p) => p.lat);
-    const lons = points.map((p) => p.lon);
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
-    const dLat = maxLat - minLat || 0.001;
-    const dLon = maxLon - minLon || 0.001;
-    const scale = Math.min((size - pad * 2) / dLon, (size - pad * 2) / dLat);
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: false,
+      attributionControl: false,
+      scrollWheelZoom: false,
+    });
 
-    ctx.clearRect(0, 0, size, size);
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, size, size);
+    L.control.zoom({ position: 'topright' }).addTo(map);
 
-    ctx.beginPath();
-    ctx.strokeStyle = '#4488ff';
-    ctx.lineWidth = 2;
-    ctx.lineJoin = 'round';
-    for (let i = 0; i < points.length; i++) {
-      const x = pad + (points[i].lon - minLon) * scale;
-      const y = pad + (maxLat - points[i].lat) * scale;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
 
-    // Start/end markers
-    const sx = pad + (points[0].lon - minLon) * scale;
-    const sy = pad + (maxLat - points[0].lat) * scale;
-    ctx.fillStyle = '#34D399';
-    ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
+    const latLngs = points.map((p) => L.latLng(p.lat, p.lon));
+    const polyline = L.polyline(latLngs, {
+      color: colors.accent,
+      weight: 3,
+      opacity: 0.8,
+      smoothFactor: 1.5,
+    }).addTo(map);
 
-    const ex = pad + (points[points.length - 1].lon - minLon) * scale;
-    const ey = pad + (maxLat - points[points.length - 1].lat) * scale;
-    ctx.fillStyle = '#F87171';
-    ctx.beginPath(); ctx.arc(ex, ey, 3, 0, Math.PI * 2); ctx.fill();
-  }, [points, size]);
+    // Start marker
+    L.circleMarker(latLngs[0], {
+      radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
+    }).addTo(map);
+
+    // End marker
+    L.circleMarker(latLngs[latLngs.length - 1], {
+      radius: 5, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 0,
+    }).addTo(map);
+
+    map.fitBounds(polyline.getBounds(), { padding: [30, 30], maxZoom: 16 });
+
+    map.on('click', () => map.scrollWheelZoom.enable());
+    map.on('mouseout', () => map.scrollWheelZoom.disable());
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [points, theme]);
+
+  // Swap tiles on theme change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.eachLayer((layer) => {
+      if (layer instanceof L.TileLayer) layer.remove();
+    });
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+  }, [theme]);
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={size}
-      height={size}
-      style={{ borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)' }}
+    <div
+      ref={mapContainerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        borderRadius: '16px',
+        overflow: 'hidden',
+      }}
     />
   );
 }
 
+// ─── Edit controls panel (floating overlay) ─────────────────────────────
+function EditPanel({
+  settings,
+  cameraPreset,
+  autoThreshold,
+  activeMode,
+  showGhostSlider,
+  showBeamToggle,
+  showSpeedSlider,
+  playSpeed,
+  chromaticModes,
+  lang,
+  t,
+  onUpdateSetting,
+  onCameraPreset,
+  onAutoThreshold,
+  onPlaySpeed,
+  onClose,
+}: {
+  settings: RendererSettings;
+  cameraPreset: CameraPreset;
+  autoThreshold: boolean;
+  activeMode: string;
+  showGhostSlider: boolean;
+  showBeamToggle: boolean;
+  showSpeedSlider: boolean;
+  playSpeed: number;
+  chromaticModes: ChromaticMode[];
+  lang: string;
+  t: (key: any) => string;
+  onUpdateSetting: (key: keyof RendererSettings, value: number | boolean | string) => void;
+  onCameraPreset: (preset: CameraPreset) => void;
+  onAutoThreshold: (enabled: boolean) => void;
+  onPlaySpeed: (speed: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: '320px',
+      zIndex: 20,
+      display: 'flex',
+      flexDirection: 'column',
+      animation: 'echos-fade-in 200ms ease',
+    }}>
+      <GlassPanel style={{
+        padding: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        flex: 1,
+        overflowY: 'auto',
+        borderRadius: '0 16px 16px 0',
+        backdropFilter: 'blur(24px)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+            {t('v2.controls.title')}
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              width: '28px', height: '28px', borderRadius: '8px',
+              border: `1px solid ${colors.border}`, background: colors.surface,
+              color: colors.text2, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <IconClose />
+          </button>
+        </div>
+
+        {/* Camera presets */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {CAMERA_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => onCameraPreset(p.key)}
+              title={t(p.labelKey as TranslationKey)}
+              style={{
+                width: '30px', height: '30px', borderRadius: '8px',
+                border: `1px solid ${cameraPreset === p.key ? colors.accent : colors.border}`,
+                background: cameraPreset === p.key ? colors.accentMuted : colors.surface,
+                color: cameraPreset === p.key ? colors.accent : colors.text3,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 150ms ease',
+              }}
+            >
+              <p.Icon />
+            </button>
+          ))}
+        </div>
+
+        {/* Chromatic mode */}
+        <div>
+          <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+            {t('v2.controls.palette')}
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {chromaticModes.map((m: ChromaticMode) => (
+              <button
+                key={m}
+                onClick={() => onUpdateSetting('chromaticMode', m)}
+                style={{
+                  padding: '5px 10px', borderRadius: '16px',
+                  border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                  background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                  color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                  fontSize: '11px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Sliders */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+          <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+              <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAutoThreshold(e.target.checked)} style={{ width: '12px', height: '12px' }} />
+                {t('v2.controls.auto')}
+              </label>
+            </div>
+            <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { onAutoThreshold(false); onUpdateSetting('threshold', v); }} />
+          </div>
+          <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('densityScale', v)} />
+          <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => onUpdateSetting('smoothing', v)} />
+          <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => onUpdateSetting('stepCount', v)} />
+          {showGhostSlider && (
+            <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => onUpdateSetting('ghostEnhancement', v)} />
+          )}
+        </div>
+
+        {showBeamToggle && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+            <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onUpdateSetting('showBeam', e.target.checked)} />
+            {t('v2.controls.showBeam')}
+          </label>
+        )}
+
+        {showSpeedSlider && (
+          <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        )}
+      </GlassPanel>
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 export function VolumeViewer({
   volumeData,
   dimensions,
@@ -230,13 +391,10 @@ export function VolumeViewer({
   const rendererBRef = useRef<VolumeRenderer | null>(null);
   const rendererCRef = useRef<VolumeRendererClassic | null>(null);
 
-  // Active viewport for controls
-  const [activeMode, setActiveMode] = useState<'instrument' | 'spatial' | 'classic'>('instrument');
+  // Edit mode: which volume is currently being edited (null = none)
+  const [editingMode, setEditingMode] = useState<'instrument' | 'spatial' | 'classic' | null>(null);
 
-  // Manipulation mode (grid/axes visible)
-  const [manipulationMode, setManipulationMode] = useState(false);
-
-  // Settings
+  // Settings (per-mode settings could be stored separately, but for simplicity we use one shared state)
   const [settings, setSettings] = useState<RendererSettings>(() => ({
     ...DEFAULT_RENDERER,
     showBeam: true,
@@ -261,9 +419,10 @@ export function VolumeViewer({
   useEffect(() => {
     const ORBIT_SPEED = 0.05;
     const handleKey = (e: KeyboardEvent) => {
-      const activeRenderer = activeMode === 'instrument' ? rendererARef.current
-        : activeMode === 'spatial' ? rendererBRef.current
-        : rendererCRef.current;
+      const activeRenderer = editingMode === 'instrument' ? rendererARef.current
+        : editingMode === 'spatial' ? rendererBRef.current
+        : editingMode === 'classic' ? rendererCRef.current
+        : null;
 
       if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && activeRenderer) {
         e.preventDefault();
@@ -296,15 +455,18 @@ export function VolumeViewer({
         }
       }
 
-      if (e.key === 'Escape' && calibrationOpen) setCalibrationOpen(false);
+      if (e.key === 'Escape') {
+        if (calibrationOpen) setCalibrationOpen(false);
+        else if (editingMode) setEditingMode(null);
+      }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration, activeMode]);
+  }, [calibrationOpen, calibration, editingMode]);
 
   // Theme sync
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#fafafa' : '#111111';
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
     [rendererARef, rendererBRef, rendererCRef].forEach((ref) => {
       if (ref.current) {
         const cal = ref.current === rendererARef.current ? { ...DEFAULT_CALIBRATION, bgColor }
@@ -341,18 +503,20 @@ export function VolumeViewer({
 
   // ─── Initialize 3 renderers ─────────────────────────────────────────
   useEffect(() => {
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+
     // Mode A — Instrument (always)
     if (containerARef.current && !rendererARef.current) {
       const settingsA = { ...settings, showBeam: true, ghostEnhancement: 0 };
-      rendererARef.current = new VolumeRenderer(containerARef.current, settingsA, { ...DEFAULT_CALIBRATION });
+      rendererARef.current = new VolumeRenderer(containerARef.current, settingsA, { ...DEFAULT_CALIBRATION, bgColor });
       rendererARef.current.setCameraPreset('frontal');
       rendererARef.current.setGridAxesVisible(false);
     }
 
-    // Mode B — Spatial (only if data)
+    // Mode B — Spatial (always, no longer GPS-gated)
     if (containerBRef.current && !rendererBRef.current && hasSpatial) {
       const settingsB = { ...settings, chromaticMode: 'high-contrast' as ChromaticMode, ghostEnhancement: 3.0, showBeam: false };
-      rendererBRef.current = new VolumeRenderer(containerBRef.current, settingsB, { ...DEFAULT_CALIBRATION_B });
+      rendererBRef.current = new VolumeRenderer(containerBRef.current, settingsB, { ...DEFAULT_CALIBRATION_B, bgColor });
       rendererBRef.current.setCameraPreset('horizontal');
       rendererBRef.current.setGridAxesVisible(false);
     }
@@ -360,7 +524,7 @@ export function VolumeViewer({
     // Mode C — Classic (only if frames)
     if (containerCRef.current && !rendererCRef.current && hasFrames) {
       const settingsC = { ...settings, chromaticMode: 'sonar-original' as ChromaticMode, ghostEnhancement: 0, showBeam: false, stepCount: 512 };
-      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, settingsC, { ...DEFAULT_CALIBRATION_C });
+      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, settingsC, { ...DEFAULT_CALIBRATION_C, bgColor });
       rendererCRef.current.setCameraPreset('frontal');
       rendererCRef.current.setGridAxesVisible(false);
     }
@@ -373,12 +537,12 @@ export function VolumeViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasSpatial, hasFrames]);
 
-  // Toggle grid/axes visibility based on manipulation mode
+  // Toggle grid/axes visibility based on edit mode
   useEffect(() => {
-    rendererARef.current?.setGridAxesVisible(manipulationMode);
-    rendererBRef.current?.setGridAxesVisible(manipulationMode);
-    rendererCRef.current?.setGridAxesVisible(manipulationMode);
-  }, [manipulationMode]);
+    rendererARef.current?.setGridAxesVisible(editingMode === 'instrument');
+    rendererBRef.current?.setGridAxesVisible(editingMode === 'spatial');
+    rendererCRef.current?.setGridAxesVisible(editingMode === 'classic');
+  }, [editingMode]);
 
   // Upload beam wireframe
   useEffect(() => {
@@ -469,28 +633,27 @@ export function VolumeViewer({
     return () => cancelAnimationFrame(rafId);
   }, [playing, playSpeed, hasFrames, frames, currentFrame]);
 
-  // Settings
+  // Settings update
   const updateSetting = useCallback(
     (key: keyof RendererSettings, value: number | boolean | string) => {
       setSettings((prev: RendererSettings) => {
         const next = { ...prev, [key]: value };
-        // Apply to the active renderer
-        if (activeMode === 'instrument') rendererARef.current?.updateSettings({ [key]: value });
-        else if (activeMode === 'spatial') rendererBRef.current?.updateSettings({ [key]: value });
-        else rendererCRef.current?.updateSettings({ [key]: value });
+        if (editingMode === 'instrument') rendererARef.current?.updateSettings({ [key]: value });
+        else if (editingMode === 'spatial') rendererBRef.current?.updateSettings({ [key]: value });
+        else if (editingMode === 'classic') rendererCRef.current?.updateSettings({ [key]: value });
         onSettingsChange?.(next);
         return next;
       });
     },
-    [onSettingsChange, activeMode],
+    [onSettingsChange, editingMode],
   );
 
   const handleCameraPreset = useCallback((preset: CameraPreset) => {
     setCameraPreset(preset);
-    if (activeMode === 'instrument') rendererARef.current?.setCameraPreset(preset);
-    else if (activeMode === 'spatial') rendererBRef.current?.setCameraPreset(preset);
-    else rendererCRef.current?.setCameraPreset(preset);
-  }, [activeMode]);
+    if (editingMode === 'instrument') rendererARef.current?.setCameraPreset(preset);
+    else if (editingMode === 'spatial') rendererBRef.current?.setCameraPreset(preset);
+    else if (editingMode === 'classic') rendererCRef.current?.setCameraPreset(preset);
+  }, [editingMode]);
 
   const handleAutoThreshold = useCallback((enabled: boolean) => {
     setAutoThreshold(enabled);
@@ -508,287 +671,161 @@ export function VolumeViewer({
   const totalFrames = frames?.length ?? 0;
   const currentTimeS = hasFrames && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
-  // Determine which viewports to show
   const showB = hasSpatial;
   const showC = hasFrames && !!beam && !!grid;
-  const viewportCount = 1 + (showB ? 1 : 0) + (showC ? 1 : 0);
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* Main row: viewports + controls */}
-      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 160px)', minHeight: '400px' }}>
-        {/* Viewports column */}
-        <div style={{ flex: 1, display: 'flex', gap: '6px', position: 'relative' }}>
-          {/* Mini-map overlay (top-left) */}
-          {gpxTrack && gpxTrack.points.length > 1 && (
-            <div style={{
-              position: 'absolute',
-              top: '8px',
-              left: '8px',
-              zIndex: 15,
-              pointerEvents: 'none',
+  // Background that matches the page for borderless feel
+  const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+
+  // ─── Render a single volume section ─────────────────────────────────
+  const renderVolumeSection = (
+    mode: 'instrument' | 'spatial' | 'classic',
+    containerRef: React.RefObject<HTMLDivElement | null>,
+    title: string,
+    subtitle: string,
+    height: string,
+  ) => {
+    const isEditing = editingMode === mode;
+    return (
+      <section
+        key={mode}
+        style={{
+          position: 'relative',
+          marginBottom: '48px',
+        }}
+      >
+        {/* Title area */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: '16px',
+          padding: '0 4px',
+        }}>
+          <div>
+            <h2 style={{
+              margin: 0,
+              fontSize: '24px',
+              fontWeight: 700,
+              color: colors.text1,
+              letterSpacing: '-0.02em',
             }}>
-              <MiniMap points={gpxTrack.points} size={100} />
-            </div>
-          )}
-          {!gpxTrack && (
-            <div style={{
-              position: 'absolute',
-              top: '8px',
-              left: '8px',
-              zIndex: 15,
-              padding: '6px 10px',
-              borderRadius: '8px',
-              background: colors.surface,
-              border: `1px solid ${colors.border}`,
-              fontSize: '10px',
+              {title}
+            </h2>
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: '14px',
               color: colors.text3,
-              pointerEvents: 'none',
             }}>
-              Ajoutez un GPX pour la mini-map
-            </div>
-          )}
-
-          {/* Manipulation mode toggle */}
-          <div style={{
-            position: 'absolute',
-            bottom: '8px',
-            left: '8px',
-            zIndex: 15,
-          }}>
-            <button
-              onClick={() => setManipulationMode((m) => !m)}
-              style={{
-                padding: '5px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${manipulationMode ? colors.accent : colors.border}`,
-                background: manipulationMode ? colors.accentMuted : colors.surface,
-                color: manipulationMode ? colors.accent : colors.text3,
-                fontSize: '10px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              {manipulationMode ? 'Manipulation ON' : 'Manipulation'}
-            </button>
+              {subtitle}
+            </p>
           </div>
-
-          {/* Mode A viewport */}
-          <div
-            ref={containerARef}
-            onClick={() => setActiveMode('instrument')}
+          <button
+            onClick={() => setEditingMode(isEditing ? null : mode)}
             style={{
-              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
               borderRadius: '10px',
-              overflow: 'hidden',
-              border: `1px solid ${activeMode === 'instrument' ? '#4488ff50' : colors.border}`,
-              background: theme === 'light' ? '#fafafa' : '#111111',
-              position: 'relative',
+              border: `1px solid ${isEditing ? colors.accent : colors.border}`,
+              background: isEditing ? colors.accentMuted : 'transparent',
+              color: isEditing ? colors.accent : colors.text2,
+              fontSize: '13px',
+              fontWeight: 500,
               cursor: 'pointer',
-              transition: 'border-color 150ms ease',
+              transition: 'all 200ms ease',
             }}
           >
-            <div style={{
-              position: 'absolute', top: '6px', left: '6px', padding: '2px 8px',
-              borderRadius: '12px', background: 'rgba(68,136,255,0.2)', border: '1px solid rgba(68,136,255,0.4)',
-              color: '#4488ff', fontSize: '10px', fontWeight: 500, zIndex: 10, pointerEvents: 'none',
-            }}>
-              Cône
-            </div>
-          </div>
-
-          {/* Mode B viewport */}
-          {showB && (
-            <div
-              ref={containerBRef}
-              onClick={() => setActiveMode('spatial')}
-              style={{
-                flex: 1,
-                borderRadius: '10px',
-                overflow: 'hidden',
-                border: `1px solid ${activeMode === 'spatial' ? '#ff884450' : colors.border}`,
-                background: theme === 'light' ? '#fafafa' : '#111111',
-                position: 'relative',
-                cursor: 'pointer',
-                transition: 'border-color 150ms ease',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: '6px', left: '6px', padding: '2px 8px',
-                borderRadius: '12px', background: 'rgba(255,136,68,0.2)', border: '1px solid rgba(255,136,68,0.4)',
-                color: '#ff8844', fontSize: '10px', fontWeight: 500, zIndex: 10, pointerEvents: 'none',
-              }}>
-                Trace
-              </div>
-            </div>
-          )}
-
-          {/* Mode C viewport */}
-          {showC && (
-            <div
-              ref={containerCRef}
-              onClick={() => setActiveMode('classic')}
-              style={{
-                flex: 1,
-                borderRadius: '10px',
-                overflow: 'hidden',
-                border: `1px solid ${activeMode === 'classic' ? '#22cc8850' : colors.border}`,
-                background: theme === 'light' ? '#fafafa' : '#111111',
-                position: 'relative',
-                cursor: 'pointer',
-                transition: 'border-color 150ms ease',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: '6px', left: '6px', padding: '2px 8px',
-                borderRadius: '12px', background: 'rgba(34,204,136,0.2)', border: '1px solid rgba(34,204,136,0.4)',
-                color: '#22cc88', fontSize: '10px', fontWeight: 500, zIndex: 10, pointerEvents: 'none',
-              }}>
-                Projection
-              </div>
-            </div>
-          )}
+            {isEditing ? <IconClose /> : <IconEdit />}
+            {isEditing ? 'Fermer' : 'Éditer'}
+          </button>
         </div>
 
-        {/* Controls / Calibration panel */}
-        <div
-          className="echos-controls-panel"
-          style={{
-            width: '360px',
-            minWidth: '360px',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-            overflowY: 'auto',
-          }}
-        >
-          {calibrationOpen ? (
-            <CalibrationPanel
-              config={calibration}
-              onChange={handleCalibrationChange}
-              onClose={() => setCalibrationOpen(false)}
-              saved={calibrationSaved}
+        {/* Viewport — clean, borderless, blends with page */}
+        <div style={{ position: 'relative', overflow: 'hidden' }}>
+          <div
+            ref={containerRef}
+            style={{
+              width: '100%',
+              height,
+              borderRadius: '16px',
+              overflow: 'hidden',
+              background: viewportBg,
+              cursor: 'grab',
+              transition: 'box-shadow 300ms ease',
+              boxShadow: isEditing
+                ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                : theme === 'light'
+                  ? '0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 2px 20px rgba(0,0,0,0.3)',
+            }}
+          />
+
+          {/* Edit panel overlay */}
+          {isEditing && (
+            <EditPanel
+              settings={settings}
+              cameraPreset={cameraPreset}
+              autoThreshold={autoThreshold}
+              activeMode={mode}
+              showGhostSlider={mode === 'spatial'}
+              showBeamToggle={mode === 'instrument'}
+              showSpeedSlider={mode === 'classic' && hasFrames}
+              playSpeed={playSpeed}
+              chromaticModes={chromaticModes}
+              lang={lang}
+              t={t}
+              onUpdateSetting={updateSetting}
+              onCameraPreset={handleCameraPreset}
+              onAutoThreshold={handleAutoThreshold}
+              onPlaySpeed={setPlaySpeed}
+              onClose={() => setEditingMode(null)}
             />
-          ) : (
-            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-              {/* Active mode selector */}
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-                {MODE_DEFS.filter((m) => m.key === 'instrument' || (m.key === 'spatial' && showB) || (m.key === 'classic' && showC)).map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => setActiveMode(m.key)}
-                    style={{
-                      flex: 1,
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      border: `1px solid ${activeMode === m.key ? m.color + '60' : colors.border}`,
-                      background: activeMode === m.key ? m.color + '15' : 'transparent',
-                      color: activeMode === m.key ? m.color : colors.text3,
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 150ms ease',
-                    }}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
+          )}
 
-              <h3 style={{ margin: 0, fontSize: '12px', color: colors.text1, fontWeight: 600 }}>
-                {t('v2.controls.title')}
-              </h3>
-
-              {/* Camera presets */}
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {CAMERA_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    onClick={() => handleCameraPreset(p.key)}
-                    title={t(p.labelKey as TranslationKey)}
-                    style={{
-                      width: '28px', height: '28px', borderRadius: '6px',
-                      border: `1px solid ${cameraPreset === p.key ? colors.accent : colors.border}`,
-                      background: cameraPreset === p.key ? colors.accentMuted : colors.surface,
-                      color: cameraPreset === p.key ? colors.accent : colors.text3,
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 150ms ease',
-                    }}
-                  >
-                    <p.Icon />
-                  </button>
-                ))}
-              </div>
-
-              {/* Chromatic mode */}
-              <div>
-                <label style={{ fontSize: '10px', color: colors.text2, marginBottom: '3px', display: 'block' }}>
-                  {t('v2.controls.palette')}
-                </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {chromaticModes.map((m: ChromaticMode) => (
-                    <button
-                      key={m}
-                      onClick={() => updateSetting('chromaticMode', m)}
-                      style={{
-                        padding: '4px 9px', borderRadius: '16px',
-                        border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                        background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                        color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                        fontSize: '11px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                        transition: 'all 150ms ease',
-                      }}
-                    >
-                      {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Sliders */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
-                <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                    <span style={{ fontSize: '10px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-                    <label style={{ fontSize: '9px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                      <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)} style={{ width: '10px', height: '10px' }} />
-                      {t('v2.controls.auto')}
-                    </label>
-                  </div>
-                  <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
-                </div>
-                <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
-                <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
-                <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
-                {activeMode === 'spatial' && (
-                  <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
-                )}
-              </div>
-
-              {activeMode === 'instrument' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: colors.text2, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                  {t('v2.controls.showBeam')}
-                </label>
-              )}
-
-              {hasFrames && (
-                <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-              )}
-            </GlassPanel>
+          {/* Calibration panel overlay (dev tool) */}
+          {isEditing && calibrationOpen && mode === 'instrument' && (
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: '360px', zIndex: 25 }}>
+              <CalibrationPanel
+                config={calibration}
+                onChange={handleCalibrationChange}
+                onClose={() => setCalibrationOpen(false)}
+                saved={calibrationSaved}
+              />
+            </div>
           )}
         </div>
+      </section>
+    );
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Page title */}
+      <div style={{ marginBottom: '40px', textAlign: 'center' }}>
+        <h1 style={{
+          margin: 0,
+          fontSize: 'clamp(28px, 3.5vw, 42px)',
+          fontWeight: 700,
+          color: colors.text1,
+          letterSpacing: '-0.03em',
+        }}>
+          {t('v2.viewer.title')}
+        </h1>
       </div>
 
-      {/* Timeline bar (temporal playback for Mode C) */}
+      {/* Volume sections — marketing-style, stacked vertically */}
+      {renderVolumeSection('instrument', containerARef, 'Cône', 'Empilement statique — Volume acoustique reconstruit', 'clamp(400px, 50vh, 600px)')}
+      {showB && renderVolumeSection('spatial', containerBRef, 'Trace', 'Déroulé spatial — Projection le long du parcours', 'clamp(350px, 45vh, 550px)')}
+      {showC && renderVolumeSection('classic', containerCRef, 'Projection', 'Fenêtre temporelle — Projection conique glissante', 'clamp(350px, 45vh, 550px)')}
+
+      {/* Timeline bar (Mode C temporal playback) */}
       {hasFrames && totalFrames > 0 && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '10px',
-          padding: '6px 12px', background: colors.surface, borderRadius: '8px',
-          border: `1px solid ${colors.border}`, flexShrink: 0,
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '10px 16px', background: colors.surface, borderRadius: '12px',
+          border: `1px solid ${colors.border}`, marginBottom: '48px',
         }}>
           <button
             onClick={() => {
@@ -796,16 +833,16 @@ export function VolumeViewer({
               setPlaying((p) => !p);
             }}
             style={{
-              width: '28px', height: '28px', borderRadius: '50%',
+              width: '32px', height: '32px', borderRadius: '50%',
               border: `1px solid ${colors.accent}`,
               background: playing ? colors.accentMuted : 'transparent',
-              color: colors.accent, cursor: 'pointer', fontSize: '12px',
+              color: colors.accent, cursor: 'pointer', fontSize: '13px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
             {playing ? '||' : '\u25B6'}
           </button>
-          <div style={{ fontSize: '11px', color: colors.text2, fontVariantNumeric: 'tabular-nums', minWidth: '50px', flexShrink: 0 }}>
+          <div style={{ fontSize: '12px', color: colors.text2, fontVariantNumeric: 'tabular-nums', minWidth: '55px', flexShrink: 0 }}>
             {currentTimeS.toFixed(1)}s
           </div>
           <input
@@ -813,40 +850,51 @@ export function VolumeViewer({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
             style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
           />
-          <div style={{ fontSize: '10px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+          <div style={{ fontSize: '11px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
             {currentFrame + 1}/{totalFrames}
           </div>
         </div>
       )}
 
-      {/* Mode descriptions — visible in visualization */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${viewportCount}, 1fr)`,
-        gap: '6px',
-      }}>
-        {MODE_DEFS.filter((m) => m.key === 'instrument' || (m.key === 'spatial' && showB) || (m.key === 'classic' && showC)).map((m) => (
-          <div key={m.key} style={{
-            padding: '8px 12px',
-            borderRadius: '8px',
-            background: colors.surface,
-            border: `1px solid ${colors.border}`,
-          }}>
-            <div style={{ fontSize: '13px', fontWeight: 600, color: m.color, marginBottom: '2px' }}>{m.label}</div>
-            <div style={{ fontSize: '11px', color: colors.text3, lineHeight: 1.4 }}>{m.desc}</div>
+      {/* GPS Map section */}
+      {gpxTrack && gpxTrack.points.length > 1 && (
+        <section style={{ marginBottom: '48px' }}>
+          <div style={{ marginBottom: '16px', padding: '0 4px' }}>
+            <h2 style={{
+              margin: 0,
+              fontSize: '24px',
+              fontWeight: 700,
+              color: colors.text1,
+              letterSpacing: '-0.02em',
+            }}>
+              Carte
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '14px', color: colors.text3 }}>
+              Tracé GPS — {gpxTrack.totalDistanceM.toFixed(0)}m parcourus
+            </p>
           </div>
-        ))}
-      </div>
+          <div style={{
+            width: '100%',
+            height: '340px',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: theme === 'light'
+              ? '0 2px 20px rgba(0,0,0,0.06)'
+              : '0 2px 20px rgba(0,0,0,0.3)',
+          }}>
+            <GpsMap points={gpxTrack.points} theme={theme} />
+          </div>
+        </section>
+      )}
 
       {/* Orthogonal slice panels */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <div style={{ marginTop: '24px' }}>
+        <div style={{ marginBottom: '32px' }}>
           <SlicePanel volumeData={sliceVolumeData} dimensions={sliceDimensions} />
         </div>
       )}
 
       {/* Export panel */}
-      <div style={{ marginTop: '24px' }} />
       <ExportPanel
         volumeData={sliceVolumeData}
         dimensions={sliceDimensions}
@@ -855,13 +903,11 @@ export function VolumeViewer({
       />
 
       {/* Poster button */}
-      <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+      <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center' }}>
         <Button
           variant="primary"
           size="lg"
           onClick={() => {
-            // Save session data — in a real implementation this would commit to git
-            // For now, trigger a download of the session data
             const sessionData = {
               timestamp: new Date().toISOString(),
               gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
@@ -885,7 +931,7 @@ export function VolumeViewer({
       </div>
 
       {/* Bottom action buttons */}
-      <div style={{ height: '16px', flexShrink: 0 }} />
+      <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0, paddingBottom: '24px' }}>
           {onReconfigure && (
