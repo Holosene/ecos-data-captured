@@ -24,7 +24,6 @@ import type {
   BeamSettings,
   VolumeGridSettings,
   PipelineV2Progress,
-  ViewMode,
   CropRect,
   FrameMapping,
 } from '@echos/core';
@@ -112,7 +111,6 @@ export function ScanPage() {
   const { t } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
-  const [viewMode, setViewMode] = useState<ViewMode>('instrument'); // Mode A by default
 
   // Settings — driven by quality preset
   const [quality, setQuality] = useState<QualityPreset>('medium');
@@ -144,11 +142,17 @@ export function ScanPage() {
   cropRef.current = crop;
   scaleRef.current = scale;
 
-  // Processing state
+  // Processing state — multi-mode data
   const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
+  // Mode A (instrument) data
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
+  // Mode B (spatial) data — null when no GPS
+  const [spatialData, setSpatialData] = useState<Float32Array | null>(null);
+  const [spatialDims, setSpatialDims] = useState<[number, number, number]>([1, 1, 1]);
+  const [spatialExtent, setSpatialExtent] = useState<[number, number, number]>([1, 1, 1]);
+  // Preprocessed frames for Mode C + slices
   const [instrumentFrames, setInstrumentFrames] = useState<Array<{
     index: number; timeS: number; intensity: Float32Array; width: number; height: number;
   }> | null>(null);
@@ -468,7 +472,6 @@ export function ScanPage() {
       preprocessing,
       beam,
       grid,
-      viewMode,
       trackTotalDistanceM,
       mappings,
     });
@@ -476,9 +479,8 @@ export function ScanPage() {
     let extractionDone = false;
 
     const resultPromise = new Promise<{
-      normalizedData: Float32Array;
-      dims: [number, number, number];
-      extent: [number, number, number];
+      instrument: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] };
+      spatial: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] } | null;
       frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
     }>((resolve, reject) => {
       worker.onmessage = (e: MessageEvent) => {
@@ -489,13 +491,13 @@ export function ScanPage() {
             const p = EXTRACT_WEIGHT + (msg.count / totalFrames) * PROJECT_WEIGHT * 0.5;
             setProgress({ stage: 'preprocessing', progress: Math.min(p, 0.95), message: t('v2.pipeline.extracting'), currentFrame: msg.count, totalFrames });
           }
-        } else if (msg.type === 'stage' && msg.stage === 'projecting') {
+        } else if (msg.type === 'stage') {
           setProgress({ stage: 'projecting', progress: EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5, message: t('v2.pipeline.projecting') });
         } else if (msg.type === 'projection-progress') {
           const p = EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5 + (msg.current / msg.total) * PROJECT_WEIGHT * 0.5;
           setProgress({ stage: 'projecting', progress: Math.min(p, 0.98), message: t('v2.pipeline.projecting'), currentFrame: msg.current, totalFrames: msg.total });
         } else if (msg.type === 'complete') {
-          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
+          resolve({ instrument: msg.instrument, spatial: msg.spatial, frames: msg.frames });
         } else if (msg.type === 'error') {
           reject(new Error(msg.message));
         }
@@ -574,14 +576,24 @@ export function ScanPage() {
 
     if (abortRef.current) return;
 
-    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
+    const { instrument, spatial, frames: preprocessedFrames } = result;
 
+    // Mode A data
+    setVolumeData(instrument.normalizedData);
+    setVolumeDims(instrument.dims);
+    setVolumeExtent(instrument.extent);
+
+    // Mode B data (null if no GPS)
+    if (spatial) {
+      setSpatialData(spatial.normalizedData);
+      setSpatialDims(spatial.dims);
+      setSpatialExtent(spatial.extent);
+    }
+
+    // Frames for Mode C + slices
     setInstrumentFrames(preprocessedFrames);
-    setVolumeData(normalizedData);
-    setVolumeDims(dims);
-    setVolumeExtent(extent);
 
-    dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
+    dispatch({ type: 'SET_V2_VOLUME', data: instrument.normalizedData, dimensions: instrument.dims, extent: instrument.extent });
     setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
 
     // Show completion state briefly before transitioning
@@ -610,7 +622,7 @@ export function ScanPage() {
         totalDistanceM: track?.totalDistanceM ?? 0,
         durationS: track?.durationS ?? state.videoDurationS,
         frameCount: preprocessedFrames.length,
-        gridDimensions: dims,
+        gridDimensions: instrument.dims,
         preprocessing,
         beam,
       },
@@ -624,7 +636,7 @@ export function ScanPage() {
       setStepBarAnimating(true);
       setTimeout(() => setStepBarVisible(false), 500);
     }, 600);
-  }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
+  }, [state, crop, preprocessing, beam, grid, fpsExtraction, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
 
@@ -646,6 +658,7 @@ export function ScanPage() {
           <StepIndicator
             steps={PIPELINE_STEP_KEYS.map((s) => ({ label: t(s.labelKey as any), key: s.key }))}
             currentStep={phaseToStepIndex(phase)}
+            processingProgress={phase === 'processing' && progress ? progress.progress : undefined}
             onStepClick={(idx: number) => {
               const target = PIPELINE_STEP_KEYS[idx];
               if (!target) return;
@@ -682,14 +695,12 @@ export function ScanPage() {
                 />
               </GlassPanel>
 
-              <GlassPanel style={{ padding: '24px', opacity: (viewMode === 'instrument' || viewMode === 'classic') && !state.gpxFile ? 0.6 : 1 }}>
+              <GlassPanel style={{ padding: '24px', opacity: !state.gpxFile ? 0.7 : 1 }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
-                  {(viewMode === 'instrument' || viewMode === 'classic') && (
-                    <span style={{ fontWeight: 400, fontSize: '12px', color: colors.text3, marginLeft: '8px' }}>
-                      ({t('common.optional')})
-                    </span>
-                  )}
+                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.text3, marginLeft: '8px' }}>
+                    ({t('common.optional')})
+                  </span>
                 </h3>
                 <FileDropZone
                   accept=".gpx"
@@ -850,21 +861,9 @@ export function ScanPage() {
                       </div>
                     </div>
                   ) : (
-                    /* Progress state */
+                    /* Progress state — no percentage text, tall rounded bar */
                     <>
-                      <div style={{
-                        fontSize: '48px',
-                        fontWeight: 700,
-                        color: colors.text1,
-                        fontVariantNumeric: 'tabular-nums',
-                        lineHeight: 1,
-                        marginBottom: '20px',
-                        letterSpacing: '-0.02em',
-                      }}>
-                        {Math.round(progress.progress * 100)}%
-                      </div>
-
-                      <ProgressBar value={progress.progress} />
+                      <ProgressBar value={progress.progress} showPercent={false} height={14} />
 
                       <div style={{ marginTop: '32px' }}>
                         <Button
@@ -890,58 +889,39 @@ export function ScanPage() {
               {t('v2.settings.desc')}
             </p>
 
-            {/* Quality preset selector */}
+            {/* Quality preset selector — big centered titles, minimal info */}
             <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
-                {t('v2.quality.title' as any)}
-              </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 {(['minimal', 'medium', 'complete'] as const).map((q) => {
                   const selected = quality === q;
                   const cfg = QUALITY_PRESETS[q];
                   const accentMap = { minimal: '#22c55e', medium: colors.accent, complete: '#f59e0b' };
                   const color = accentMap[q];
+                  const titleMap = { minimal: 'Rapide', medium: 'Équilibré', complete: 'Complet' };
+                  const hintMap = {
+                    minimal: `${cfg.fps} image/s, aperçu en quelques secondes`,
+                    medium: `${cfg.fps} images/s, bon compromis`,
+                    complete: `${cfg.fps} images/s, qualité maximale`,
+                  };
                   return (
                     <button
                       key={q}
                       onClick={() => setQuality(q)}
                       style={{
-                        padding: '14px',
+                        padding: '18px 14px',
                         borderRadius: '12px',
                         border: `2px solid ${selected ? color : colors.border}`,
                         background: selected ? `${color}15` : 'transparent',
                         cursor: 'pointer',
-                        textAlign: 'left',
+                        textAlign: 'center',
                         transition: 'all 150ms ease',
                       }}
                     >
-                      <div style={{ color: selected ? color : colors.text1, fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>
-                        {t(`v2.quality.${q}` as any)}
+                      <div style={{ color: selected ? color : colors.text1, fontWeight: 700, fontSize: '20px', marginBottom: '6px' }}>
+                        {titleMap[q]}
                       </div>
-                      <div style={{ color: colors.text3, fontSize: '11px', lineHeight: 1.5 }}>
-                        {t(`v2.quality.${q}Desc` as any)}
-                      </div>
-                      <div style={{
-                        marginTop: '8px',
-                        display: 'flex',
-                        gap: '8px',
-                        fontSize: '10px',
-                        color: colors.text3,
-                      }}>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: selected ? `${color}20` : colors.surface,
-                        }}>
-                          {cfg.fps} fps
-                        </span>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: selected ? `${color}20` : colors.surface,
-                        }}>
-                          {cfg.grid.resX}&sup3;
-                        </span>
+                      <div style={{ color: colors.text3, fontSize: '11px', lineHeight: 1.4 }}>
+                        {hintMap[q]}
                       </div>
                     </button>
                   );
@@ -949,70 +929,7 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-              {/* Mode selection */}
-              <GlassPanel style={{ padding: '16px' }}>
-                <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
-                  {t('v2.config.viewMode')}
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                  <button
-                    onClick={() => setViewMode('instrument')}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '12px',
-                      border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
-                      background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                      Mode A — {t('v2.mode.instrument')}
-                    </div>
-                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                      {t('v2.mode.instrumentDesc')}
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setViewMode('spatial')}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '12px',
-                      border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
-                      background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                      Mode B — {t('v2.mode.spatial')}
-                    </div>
-                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                      {t('v2.mode.spatialDesc')}
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setViewMode('classic')}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '12px',
-                      border: `2px solid ${viewMode === 'classic' ? '#22cc88' : colors.border}`,
-                      background: viewMode === 'classic' ? 'rgba(34,204,136,0.12)' : 'transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                      Mode C — {t('v2.mode.classic')}
-                    </div>
-                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                      {t('v2.mode.classicDesc')}
-                    </div>
-                  </button>
-                </div>
-              </GlassPanel>
-
+            <div style={{ marginBottom: '12px' }}>
               {/* Depth setting with exponential slider */}
               <GlassPanel style={{ padding: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -1105,6 +1022,20 @@ export function ScanPage() {
                   </div>
                 )}
               </GlassPanel>
+            </div>
+
+            {/* Info: all 3 render modes generated simultaneously */}
+            <div style={{
+              padding: '10px 14px',
+              marginBottom: '12px',
+              borderRadius: '8px',
+              background: colors.accentMuted,
+              border: `1px solid ${colors.accent}30`,
+              fontSize: '12px',
+              color: colors.text2,
+              lineHeight: 1.5,
+            }}>
+              {t('v2.settings.allModesInfo' as any) || 'Les 3 modes de rendu (Cône, Trace GPS, Projection) seront générés simultanément.'}
             </div>
 
             {/* Synchronization section — only when GPX is loaded */}
@@ -1224,21 +1155,14 @@ export function ScanPage() {
             </GlassPanel>
             )}
 
-            {/* Summary */}
+            {/* Summary — minimal */}
             <GlassPanel style={{ padding: '12px', marginBottom: '12px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
-                {t('v2.settings.summary')}
-              </h3>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
+                gridTemplateColumns: 'repeat(3, 1fr)',
                 gap: '12px',
                 fontSize: '13px',
               }}>
-                <div>
-                  <div style={{ color: colors.text3, fontSize: '11px', marginBottom: '2px' }}>{t('v2.settings.cropSize')}</div>
-                  <div style={{ color: colors.text1, fontWeight: 500 }}>{crop.width}×{crop.height}</div>
-                </div>
                 <div>
                   <div style={{ color: colors.text3, fontSize: '11px', marginBottom: '2px' }}>{t('v2.preview.frames')}</div>
                   <div style={{ color: colors.text1, fontWeight: 500 }}>~{Math.floor(state.videoDurationS * fpsExtraction)}</div>
@@ -1272,10 +1196,13 @@ export function ScanPage() {
               volumeData={volumeData}
               dimensions={volumeDims}
               extent={volumeExtent}
-              mode={viewMode}
+              spatialData={spatialData}
+              spatialDimensions={spatialDims}
+              spatialExtent={spatialExtent}
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}
+              gpxTrack={state.gpxTrack ?? undefined}
               onReconfigure={() => {
                 setStepBarVisible(true);
                 setStepBarAnimating(false);
@@ -1286,6 +1213,7 @@ export function ScanPage() {
                 setStepBarAnimating(false);
                 setPhase('import');
                 setVolumeData(null);
+                setSpatialData(null);
                 setFrameReady(false);
               }}
             />

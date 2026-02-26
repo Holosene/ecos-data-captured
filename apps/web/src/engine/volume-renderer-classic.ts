@@ -200,6 +200,12 @@ export class VolumeRendererClassic {
     return cal;
   }
 
+  /** Toggle grid and axes helpers visibility */
+  setGridAxesVisible(visible: boolean): void {
+    this.gridHelper.visible = visible;
+    this.axesHelper.visible = visible;
+  }
+
   /** Programmatically orbit the camera by delta angles (radians) */
   rotateBy(deltaAzimuth: number, deltaPolar: number): void {
     const offset = this.camera.position.clone().sub(this.controls.target);
