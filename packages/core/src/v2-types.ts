@@ -125,7 +125,7 @@ export interface RecordingSession {
 
 // ─── View Modes ─────────────────────────────────────────────────────────────
 
-export type ViewMode = 'instrument' | 'spatial';
+export type ViewMode = 'instrument' | 'spatial' | 'classic';
 
 // ─── Transfer Function ──────────────────────────────────────────────────────
 

@@ -18,6 +18,7 @@ import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, 
 import { DEFAULT_RENDERER, computeAutoThreshold } from '@echos/core';
 import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
+import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
@@ -31,7 +32,7 @@ interface VolumeViewerProps {
   volumeData: Float32Array | null;
   dimensions: [number, number, number];
   extent: [number, number, number];
-  mode: 'instrument' | 'spatial';
+  mode: 'instrument' | 'spatial' | 'classic';
   /** Preprocessed frames for Rendu B (sliding window playback) */
   frames?: PreprocessedFrame[];
   beam?: BeamSettings;
@@ -182,13 +183,13 @@ export function VolumeViewer({
   onNewScan,
 }: VolumeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<VolumeRenderer | null>(null);
+  const rendererRef = useRef<VolumeRenderer | VolumeRendererClassic | null>(null);
   const [settings, setSettings] = useState<RendererSettings>({
     ...DEFAULT_RENDERER,
-    showBeam: mode === 'instrument',
+    showBeam: mode === 'instrument' || mode === 'classic',
     ghostEnhancement: mode === 'spatial' ? 0.5 : 0,
   });
-  const [cameraPreset, setCameraPreset] = useState<CameraPreset>(mode === 'instrument' ? 'frontal' : 'horizontal');
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>((mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
@@ -273,10 +274,12 @@ export function VolumeViewer({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const renderer = new VolumeRenderer(containerRef.current, settings, calibration);
+    const renderer = mode === 'classic'
+      ? new VolumeRendererClassic(containerRef.current, settings, calibration)
+      : new VolumeRenderer(containerRef.current, settings, calibration);
     rendererRef.current = renderer;
 
-    const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
+    const defaultPreset = (mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal';
     renderer.setCameraPreset(defaultPreset);
 
     return () => {
@@ -455,16 +458,16 @@ export function VolumeViewer({
               left: '10px',
               padding: '3px 10px',
               borderRadius: '16px',
-              background: mode === 'instrument' ? 'rgba(68,136,255,0.2)' : 'rgba(255,136,68,0.2)',
-              border: `1px solid ${mode === 'instrument' ? 'rgba(68,136,255,0.4)' : 'rgba(255,136,68,0.4)'}`,
-              color: mode === 'instrument' ? '#4488ff' : '#ff8844',
+              background: mode === 'classic' ? 'rgba(34,204,136,0.2)' : mode === 'instrument' ? 'rgba(68,136,255,0.2)' : 'rgba(255,136,68,0.2)',
+              border: `1px solid ${mode === 'classic' ? 'rgba(34,204,136,0.4)' : mode === 'instrument' ? 'rgba(68,136,255,0.4)' : 'rgba(255,136,68,0.4)'}`,
+              color: mode === 'classic' ? '#22cc88' : mode === 'instrument' ? '#4488ff' : '#ff8844',
               fontSize: '11px',
               fontWeight: 500,
               zIndex: 10,
               pointerEvents: 'none',
             }}
           >
-            {mode === 'instrument' ? 'Rendu A' : 'Rendu B'}
+            {mode === 'classic' ? 'Rendu C' : mode === 'instrument' ? 'Rendu A' : 'Rendu B'}
           </div>
 
           {/* Camera preset buttons */}
@@ -605,7 +608,7 @@ export function VolumeViewer({
                 <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
               </div>
 
-              {mode === 'instrument' && (
+              {(mode === 'instrument' || mode === 'classic') && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
                   <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
                   {t('v2.controls.showBeam')}

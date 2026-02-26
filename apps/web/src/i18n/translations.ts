@@ -266,6 +266,8 @@ export const translations = {
     'v2.mode.instrumentDesc': 'Visualisez le sonar comme instrument acoustique. Volume fixe en forme de cône, axe temporel interne.',
     'v2.mode.spatial': 'Trace Spatiale',
     'v2.mode.spatialDesc': 'Déroulez l\u2019enregistrement dans l\u2019espace 3D le long de la trace GPS. Accumulation fantôme multi-passes.',
+    'v2.mode.classic': 'Moteur Classique',
+    'v2.mode.classicDesc': 'Moteur volumétrique original (cdef367). Caméra frontale axe Y, cône filaire, ray marching en espace local.',
 
     // V2 Pipeline
     'v2.pipeline.title': 'Génération en cours\u2026',
@@ -615,6 +617,8 @@ export const translations = {
     'v2.mode.instrumentDesc': 'View the sonar as an acoustic instrument. Fixed cone-shaped volume with internal time axis.',
     'v2.mode.spatial': 'Spatial Trace',
     'v2.mode.spatialDesc': 'Unroll the recording into 3D space along the GPS trace. Multi-pass ghost accumulation.',
+    'v2.mode.classic': 'Classic Engine',
+    'v2.mode.classicDesc': 'Original volumetric engine (cdef367). Frontal Y-axis camera, wireframe cone, local-space ray marching.',
 
     // V2 Pipeline
     'v2.pipeline.title': 'Generating\u2026',

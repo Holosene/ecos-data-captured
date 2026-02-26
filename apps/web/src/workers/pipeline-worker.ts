@@ -34,7 +34,7 @@ import type {
 let preprocessing: PreprocessingSettings;
 let beam: BeamSettings;
 let grid: VolumeGridSettings;
-let viewMode: 'instrument' | 'spatial';
+let viewMode: 'instrument' | 'spatial' | 'classic';
 let trackTotalDistanceM: number;
 let mappings: FrameMapping[];
 

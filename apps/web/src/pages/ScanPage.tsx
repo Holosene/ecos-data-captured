@@ -682,10 +682,10 @@ export function ScanPage() {
                 />
               </GlassPanel>
 
-              <GlassPanel style={{ padding: '24px', opacity: viewMode === 'instrument' && !state.gpxFile ? 0.6 : 1 }}>
+              <GlassPanel style={{ padding: '24px', opacity: (viewMode === 'instrument' || viewMode === 'classic') && !state.gpxFile ? 0.6 : 1 }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
-                  {viewMode === 'instrument' && (
+                  {(viewMode === 'instrument' || viewMode === 'classic') && (
                     <span style={{ fontWeight: 400, fontSize: '12px', color: colors.text3, marginLeft: '8px' }}>
                       ({t('common.optional')})
                     </span>
@@ -955,7 +955,7 @@ export function ScanPage() {
                 <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
                   {t('v2.config.viewMode')}
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                   <button
                     onClick={() => setViewMode('instrument')}
                     style={{
@@ -990,6 +990,24 @@ export function ScanPage() {
                     </div>
                     <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
                       {t('v2.mode.spatialDesc')}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setViewMode('classic')}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '12px',
+                      border: `2px solid ${viewMode === 'classic' ? '#22cc88' : colors.border}`,
+                      background: viewMode === 'classic' ? 'rgba(34,204,136,0.12)' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                      Mode C — {t('v2.mode.classic')}
+                    </div>
+                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                      {t('v2.mode.classicDesc')}
                     </div>
                   </button>
                 </div>

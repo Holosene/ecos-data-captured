@@ -3,6 +3,7 @@
  */
 
 export { VolumeRenderer } from './volume-renderer.js';
+export { VolumeRendererClassic } from './volume-renderer-classic.js';
 export type { CameraPreset } from './volume-renderer.js';
 export { generateLUT, getChromaticModes, CHROMATIC_LABELS } from './transfer-function.js';
 export {
