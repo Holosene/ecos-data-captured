@@ -190,11 +190,11 @@ export function VolumeViewer({
         ...DEFAULT_RENDERER,
         chromaticMode: 'sonar-original' as RendererSettings['chromaticMode'],
         opacityScale: 1.0,
-        threshold: 0.02,
-        densityScale: 1.3,
+        threshold: 0,
+        densityScale: 1.4,
         smoothing: 1.0,
-        ghostEnhancement: 0,
-        stepCount: 512,
+        ghostEnhancement: 3.0,
+        stepCount: 192,
         showBeam: false,
       };
     }
