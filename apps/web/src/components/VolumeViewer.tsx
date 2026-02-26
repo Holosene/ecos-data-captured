@@ -62,15 +62,20 @@ function buildSliceVolumeFromFrames(
   if (dimX === 0 || dimZ === 0) return null;
 
   const data = new Float32Array(dimX * dimY * dimZ);
+  const strideZ = dimY * dimX;
 
+  // Optimized: copy row-by-row using subarray views instead of pixel-by-pixel.
+  // Layout: data[z * dimY * dimX + y * dimX + x]
+  // Each frame row (zi) of width dimX gets copied as a contiguous block.
   for (let yi = 0; yi < dimY; yi++) {
-    const frame = frameList[yi];
+    const intensity = frameList[yi].intensity;
+    const yiOffset = yi * dimX;
+
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let xi = 0; xi < dimX; xi++) {
-        const srcIdx = zi * dimX + xi;  // frame intensity: row-major [depth × width]
-        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
-        data[dstIdx] = frame.intensity[srcIdx] ?? 0;
-      }
+      const srcOffset = zi * dimX;
+      const dstOffset = zi * strideZ + yiOffset;
+      // Copy entire row at once (dimX floats)
+      data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
     }
   }
 

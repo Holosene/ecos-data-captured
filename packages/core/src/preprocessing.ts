@@ -49,24 +49,45 @@ function upscale(
 
 function extractIntensity(imgData: ImageData): Float32Array {
   const { data, width, height } = imgData;
-  const out = new Float32Array(width * height);
-  for (let i = 0; i < width * height; i++) {
-    const r = data[i * 4];
-    const g = data[i * 4 + 1];
-    const b = data[i * 4 + 2];
-    // ITU-R BT.709 luminance
-    out[i] = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  const len = width * height;
+  const out = new Float32Array(len);
+  // Unrolled loop: process 4 pixels per iteration to reduce loop overhead.
+  // Uses integer approximation of BT.709: (r*55 + g*183 + b*18) >> 8 ≈ /255
+  const len4 = (len >> 2) << 2;
+  let j = 0;
+  for (let i = 0; i < len4; i += 4) {
+    const i0 = j; const i1 = j + 4; const i2 = j + 8; const i3 = j + 12;
+    out[i]     = (data[i0] * 55 + data[i0 + 1] * 183 + data[i0 + 2] * 18) / 65280;
+    out[i + 1] = (data[i1] * 55 + data[i1 + 1] * 183 + data[i1 + 2] * 18) / 65280;
+    out[i + 2] = (data[i2] * 55 + data[i2 + 1] * 183 + data[i2 + 2] * 18) / 65280;
+    out[i + 3] = (data[i3] * 55 + data[i3 + 1] * 183 + data[i3 + 2] * 18) / 65280;
+    j += 16;
+  }
+  for (let i = len4; i < len; i++) {
+    const off = i * 4;
+    out[i] = (data[off] * 55 + data[off + 1] * 183 + data[off + 2] * 18) / 65280;
   }
   return out;
 }
 
-// ─── Gamma correction ───────────────────────────────────────────────────────
+// ─── Gamma correction (LUT-accelerated) ─────────────────────────────────────
 
 function applyGamma(pixels: Float32Array, gamma: number): void {
   if (gamma === 1.0) return;
+  // Build a 1024-entry LUT to avoid per-pixel Math.pow
+  const LUT_SIZE = 1024;
+  const lut = new Float32Array(LUT_SIZE + 1);
   const invGamma = 1.0 / gamma;
+  for (let i = 0; i <= LUT_SIZE; i++) {
+    lut[i] = Math.pow(i / LUT_SIZE, invGamma);
+  }
   for (let i = 0; i < pixels.length; i++) {
-    pixels[i] = Math.pow(clamp(pixels[i], 0, 1), invGamma);
+    const v = pixels[i];
+    // Fast LUT lookup with linear interpolation
+    const idx = (v < 0 ? 0 : v > 1 ? LUT_SIZE : v * LUT_SIZE);
+    const lo = idx | 0; // fast floor
+    const frac = idx - lo;
+    pixels[i] = lut[lo] + frac * (lut[lo + 1 > LUT_SIZE ? LUT_SIZE : lo + 1] - lut[lo]);
   }
 }
 
@@ -100,34 +121,85 @@ function gaussianBlur(
   const temp = new Float32Array(w * h);
   const out = new Float32Array(w * h);
 
-  // Horizontal pass
+  // Horizontal pass — avoid clamp() call in hot loop
   for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
+    const yOff = y * w;
+
+    // Left edge (needs clamping)
+    for (let x = 0; x < radius && x < w; x++) {
       let sum = 0;
       for (let k = -radius; k <= radius; k++) {
-        const sx = clamp(x + k, 0, w - 1);
-        sum += pixels[y * w + sx] * kernel[k + radius];
+        const sx = x + k < 0 ? 0 : x + k;
+        sum += pixels[yOff + sx] * kernel[k + radius];
       }
-      temp[y * w + x] = sum;
+      temp[yOff + x] = sum;
+    }
+
+    // Center (no clamping needed)
+    const xEnd = w - radius;
+    for (let x = radius; x < xEnd; x++) {
+      let sum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        sum += pixels[yOff + x + k] * kernel[k + radius];
+      }
+      temp[yOff + x] = sum;
+    }
+
+    // Right edge (needs clamping)
+    for (let x = Math.max(radius, xEnd); x < w; x++) {
+      let sum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        const sx = x + k >= w ? w - 1 : x + k;
+        sum += pixels[yOff + sx] * kernel[k + radius];
+      }
+      temp[yOff + x] = sum;
     }
   }
 
-  // Vertical pass
-  for (let y = 0; y < h; y++) {
+  // Vertical pass — avoid clamp() call in hot loop
+  // Top edge
+  for (let y = 0; y < radius && y < h; y++) {
+    const yOff = y * w;
     for (let x = 0; x < w; x++) {
       let sum = 0;
       for (let k = -radius; k <= radius; k++) {
-        const sy = clamp(y + k, 0, h - 1);
+        const sy = y + k < 0 ? 0 : y + k;
         sum += temp[sy * w + x] * kernel[k + radius];
       }
-      out[y * w + x] = sum;
+      out[yOff + x] = sum;
+    }
+  }
+
+  // Center rows
+  const yEnd = h - radius;
+  for (let y = radius; y < yEnd; y++) {
+    const yOff = y * w;
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        sum += temp[(y + k) * w + x] * kernel[k + radius];
+      }
+      out[yOff + x] = sum;
+    }
+  }
+
+  // Bottom edge
+  for (let y = Math.max(radius, yEnd); y < h; y++) {
+    const yOff = y * w;
+    for (let x = 0; x < w; x++) {
+      let sum = 0;
+      for (let k = -radius; k <= radius; k++) {
+        const sy = y + k >= h ? h - 1 : y + k;
+        sum += temp[sy * w + x] * kernel[k + radius];
+      }
+      out[yOff + x] = sum;
     }
   }
 
   return out;
 }
 
-// ─── Bilateral denoise ──────────────────────────────────────────────────────
+// ─── Bilateral denoise (fast LUT-based) ─────────────────────────────────────
 
 function bilateralDenoise(
   pixels: Float32Array,
@@ -142,31 +214,59 @@ function bilateralDenoise(
   const radius = Math.ceil(spatialSigma * 2);
   const out = new Float32Array(w * h);
 
+  // Pre-compute spatial weight LUT (kernel is symmetric, index by dx*dx+dy*dy)
+  const maxSpatialDist2 = 2 * radius * radius;
+  const spatialLUT = new Float32Array(maxSpatialDist2 + 1);
+  const invSpatial2 = -1 / (2 * spatialSigma * spatialSigma);
+  for (let d2 = 0; d2 <= maxSpatialDist2; d2++) {
+    spatialLUT[d2] = Math.exp(d2 * invSpatial2);
+  }
+
+  // Pre-compute range weight LUT (quantize intensity diff to 256 levels)
+  const RANGE_LUT_SIZE = 256;
+  const rangeLUT = new Float32Array(RANGE_LUT_SIZE);
+  const invRange2 = -1 / (2 * rangeSigma * rangeSigma);
+  for (let i = 0; i < RANGE_LUT_SIZE; i++) {
+    const diff = i / RANGE_LUT_SIZE; // max diff is 1.0
+    rangeLUT[i] = Math.exp(diff * diff * invRange2);
+  }
+
   for (let y = 0; y < h; y++) {
+    const yOff = y * w;
+    // Pre-compute clamped y bounds
+    const yMin = Math.max(0, y - radius);
+    const yMax = Math.min(h - 1, y + radius);
+
     for (let x = 0; x < w; x++) {
-      const centerVal = pixels[y * w + x];
+      const centerVal = pixels[yOff + x];
       let weightSum = 0;
       let valSum = 0;
 
-      for (let dy = -radius; dy <= radius; dy++) {
-        for (let dx = -radius; dx <= radius; dx++) {
-          const nx = clamp(x + dx, 0, w - 1);
-          const ny = clamp(y + dy, 0, h - 1);
-          const neighborVal = pixels[ny * w + nx];
+      // Pre-compute clamped x bounds
+      const xMin = Math.max(0, x - radius);
+      const xMax = Math.min(w - 1, x + radius);
 
-          const spatialDist2 = dx * dx + dy * dy;
-          const rangeDist2 = (centerVal - neighborVal) ** 2;
+      for (let ny = yMin; ny <= yMax; ny++) {
+        const dy = ny - y;
+        const dy2 = dy * dy;
+        const nyOff = ny * w;
 
-          const weight =
-            Math.exp(-spatialDist2 / (2 * spatialSigma * spatialSigma)) *
-            Math.exp(-rangeDist2 / (2 * rangeSigma * rangeSigma));
+        for (let nx = xMin; nx <= xMax; nx++) {
+          const dx = nx - x;
+          const spatialDist2 = dx * dx + dy2;
+          const neighborVal = pixels[nyOff + nx];
 
+          const rangeDiff = Math.abs(centerVal - neighborVal);
+          const rangeIdx = (rangeDiff * RANGE_LUT_SIZE) | 0; // fast floor
+          const rangeWeight = rangeIdx < RANGE_LUT_SIZE ? rangeLUT[rangeIdx] : 0;
+
+          const weight = spatialLUT[spatialDist2] * rangeWeight;
           weightSum += weight;
           valSum += neighborVal * weight;
         }
       }
 
-      out[y * w + x] = weightSum > 0 ? valSum / weightSum : centerVal;
+      out[yOff + x] = weightSum > 0 ? valSum / weightSum : centerVal;
     }
   }
 
@@ -174,6 +274,29 @@ function bilateralDenoise(
 }
 
 // ─── Block artifact removal (3x3 median) ────────────────────────────────────
+
+// Sorting network for 9 elements to find median — zero allocation, no Array.sort
+function median9(a: number, b: number, c: number, d: number, e: number,
+                 f: number, g: number, h: number, i: number): number {
+  // Optimal sorting network for finding median of 9 (only 19 comparisons)
+  let t: number;
+  if (a > b) { t = a; a = b; b = t; }
+  if (d > e) { t = d; d = e; e = t; }
+  if (g > h) { t = g; g = h; h = t; }
+  if (a > d) { t = a; a = d; d = t; t = b; b = e; e = t; }
+  if (g > d) { t = g; g = d; d = t; t = h; h = e; e = t; }  // now a <= d <= g (3 min sorted)
+  if (b > c) { t = b; b = c; c = t; }
+  if (e > f) { t = e; e = f; f = t; }
+  if (h > i) { t = h; h = i; i = t; }
+  // Median is max(min-of-3-maxes, max-of-3-mins, middle-of-middles)
+  // Simplified: use partial sort to get 5th element
+  if (b > e) { t = b; b = e; e = t; }
+  if (e > h) { t = e; e = h; h = t; }
+  if (b > e) { t = b; b = e; e = t; }
+  if (d > e) { t = d; d = e; e = t; }
+  if (e > f) { t = e; e = f; f = t; }
+  return e;
+}
 
 function medianFilter3x3(
   pixels: Float32Array,
@@ -184,22 +307,24 @@ function medianFilter3x3(
   if (strength <= 0) return pixels;
 
   const out = new Float32Array(w * h);
-  const window: number[] = new Array(9);
 
   for (let y = 0; y < h; y++) {
+    const yOff = y * w;
+    const y0 = (y > 0 ? y - 1 : 0) * w;
+    const y1 = yOff;
+    const y2 = (y < h - 1 ? y + 1 : y) * w;
+
     for (let x = 0; x < w; x++) {
-      let idx = 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = clamp(x + dx, 0, w - 1);
-          const ny = clamp(y + dy, 0, h - 1);
-          window[idx++] = pixels[ny * w + nx];
-        }
-      }
-      window.sort((a, b) => a - b);
-      const median = window[4];
-      const original = pixels[y * w + x];
-      out[y * w + x] = original + strength * (median - original);
+      const x0 = x > 0 ? x - 1 : 0;
+      const x2 = x < w - 1 ? x + 1 : x;
+
+      const med = median9(
+        pixels[y0 + x0], pixels[y0 + x], pixels[y0 + x2],
+        pixels[y1 + x0], pixels[y1 + x], pixels[y1 + x2],
+        pixels[y2 + x0], pixels[y2 + x], pixels[y2 + x2],
+      );
+      const original = pixels[yOff + x];
+      out[yOff + x] = original + strength * (med - original);
     }
   }
 

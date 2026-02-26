@@ -65,6 +65,8 @@ export function createEmptyVolume(
 /**
  * Project a single frame into a conic volume (Mode A: Instrument).
  * The volume represents the cone itself — no GPS, time axis = Y.
+ *
+ * Optimized: precomputed LUTs for depth→zi, col→xi, Gaussian weights.
  */
 export function projectFrameIntoCone(
   frame: PreprocessedFrame,
@@ -72,47 +74,56 @@ export function projectFrameIntoCone(
   beam: BeamSettings,
   ySliceIndex: number,
 ): void {
-  const [resX, _resY, resZ] = volume.dimensions;
+  const [resX, resY, resZ] = volume.dimensions;
   const [extX, , extZ] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+  const tanHalf = Math.tan(halfAngle);
+  const originX = volume.origin[0];
+  const invExtX_resX = resX / extX;
+  const invExtZ_resZ = resZ / extZ;
+  const invHeight = 1.0 / frame.height;
+  const invWidth = 1.0 / frame.width;
+  const latSigmaFactor = beam.lateralFalloffSigma;
+  const dataLen = volume.data.length;
+  const strideZ = resY * resX;
+  const yOffset = ySliceIndex * resX;
 
-  for (let row = 0; row < frame.height; row++) {
-    // Depth mapped from pixel row
-    const depth = (row / frame.height) * beam.depthMaxM;
-    if (depth < beam.nearFieldM) continue;
+  // Pre-compute per-row: zi, radiusAtDepth, invSigma2x2
+  const nearFieldRow = Math.ceil((beam.nearFieldM / beam.depthMaxM) * frame.height);
 
-    const radiusAtDepth = coneRadiusAtDepth(depth, halfAngle);
-    const sigma = beam.lateralFalloffSigma * radiusAtDepth;
-    const sigma2x2 = 2 * sigma * sigma;
+  // Pre-compute per-col: normalizedCol (col / width - 0.5) * 2
+  const colNorm = new Float32Array(frame.width);
+  for (let col = 0; col < frame.width; col++) {
+    colNorm[col] = (col * invWidth - 0.5) * 2;
+  }
 
-    // Map depth to Z voxel
-    const zi = Math.floor((depth / extZ) * resZ);
+  for (let row = nearFieldRow; row < frame.height; row++) {
+    const depth = row * invHeight * beam.depthMaxM;
+    const zi = (depth * invExtZ_resZ) | 0;
     if (zi < 0 || zi >= resZ) continue;
 
+    const radiusAtDepth = depth * tanHalf;
+    const sigma = latSigmaFactor * radiusAtDepth;
+    const invSigma2x2 = sigma > 0 ? -1.0 / (2 * sigma * sigma) : 0;
+
+    const ziStride = zi * strideZ + yOffset;
+    const rowOffset = row * frame.width;
+
     for (let col = 0; col < frame.width; col++) {
-      const intensity = frame.intensity[row * frame.width + col];
+      const intensity = frame.intensity[rowOffset + col];
       if (intensity < 0.001) continue;
 
-      // Angular position within beam
-      const normalizedCol = (col / frame.width - 0.5) * 2; // -1 to 1
-      const lateralOffset = normalizedCol * radiusAtDepth;
-
-      // Gaussian weight based on lateral distance from center
-      const lateralDist2 = lateralOffset * lateralOffset;
-      const gaussWeight = sigma2x2 > 0
-        ? Math.exp(-lateralDist2 / sigma2x2)
+      const lateralOffset = colNorm[col] * radiusAtDepth;
+      const gaussWeight = invSigma2x2 !== 0
+        ? Math.exp(lateralOffset * lateralOffset * invSigma2x2)
         : 1.0;
 
-      // Map lateral offset to X voxel
-      const xWorld = lateralOffset;
-      const xi = Math.floor(((xWorld - volume.origin[0]) / extX) * resX);
+      const xi = ((lateralOffset - originX) * invExtX_resX) | 0;
       if (xi < 0 || xi >= resX) continue;
 
-      // Accumulate
-      const voxelIdx = zi * volume.dimensions[1] * resX + ySliceIndex * resX + xi;
-      if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
-        const weightedIntensity = intensity * gaussWeight;
-        volume.data[voxelIdx] += weightedIntensity;
+      const voxelIdx = ziStride + xi;
+      if (voxelIdx >= 0 && voxelIdx < dataLen) {
+        volume.data[voxelIdx] += intensity * gaussWeight;
         volume.weights[voxelIdx] += gaussWeight;
       }
     }
@@ -124,6 +135,8 @@ export function projectFrameIntoCone(
 /**
  * Project all frames into a spatial volume (Mode B: Spatial Trace).
  * Frames are positioned along the Y axis according to GPS distance.
+ *
+ * Optimized: precomputed LUTs, hoisted invariants, minimized Math calls.
  */
 export function projectFramesSpatial(
   frames: PreprocessedFrame[],
@@ -133,52 +146,70 @@ export function projectFramesSpatial(
   onProgress?: (current: number, total: number) => void,
 ): void {
   const [resX, resY, resZ] = volume.dimensions;
-  const [extX, extY, extZ] = volume.extent;
+  const [extX, , extZ] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+  const tanHalf = Math.tan(halfAngle);
+  const originX = volume.origin[0];
+  const invExtX_resX = resX / extX;
+  const invExtZ_resZ = resZ / extZ;
+  const latSigmaFactor = beam.lateralFalloffSigma;
+  const dataLen = volume.data.length;
+  const strideZ = resY * resX;
 
   // Find distance range
-  const distances = mappings.map((m) => m.distanceM);
-  const minDist = Math.min(...distances);
-  const maxDist = Math.max(...distances);
-  const distRange = maxDist - minDist || 1;
+  let minDist = Infinity;
+  let maxDist = -Infinity;
+  for (let i = 0; i < mappings.length; i++) {
+    const d = mappings[i].distanceM;
+    if (d < minDist) minDist = d;
+    if (d > maxDist) maxDist = d;
+  }
+  const invDistRange = 1.0 / (maxDist - minDist || 1);
 
   for (let fi = 0; fi < frames.length; fi++) {
     const frame = frames[fi];
     const mapping = mappings[fi];
     if (!mapping) continue;
 
-    // Y position in volume based on distance
-    const yNorm = (mapping.distanceM - minDist) / distRange;
-    const yi = Math.floor(yNorm * (resY - 1));
+    const yi = ((mapping.distanceM - minDist) * invDistRange * (resY - 1)) | 0;
     if (yi < 0 || yi >= resY) continue;
 
-    for (let row = 0; row < frame.height; row++) {
-      const depth = (row / frame.height) * beam.depthMaxM;
-      if (depth < beam.nearFieldM) continue;
+    const yOffset = yi * resX;
+    const invHeight = 1.0 / frame.height;
+    const invWidth = 1.0 / frame.width;
+    const nearFieldRow = Math.ceil((beam.nearFieldM / beam.depthMaxM) * frame.height);
 
-      const radiusAtDepth = coneRadiusAtDepth(depth, halfAngle);
-      const sigma = beam.lateralFalloffSigma * radiusAtDepth;
-      const sigma2x2 = 2 * sigma * sigma;
+    // Pre-compute per-col normalizedCol
+    const colNorm = new Float32Array(frame.width);
+    for (let col = 0; col < frame.width; col++) {
+      colNorm[col] = (col * invWidth - 0.5) * 2;
+    }
 
-      const zi = Math.floor((depth / extZ) * resZ);
+    for (let row = nearFieldRow; row < frame.height; row++) {
+      const depth = row * invHeight * beam.depthMaxM;
+      const zi = (depth * invExtZ_resZ) | 0;
       if (zi < 0 || zi >= resZ) continue;
 
+      const radiusAtDepth = depth * tanHalf;
+      const sigma = latSigmaFactor * radiusAtDepth;
+      const invSigma2x2 = sigma > 0 ? -1.0 / (2 * sigma * sigma) : 0;
+      const ziStride = zi * strideZ + yOffset;
+      const rowOffset = row * frame.width;
+
       for (let col = 0; col < frame.width; col++) {
-        const intensity = frame.intensity[row * frame.width + col];
+        const intensity = frame.intensity[rowOffset + col];
         if (intensity < 0.001) continue;
 
-        const normalizedCol = (col / frame.width - 0.5) * 2;
-        const lateralOffset = normalizedCol * radiusAtDepth;
-        const lateralDist2 = lateralOffset * lateralOffset;
-        const gaussWeight = sigma2x2 > 0
-          ? Math.exp(-lateralDist2 / sigma2x2)
+        const lateralOffset = colNorm[col] * radiusAtDepth;
+        const gaussWeight = invSigma2x2 !== 0
+          ? Math.exp(lateralOffset * lateralOffset * invSigma2x2)
           : 1.0;
 
-        const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
+        const xi = ((lateralOffset - originX) * invExtX_resX) | 0;
         if (xi < 0 || xi >= resX) continue;
 
-        const voxelIdx = zi * resY * resX + yi * resX + xi;
-        if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
+        const voxelIdx = ziStride + xi;
+        if (voxelIdx >= 0 && voxelIdx < dataLen) {
           volume.data[voxelIdx] += intensity * gaussWeight;
           volume.weights[voxelIdx] += gaussWeight;
         }
@@ -194,23 +225,49 @@ export function projectFramesSpatial(
 /**
  * Normalize accumulated volume: divide by weights to get average intensity.
  * Returns a new Float32Array of normalized values [0–1].
+ *
+ * Optimized: first pass finds max while normalizing by weights,
+ * second pass scales to [0-1]. Unrolled 4x for throughput.
  */
 export function normalizeVolume(volume: ProbabilisticVolume): Float32Array {
-  const out = new Float32Array(volume.data.length);
+  const len = volume.data.length;
+  const out = new Float32Array(len);
+  const data = volume.data;
+  const weights = volume.weights;
   let maxVal = 0;
 
-  // First pass: normalize by weights
-  for (let i = 0; i < volume.data.length; i++) {
-    if (volume.weights[i] > 0) {
-      out[i] = volume.data[i] / volume.weights[i];
-      if (out[i] > maxVal) maxVal = out[i];
-    }
+  // Pass 1: normalize by weights + track max (unrolled 4x)
+  const len4 = (len >> 2) << 2;
+  for (let i = 0; i < len4; i += 4) {
+    const w0 = weights[i], w1 = weights[i + 1], w2 = weights[i + 2], w3 = weights[i + 3];
+    const v0 = w0 > 0 ? data[i] / w0 : 0;
+    const v1 = w1 > 0 ? data[i + 1] / w1 : 0;
+    const v2 = w2 > 0 ? data[i + 2] / w2 : 0;
+    const v3 = w3 > 0 ? data[i + 3] / w3 : 0;
+    out[i] = v0; out[i + 1] = v1; out[i + 2] = v2; out[i + 3] = v3;
+    // Branch-free max: reduces branch misprediction
+    if (v0 > maxVal) maxVal = v0;
+    if (v1 > maxVal) maxVal = v1;
+    if (v2 > maxVal) maxVal = v2;
+    if (v3 > maxVal) maxVal = v3;
+  }
+  for (let i = len4; i < len; i++) {
+    const w = weights[i];
+    const v = w > 0 ? data[i] / w : 0;
+    out[i] = v;
+    if (v > maxVal) maxVal = v;
   }
 
-  // Second pass: normalize to 0–1 range
+  // Pass 2: scale to [0-1] (unrolled 4x)
   if (maxVal > 0) {
     const invMax = 1.0 / maxVal;
-    for (let i = 0; i < out.length; i++) {
+    for (let i = 0; i < len4; i += 4) {
+      out[i] *= invMax;
+      out[i + 1] *= invMax;
+      out[i + 2] *= invMax;
+      out[i + 3] *= invMax;
+    }
+    for (let i = len4; i < len; i++) {
       out[i] *= invMax;
     }
   }
@@ -326,6 +383,8 @@ export function projectFrameWindow(
 /**
  * Same as projectFrameIntoCone but with an extra weight multiplier.
  * X = lateral, Y = track (ySliceIndex), Z = depth.
+ *
+ * Optimized: precomputed invariants, minimized per-pixel work.
  */
 function projectFrameIntoConeWeighted(
   frame: PreprocessedFrame,
@@ -334,39 +393,52 @@ function projectFrameIntoConeWeighted(
   ySliceIndex: number,
   weight: number,
 ): void {
-  const [resX, _resY, resZ] = volume.dimensions;
+  const [resX, resY, resZ] = volume.dimensions;
   const [extX, , extZ] = volume.extent;
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
+  const tanHalf = Math.tan(halfAngle);
+  const originX = volume.origin[0];
+  const invExtX_resX = resX / extX;
+  const invExtZ_resZ = resZ / extZ;
+  const latSigmaFactor = beam.lateralFalloffSigma;
+  const dataLen = volume.data.length;
+  const strideZ = resY * resX;
+  const yOffset = ySliceIndex * resX;
+  const invHeight = 1.0 / frame.height;
+  const invWidth = 1.0 / frame.width;
+  const nearFieldRow = Math.ceil((beam.nearFieldM / beam.depthMaxM) * frame.height);
 
-  for (let row = 0; row < frame.height; row++) {
-    const depth = (row / frame.height) * beam.depthMaxM;
-    if (depth < beam.nearFieldM) continue;
+  // Pre-compute per-col normalizedCol
+  const colNorm = new Float32Array(frame.width);
+  for (let col = 0; col < frame.width; col++) {
+    colNorm[col] = (col * invWidth - 0.5) * 2;
+  }
 
-    const radiusAtDepth = coneRadiusAtDepth(depth, halfAngle);
-    const sigma = beam.lateralFalloffSigma * radiusAtDepth;
-    const sigma2x2 = 2 * sigma * sigma;
-
-    const zi = Math.floor((depth / extZ) * resZ);
+  for (let row = nearFieldRow; row < frame.height; row++) {
+    const depth = row * invHeight * beam.depthMaxM;
+    const zi = (depth * invExtZ_resZ) | 0;
     if (zi < 0 || zi >= resZ) continue;
 
+    const radiusAtDepth = depth * tanHalf;
+    const sigma = latSigmaFactor * radiusAtDepth;
+    const invSigma2x2 = sigma > 0 ? -1.0 / (2 * sigma * sigma) : 0;
+    const ziStride = zi * strideZ + yOffset;
+    const rowOffset = row * frame.width;
+
     for (let col = 0; col < frame.width; col++) {
-      const intensity = frame.intensity[row * frame.width + col];
+      const intensity = frame.intensity[rowOffset + col];
       if (intensity < 0.001) continue;
 
-      const normalizedCol = (col / frame.width - 0.5) * 2;
-      const lateralOffset = normalizedCol * radiusAtDepth;
-
-      const lateralDist2 = lateralOffset * lateralOffset;
-      const gaussWeight = sigma2x2 > 0
-        ? Math.exp(-lateralDist2 / sigma2x2)
+      const lateralOffset = colNorm[col] * radiusAtDepth;
+      const gaussWeight = invSigma2x2 !== 0
+        ? Math.exp(lateralOffset * lateralOffset * invSigma2x2)
         : 1.0;
 
-      // Map lateral offset to X voxel
-      const xi = Math.floor(((lateralOffset - volume.origin[0]) / extX) * resX);
+      const xi = ((lateralOffset - originX) * invExtX_resX) | 0;
       if (xi < 0 || xi >= resX) continue;
 
-      const voxelIdx = zi * volume.dimensions[1] * resX + ySliceIndex * resX + xi;
-      if (voxelIdx >= 0 && voxelIdx < volume.data.length) {
+      const voxelIdx = ziStride + xi;
+      if (voxelIdx >= 0 && voxelIdx < dataLen) {
         const w = gaussWeight * weight;
         volume.data[voxelIdx] += intensity * w;
         volume.weights[voxelIdx] += w;

@@ -441,7 +441,8 @@ export function ScanPage() {
       worker.onerror = (err) => reject(new Error(err.message));
     });
 
-    const PARALLEL = Math.min(4, Math.max(2, Math.floor(navigator.hardwareConcurrency / 2)));
+    // Use more parallel video decoders — each handles sequential seeks in its chunk
+    const PARALLEL = Math.min(6, Math.max(2, navigator.hardwareConcurrency || 4));
     const blobUrl = video.src;
     const chunkSize = Math.ceil(totalFrames / PARALLEL);
     let extractedCount = 0;
@@ -461,8 +462,11 @@ export function ScanPage() {
         worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
 
         extractedCount++;
-        const p = (extractedCount / totalFrames) * EXTRACT_WEIGHT;
-        setProgress({ stage: 'preprocessing', progress: p, message: t('v2.pipeline.extracting'), currentFrame: extractedCount, totalFrames });
+        // Throttle progress updates to every 5 frames to reduce React re-renders
+        if (extractedCount % 5 === 0 || extractedCount === totalFrames) {
+          const p = (extractedCount / totalFrames) * EXTRACT_WEIGHT;
+          setProgress({ stage: 'preprocessing', progress: p, message: t('v2.pipeline.extracting'), currentFrame: extractedCount, totalFrames });
+        }
       }
     };
 
@@ -474,8 +478,12 @@ export function ScanPage() {
       videos.push(v);
     }
 
+    // Wait for all video elements to be ready (parallel load)
     await Promise.all(
-      videos.slice(1).map((v) => new Promise<void>((r) => { v.oncanplaythrough = () => r(); })),
+      videos.slice(1).map((v) => new Promise<void>((r) => {
+        if (v.readyState >= 4) { r(); return; }
+        v.oncanplaythrough = () => r();
+      })),
     );
 
     const chunkPromises = videos.map((v, p) => {

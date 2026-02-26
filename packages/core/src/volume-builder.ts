@@ -93,12 +93,23 @@ function resampleSlices(
     const f0 = indexed[lo].frame;
     const f1 = indexed[hi].frame;
 
-    // Linear interpolation between two frames
-    const pixels = new Float32Array(width * height);
-    for (let i = 0; i < width * height; i++) {
-      const v0 = f0.pixels[i] !== undefined ? f0.pixels[i] / 255 : 0;
-      const v1 = f1.pixels[i] !== undefined ? f1.pixels[i] / 255 : 0;
-      pixels[i] = v0 + t * (v1 - v0);
+    // Linear interpolation between two frames (optimized: avoid per-pixel undef checks)
+    const len = width * height;
+    const pixels = new Float32Array(len);
+    const p0 = f0.pixels;
+    const p1 = f1.pixels;
+    const inv255 = 1.0 / 255;
+    const oneMinusT = 1.0 - t;
+    // Unrolled 4x for throughput
+    const len4 = (len >> 2) << 2;
+    for (let i = 0; i < len4; i += 4) {
+      pixels[i]     = (p0[i]     * oneMinusT + p1[i]     * t) * inv255;
+      pixels[i + 1] = (p0[i + 1] * oneMinusT + p1[i + 1] * t) * inv255;
+      pixels[i + 2] = (p0[i + 2] * oneMinusT + p1[i + 2] * t) * inv255;
+      pixels[i + 3] = (p0[i + 3] * oneMinusT + p1[i + 3] * t) * inv255;
+    }
+    for (let i = len4; i < len; i++) {
+      pixels[i] = (p0[i] * oneMinusT + p1[i] * t) * inv255;
     }
 
     slices.push({ distanceM: targetDist, pixels, width, height });
@@ -155,14 +166,16 @@ export function buildVolume(
   const data = new Float32Array(dimX * dimY * dimZ);
 
   // Fill volume: data[z * dimY * dimX + y * dimX + x]
+  // Optimized: copy row-by-row using TypedArray.set instead of pixel-by-pixel
+  const strideZ = dimY * dimX;
   for (let yi = 0; yi < dimY; yi++) {
-    const slice = slices[yi];
+    const pixels = slices[yi].pixels;
+    const yiOffset = yi * dimX;
+
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let xi = 0; xi < dimX; xi++) {
-        const srcIdx = zi * dimX + xi;
-        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
-        data[dstIdx] = slice.pixels[srcIdx] ?? 0;
-      }
+      const srcOffset = zi * dimX;
+      const dstOffset = zi * strideZ + yiOffset;
+      data.set(pixels.subarray(srcOffset, srcOffset + dimX), dstOffset);
     }
 
     if (yi % 50 === 0) {
