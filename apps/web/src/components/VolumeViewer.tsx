@@ -188,13 +188,13 @@ export function VolumeViewer({
     if (mode === 'spatial') {
       return {
         ...DEFAULT_RENDERER,
-        chromaticMode: 'high-contrast' as RendererSettings['chromaticMode'],
+        chromaticMode: 'sonar-original' as RendererSettings['chromaticMode'],
         opacityScale: 1.0,
-        threshold: 0,
-        densityScale: 1.4,
+        threshold: 0.02,
+        densityScale: 1.3,
         smoothing: 1.0,
-        ghostEnhancement: 3.0,
-        stepCount: 192,
+        ghostEnhancement: 0,
+        stepCount: 512,
         showBeam: false,
       };
     }
