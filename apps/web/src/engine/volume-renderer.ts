@@ -233,6 +233,18 @@ export class VolumeRenderer {
     return cal;
   }
 
+  /** Programmatically orbit the camera by delta angles (radians) */
+  rotateBy(deltaAzimuth: number, deltaPolar: number): void {
+    const offset = this.camera.position.clone().sub(this.controls.target);
+    const spherical = new THREE.Spherical().setFromVector3(offset);
+    spherical.theta -= deltaAzimuth;
+    spherical.phi -= deltaPolar;
+    spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
+    offset.setFromSpherical(spherical);
+    this.camera.position.copy(this.controls.target).add(offset);
+    this.controls.update();
+  }
+
   // ─── Camera Presets ─────────────────────────────────────────────────────
 
   setCameraPreset(preset: CameraPreset): void {

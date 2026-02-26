@@ -201,9 +201,23 @@ export function VolumeViewer({
   const bPressCountRef = useRef(0);
   const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // "b" x5 toggle + Ctrl+S save
+  // "b" x5 toggle + Ctrl+S save + arrow keys orbit
   useEffect(() => {
+    const ORBIT_SPEED = 0.05; // radians per key press
+
     const handleKey = (e: KeyboardEvent) => {
+      // Arrow keys — orbit camera
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && rendererRef.current) {
+        e.preventDefault();
+        switch (e.key) {
+          case 'ArrowLeft':  rendererRef.current.rotateBy( ORBIT_SPEED, 0); break;
+          case 'ArrowRight': rendererRef.current.rotateBy(-ORBIT_SPEED, 0); break;
+          case 'ArrowUp':    rendererRef.current.rotateBy(0,  ORBIT_SPEED); break;
+          case 'ArrowDown':  rendererRef.current.rotateBy(0, -ORBIT_SPEED); break;
+        }
+        return;
+      }
+
       // Ctrl+S / Cmd+S — save calibration
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
         e.preventDefault();
