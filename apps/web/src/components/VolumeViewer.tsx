@@ -83,8 +83,9 @@ function buildSliceVolumeFromFrames(
 }
 
 // ─── Build a windowed volume for temporal playback ─────────────────────────
-// Same direct pixel stacking as buildSliceVolumeFromFrames, but for a
-// sliding window of frames. Produces visible echoes (no cone projection).
+// Direct pixel stacking with cone mask on Y axis (track/frames):
+// At the surface (low Z/depth), only central frames are visible;
+// at depth (high Z), all frames in the window are visible.
 // Layout: data[z * dimY * dimX + y * dimX + x]
 //   X = pixel col (lateral), Y = frame index (window), Z = pixel row (depth)
 
@@ -107,10 +108,19 @@ function buildWindowVolume(
   const dimZ = windowFrames[0].height;   // depth (sonar rows)
 
   const data = new Float32Array(dimX * dimY * dimZ);
+  const centerY = (dimY - 1) / 2;
 
   for (let yi = 0; yi < dimY; yi++) {
     const frame = windowFrames[yi];
+    // Distance from center frame (0..1)
+    const distY = Math.abs(yi - centerY) / Math.max(centerY, 1);
+
     for (let zi = 0; zi < dimZ; zi++) {
+      // Cone opens with depth: depthFrac 0 = surface (narrow), 1 = bottom (wide)
+      const depthFrac = zi / Math.max(dimZ - 1, 1);
+      // At depthFrac=0 only center (distY=0) passes; at depthFrac=1 all pass
+      if (distY > depthFrac) continue;
+
       for (let xi = 0; xi < dimX; xi++) {
         const srcIdx = zi * dimX + xi;
         const dstIdx = zi * dimY * dimX + yi * dimX + xi;
@@ -255,6 +265,8 @@ export function VolumeViewer({
   const [playSpeed, setPlaySpeed] = useState(4);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
+  const playSpeedRef = useRef(playSpeed);
+  const lastTimeRef = useRef(0);
 
   // Volume data for 2D orthogonal slices:
   // - Mode A: built from ALL raw frames at full pixel resolution (v1-style stacking)
@@ -358,22 +370,24 @@ export function VolumeViewer({
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
   }, [isTemporalMode, currentFrame, frames]);
 
-  // Playback animation loop
+  // Keep refs in sync
+  useEffect(() => { playingRef.current = playing; }, [playing]);
+  useEffect(() => { playSpeedRef.current = playSpeed; }, [playSpeed]);
+  useEffect(() => { currentFrameRef.current = currentFrame; }, [currentFrame]);
+
+  // Playback animation loop — reads refs directly so it doesn't restart on every frame
   useEffect(() => {
-    if (!isTemporalMode) return;
-    playingRef.current = playing;
-    currentFrameRef.current = currentFrame;
+    if (!isTemporalMode || !playing) return;
 
-    if (!playing) return;
-
-    let lastTime = 0;
-    const intervalMs = 1000 / playSpeed;
+    lastTimeRef.current = 0;
     let rafId: number;
 
     const tick = (timestamp: number) => {
       if (!playingRef.current) return;
-      if (timestamp - lastTime >= intervalMs) {
-        lastTime = timestamp;
+      const intervalMs = 1000 / playSpeedRef.current;
+      if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
+      if (timestamp - lastTimeRef.current >= intervalMs) {
+        lastTimeRef.current = timestamp;
         const next = currentFrameRef.current + 1;
         if (next >= frames!.length) {
           setPlaying(false);
@@ -387,7 +401,7 @@ export function VolumeViewer({
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [playing, playSpeed, isTemporalMode, frames, currentFrame]);
+  }, [playing, isTemporalMode, frames]);
 
   // Update settings
   const updateSetting = useCallback(
