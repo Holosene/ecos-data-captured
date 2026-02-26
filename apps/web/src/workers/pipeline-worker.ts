@@ -109,6 +109,11 @@ self.onmessage = (e: MessageEvent) => {
         normalizedData = normalizeVolume(volume);
         dims = volume.dimensions;
         ext = volume.extent;
+      } else if (viewMode === 'classic') {
+        // ── Mode C: no static volume — frames are used for live temporal playback ──
+        normalizedData = new Float32Array(0);
+        dims = [grid.resX, grid.resY, grid.resZ];
+        ext = [1, 1, 1];
       } else {
         // ── Mode A: build stacked instrument volume (all frames along Y) ──
         self.postMessage({ type: 'stage', stage: 'projecting' });
