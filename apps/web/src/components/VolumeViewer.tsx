@@ -15,7 +15,7 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
-import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
+import { DEFAULT_RENDERER, computeAutoThreshold } from '@echos/core';
 import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
@@ -27,12 +27,12 @@ import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
 
 interface VolumeViewerProps {
-  /** Static volume data (Mode B spatial, or fallback) */
+  /** Static volume data (Rendu A, or fallback) */
   volumeData: Float32Array | null;
   dimensions: [number, number, number];
   extent: [number, number, number];
   mode: 'instrument' | 'spatial';
-  /** Mode A temporal: preprocessed frames for live playback */
+  /** Preprocessed frames for Rendu B (sliding window playback) */
   frames?: PreprocessedFrame[];
   beam?: BeamSettings;
   grid?: VolumeGridSettings;
@@ -80,6 +80,52 @@ function buildSliceVolumeFromFrames(
   }
 
   return { data, dimensions: [dimX, dimY, dimZ] };
+}
+
+// ─── Rendu B: windowed volume for temporal playback ────────────────────────
+// Direct pixel stacking (no cone projection). Sliding window of N frames.
+// Layout: data[z * dimY * dimX + y * dimX + x]
+//   X = pixel col (lateral), Y = frame index (window), Z = pixel row (depth)
+
+function buildWindowVolume(
+  allFrames: PreprocessedFrame[],
+  centerIndex: number,
+  windowSize: number,
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
+  const half = Math.floor(windowSize / 2);
+  const start = Math.max(0, centerIndex - half);
+  const end = Math.min(allFrames.length, start + windowSize);
+  const windowFrames = allFrames.slice(start, end);
+
+  if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
+    return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
+  }
+
+  const dimX = windowFrames[0].width;    // lateral (beam columns)
+  const dimY = windowFrames.length;      // track (window frames)
+  const dimZ = windowFrames[0].height;   // depth (sonar rows)
+
+  const data = new Float32Array(dimX * dimY * dimZ);
+
+  for (let yi = 0; yi < dimY; yi++) {
+    const frame = windowFrames[yi];
+    for (let zi = 0; zi < dimZ; zi++) {
+      for (let xi = 0; xi < dimX; xi++) {
+        const srcIdx = zi * dimX + xi;
+        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
+        data[dstIdx] = frame.intensity[srcIdx] ?? 0;
+      }
+    }
+  }
+
+  // Extent: Y forced thick (0.5) so volume has visible depth
+  // even with few frames (12 frames vs 200+ pixels).
+  const aspect = dimX / dimZ;
+  return {
+    normalized: data,
+    dimensions: [dimX, dimY, dimZ],
+    extent: [aspect, 0.5, 1],
+  };
 }
 
 // ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
@@ -202,10 +248,8 @@ export function VolumeViewer({
     rendererRef.current?.setCalibration(cal);
   }, []);
 
-  // Temporal playback state (Mode A)
-  // Disabled: 3D volume now uses the pre-built stacked volume from the worker.
-  // Playback only affects the 2D slice highlight, not the 3D volume data.
-  const isTemporalMode = false;
+  // Rendu B: temporal playback with sliding window (active when mode === 'spatial')
+  const isRenduB = mode === 'spatial' && frames && frames.length > 0;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState(4);
@@ -248,16 +292,16 @@ export function VolumeViewer({
     rendererRef.current.updateBeamGeometry(beam.beamAngleDeg / 2, beam.depthMaxM);
   }, [beam]);
 
-  // Upload static volume data (Mode B or non-temporal Mode A)
+  // Rendu A: upload static volume data from worker
   useEffect(() => {
-    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
+    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isRenduB) return;
     rendererRef.current.uploadVolume(volumeData, dimensions, extent);
 
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
       updateSetting('threshold', threshold);
     }
-  }, [volumeData, dimensions, extent, isTemporalMode]);
+  }, [volumeData, dimensions, extent, isRenduB]);
 
   // Set slice data: use full-frame volume (v1-style stacking) when frames are
   // available (both Mode A and Mode B), fall back to projected volume otherwise.
@@ -274,9 +318,9 @@ export function VolumeViewer({
   // Pre-computed frame projection cache for smooth playback
   const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
-  // Pre-compute frame projections ahead of current position
+  // Rendu B: pre-compute windowed volumes ahead of current position
   useEffect(() => {
-    if (!isTemporalMode) return;
+    if (!isRenduB) return;
 
     const cache = frameCacheRef.current;
     const lookAhead = 16;
@@ -286,7 +330,7 @@ export function VolumeViewer({
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames!.length || cache.has(idx)) continue;
-        const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
+        const result = buildWindowVolume(frames!, idx, WINDOW_SIZE);
         if (!cancelled) cache.set(idx, result);
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
@@ -298,26 +342,25 @@ export function VolumeViewer({
     })();
 
     return () => { cancelled = true; };
-  }, [isTemporalMode, currentFrame, frames, beam, grid]);
+  }, [isRenduB, currentFrame, frames]);
 
-  // Temporal projection: use cache or compute on-demand
+  // Rendu B: build windowed volume and upload
   useEffect(() => {
-    if (!isTemporalMode || !rendererRef.current) return;
+    if (!isRenduB || !rendererRef.current) return;
 
     const cache = frameCacheRef.current;
     let result = cache.get(currentFrame);
     if (!result) {
-      result = projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
+      result = buildWindowVolume(frames!, currentFrame, WINDOW_SIZE);
       cache.set(currentFrame, result);
     }
 
-    // Upload conic-projected volume for 3D ray marching
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-  }, [isTemporalMode, currentFrame, frames, beam, grid]);
+  }, [isRenduB, currentFrame, frames]);
 
   // Playback animation loop
   useEffect(() => {
-    if (!isTemporalMode) return;
+    if (!isRenduB) return;
     playingRef.current = playing;
     currentFrameRef.current = currentFrame;
 
@@ -344,7 +387,7 @@ export function VolumeViewer({
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [playing, playSpeed, isTemporalMode, frames, currentFrame]);
+  }, [playing, playSpeed, isRenduB, frames, currentFrame]);
 
   // Update settings
   const updateSetting = useCallback(
@@ -381,7 +424,7 @@ export function VolumeViewer({
 
   const chromaticModes = getChromaticModes();
   const totalFrames = frames?.length ?? 0;
-  const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
+  const currentTimeS = isRenduB && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -421,7 +464,7 @@ export function VolumeViewer({
               pointerEvents: 'none',
             }}
           >
-            {mode === 'instrument' ? `Mode A — ${t('v2.mode.instrument')}` : `Mode B — ${t('v2.mode.spatial')}`}
+            {mode === 'instrument' ? 'Rendu A' : 'Rendu B'}
           </div>
 
           {/* Camera preset buttons */}
@@ -460,7 +503,7 @@ export function VolumeViewer({
             ))}
           </div>
 
-          {!volumeData && !isTemporalMode && (
+          {!volumeData && !isRenduB && (
             <div
               style={{
                 position: 'absolute',
@@ -569,7 +612,7 @@ export function VolumeViewer({
                 </label>
               )}
 
-              {isTemporalMode && (
+              {isRenduB && (
                 <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
               )}
             </GlassPanel>
@@ -577,8 +620,8 @@ export function VolumeViewer({
         </div>
       </div>
 
-      {/* Timeline bar (Mode A temporal) */}
-      {isTemporalMode && totalFrames > 0 && (
+      {/* Timeline bar (Rendu B temporal playback) */}
+      {isRenduB && totalFrames > 0 && (
         <div
           style={{
             display: 'flex',
