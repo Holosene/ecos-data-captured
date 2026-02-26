@@ -202,12 +202,9 @@ export function VolumeViewer({
     rendererRef.current?.setCalibration(cal);
   }, []);
 
-  // Sliding window playback
-  const [windowPlaying, setWindowPlaying] = useState(true);
-  const scrubberRef = useRef<HTMLInputElement>(null);
-  const frameLabelRef = useRef<HTMLSpanElement>(null);
-
-  // Legacy temporal playback state (Mode A) — disabled
+  // Temporal playback state (Mode A)
+  // Disabled: 3D volume now uses the pre-built stacked volume from the worker.
+  // Playback only affects the 2D slice highlight, not the 3D volume data.
   const isTemporalMode = false;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -238,20 +235,7 @@ export function VolumeViewer({
     const defaultPreset = mode === 'instrument' ? 'frontal' : 'horizontal';
     renderer.setCameraPreset(defaultPreset);
 
-    // Sync playback scrubber & frame label (no React re-renders)
-    renderer.setOnPlaybackTick((p: number) => {
-      if (scrubberRef.current) {
-        scrubberRef.current.value = String(Math.round(p * 1000));
-      }
-      if (frameLabelRef.current) {
-        const total = renderer.getTotalFrames();
-        const frame = Math.round(p * Math.max(total - 1, 0));
-        frameLabelRef.current.textContent = `${frame + 1} / ${total}`;
-      }
-    });
-
     return () => {
-      renderer.setOnPlaybackTick(undefined);
       renderer.dispose();
       rendererRef.current = null;
     };
@@ -593,78 +577,7 @@ export function VolumeViewer({
         </div>
       </div>
 
-      {/* Playback bar — sliding window */}
-      {volumeData && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '6px 12px',
-            background: colors.surface,
-            borderRadius: '8px',
-            border: `1px solid ${colors.border}`,
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => {
-              const next = !windowPlaying;
-              setWindowPlaying(next);
-              rendererRef.current?.setPlaybackPlaying(next);
-            }}
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              border: `1px solid ${colors.accent}`,
-              background: windowPlaying ? colors.accentMuted : 'transparent',
-              color: colors.accent,
-              cursor: 'pointer',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              fontFamily: 'inherit',
-            }}
-          >
-            {windowPlaying ? '||' : '\u25B6'}
-          </button>
-
-          <input
-            ref={scrubberRef}
-            type="range"
-            min={0}
-            max={1000}
-            defaultValue={0}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              const p = Number(e.target.value) / 1000;
-              rendererRef.current?.setPlaybackProgress(p);
-              rendererRef.current?.setPlaybackPlaying(false);
-              setWindowPlaying(false);
-            }}
-            style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
-          />
-
-          <span
-            ref={frameLabelRef}
-            style={{
-              fontSize: '10px',
-              color: colors.text3,
-              fontVariantNumeric: 'tabular-nums',
-              fontFamily: 'monospace',
-              minWidth: '70px',
-              textAlign: 'right',
-              flexShrink: 0,
-            }}
-          >
-            1 / {dimensions[1]}
-          </span>
-        </div>
-      )}
-
-      {/* Timeline bar (Mode A temporal — legacy, disabled) */}
+      {/* Timeline bar (Mode A temporal) */}
       {isTemporalMode && totalFrames > 0 && (
         <div
           style={{

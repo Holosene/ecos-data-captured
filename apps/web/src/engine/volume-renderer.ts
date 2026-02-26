@@ -25,7 +25,6 @@ import { generateLUT } from './transfer-function.js';
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
-  window: { size: number; speed: number };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -35,7 +34,6 @@ export interface CalibrationConfig {
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
-  window: { size: 0.15, speed: 0.08 },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -68,12 +66,6 @@ export class VolumeRenderer {
   private calibration: CalibrationConfig;
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
-
-  // Playback state (sliding window: volume translates through fixed clip region)
-  private playbackProgress: number = 0; // 0 → 1
-  private playbackPlaying: boolean = true;
-  private lastAnimTime: number = 0;
-  private onPlaybackTick?: (progress: number) => void;
 
   constructor(
     container: HTMLElement,
@@ -162,7 +154,13 @@ export class VolumeRenderer {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Recompute scale — direct from extent
+    // Position only — no rotation on mesh (Règle 4)
+    if (this.volumeMesh) {
+      const p = config.position;
+      this.volumeMesh.position.set(p.x, p.y, p.z);
+    }
+
+    // Recompute scale — direct from extent (Règle 5)
     if (this.material) {
       const maxExtent = Math.max(...this.extent);
       const scale = new THREE.Vector3(
@@ -175,15 +173,7 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-
-      // Update clip planes
-      const clipHalf = config.window.size * halfScale.y;
-      this.material.uniforms.uClipYMin.value = -clipHalf;
-      this.material.uniforms.uClipYMax.value = clipHalf;
     }
-
-    // Re-apply playback position (recalculates mesh Y with new calibration)
-    this.applyPlaybackPosition();
 
     // Scene helpers
     const axesBaseSize = 0.3;
@@ -218,10 +208,9 @@ export class VolumeRenderer {
 
     switch (preset) {
       case 'frontal': {
-        // Look down the Y axis (track/frame axis) — cone face (X-Z) visible
         const dist = maxDim * distMul;
-        this.camera.position.set(0, dist, 0);
-        this.camera.up.set(0, 0, -1);
+        this.camera.position.set(0, 0, dist);
+        this.camera.up.set(0, 1, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
@@ -351,9 +340,6 @@ export class VolumeRenderer {
         uShowBeam: { value: this.settings.showBeam },
         uBeamAngle: { value: 0.175 },
         uTimeSlice: { value: 0.5 },
-        uMeshPosition: { value: new THREE.Vector3() },
-        uClipYMin: { value: -this.calibration.window.size * halfScale.y },
-        uClipYMax: { value: this.calibration.window.size * halfScale.y },
       },
       side: THREE.BackSide,
       transparent: true,
@@ -361,10 +347,12 @@ export class VolumeRenderer {
     });
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
-    this.scene.add(this.volumeMesh);
 
-    // Apply playback position (sets mesh.position based on progress + calibration offset)
-    this.applyPlaybackPosition();
+    // Position only — no rotation on mesh (Règle 4)
+    const p = this.calibration.position;
+    this.volumeMesh.position.set(p.x, p.y, p.z);
+
+    this.scene.add(this.volumeMesh);
 
     // Set camera on first mesh creation only (preserve user rotation during playback)
     if (!this.meshCreated) {
@@ -382,11 +370,13 @@ uniform vec3 volumeScale;
 
 in vec3 position;
 
-out vec3 vModelPos;
+out vec3 vWorldPos;
+out vec3 vLocalPos;
 
 void main() {
-  vModelPos = position * volumeScale;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(vModelPos, 1.0);
+  vLocalPos = position * 0.5 + 0.5;
+  vWorldPos = position * volumeScale;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position * volumeScale, 1.0);
 }
 `;
   }
@@ -398,12 +388,9 @@ precision highp sampler3D;
 uniform sampler3D uVolume;
 uniform sampler2D uTransferFunction;
 uniform vec3 uCameraPos;
-uniform vec3 uMeshPosition;
 uniform vec3 uVolumeMin;
 uniform vec3 uVolumeMax;
 uniform vec3 uVolumeSize;
-uniform float uClipYMin;
-uniform float uClipYMax;
 
 uniform float uOpacityScale;
 uniform float uThreshold;
@@ -415,7 +402,8 @@ uniform bool uShowBeam;
 uniform float uBeamAngle;
 uniform float uTimeSlice;
 
-in vec3 vModelPos;
+in vec3 vWorldPos;
+in vec3 vLocalPos;
 
 out vec4 fragColor;
 
@@ -447,11 +435,10 @@ float sampleVolume(vec3 pos) {
 }
 
 void main() {
-  // Transform camera position to model space (mesh only has translation)
-  vec3 localCamPos = uCameraPos - uMeshPosition;
-  vec3 rayDir = normalize(vModelPos - localCamPos);
+  vec3 rayOrigin = uCameraPos;
+  vec3 rayDir = normalize(vWorldPos - uCameraPos);
 
-  vec2 tHit = intersectBox(localCamPos, rayDir, uVolumeMin, uVolumeMax);
+  vec2 tHit = intersectBox(rayOrigin, rayDir, uVolumeMin, uVolumeMax);
   float tNear = max(tHit.x, 0.0);
   float tFar = tHit.y;
 
@@ -465,15 +452,10 @@ void main() {
     if (i >= uStepCount) break;
     if (accum.a >= 0.98) break;
 
-    vec3 samplePos = localCamPos + rayDir * t;
-
-    // World-space Y clipping: fixed visibility region
-    float worldY = samplePos.y + uMeshPosition.y;
-
+    vec3 samplePos = rayOrigin + rayDir * t;
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
-    if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))
-        && worldY >= uClipYMin && worldY <= uClipYMax) {
+    if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
       float rawVal = sampleVolume(uvw);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
@@ -530,60 +512,6 @@ void main() {
     }
   }
 
-  // ─── Playback (sliding window: volume moves through fixed clip region) ───
-
-  setPlaybackPlaying(playing: boolean): void {
-    this.playbackPlaying = playing;
-    if (playing) this.lastAnimTime = 0;
-  }
-
-  isPlaybackPlaying(): boolean {
-    return this.playbackPlaying;
-  }
-
-  setPlaybackProgress(t: number): void {
-    this.playbackProgress = Math.max(0, Math.min(1, t));
-    this.applyPlaybackPosition();
-  }
-
-  getPlaybackProgress(): number {
-    return this.playbackProgress;
-  }
-
-  /** Register callback fired each frame during playback (for syncing UI scrubber) */
-  setOnPlaybackTick(cb: ((progress: number) => void) | undefined): void {
-    this.onPlaybackTick = cb;
-  }
-
-  /** Total number of frames along the track axis */
-  getTotalFrames(): number {
-    return this.dimensions[1];
-  }
-
-  /** Apply playback progress — translates mesh along Y, updates shader uniforms */
-  private applyPlaybackPosition(): void {
-    if (!this.volumeMesh || !this.material) return;
-
-    const halfY = this.volumeScale.y * 0.5;
-    const clipHalf = this.calibration.window.size * halfY;
-    const totalTravel = halfY + clipHalf;
-
-    // Volume slides from +totalTravel (first frame at top of clip)
-    // to -totalTravel (last frame at bottom of clip)
-    const meshY = this.calibration.position.y + totalTravel * (1 - 2 * this.playbackProgress);
-
-    this.volumeMesh.position.set(
-      this.calibration.position.x,
-      meshY,
-      this.calibration.position.z,
-    );
-    this.material.uniforms.uMeshPosition.value.set(
-      this.calibration.position.x,
-      meshY,
-      this.calibration.position.z,
-    );
-  }
-
   // ─── Beam wireframe ───────────────────────────────────────────────────
 
   updateBeamGeometry(halfAngleDeg: number, depthMax: number): void {
@@ -613,21 +541,6 @@ void main() {
 
     if (this.material) {
       this.material.uniforms.uCameraPos.value.copy(this.camera.position);
-
-      // Advance playback when playing
-      if (this.playbackPlaying) {
-        const now = performance.now() / 1000;
-        const dt = this.lastAnimTime > 0 ? Math.min(now - this.lastAnimTime, 0.1) : 0;
-        this.lastAnimTime = now;
-
-        this.playbackProgress += this.calibration.window.speed * dt;
-        if (this.playbackProgress > 1) {
-          this.playbackProgress -= 1; // loop
-        }
-
-        this.applyPlaybackPosition();
-        this.onPlaybackTick?.(this.playbackProgress);
-      }
     }
 
     this.renderer.render(this.scene, this.camera);

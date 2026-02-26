@@ -286,7 +286,7 @@ export function buildInstrumentVolume(
   beam: BeamSettings,
   grid: VolumeGridSettings,
   onProgress?: (current: number, total: number) => void,
-): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number]; autoSkewX: number } {
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
@@ -313,15 +313,11 @@ export function buildInstrumentVolume(
     onProgress?.(i + 1, frames.length);
   }
 
-  // Auto-detect diagonal shear from X centroid drift across frames
-  const autoSkewX = computeAutoSkewX(frames);
-
   const normalized = normalizeVolume(volume);
   return {
     normalized,
     dimensions: volume.dimensions,
     extent: volume.extent,
-    autoSkewX,
   };
 }
 
@@ -453,65 +449,6 @@ function projectFrameIntoConeWeighted(
       }
     }
   }
-}
-
-// ─── Auto skew detection ─────────────────────────────────────────────────────
-
-/**
- * Compute the automatic skew correction factor for Mode A diagonal compensation.
- *
- * The sonar screen scrolls data horizontally, so when frames are stacked
- * along Y the "active" data drifts in X, creating a diagonal stripe.
- *
- * This function computes the intensity-weighted X centroid per frame, fits
- * a linear regression (centroid vs normalized frame index), and returns
- * the negative slope — i.e. the shear to apply in the shader to straighten
- * the diagonal:  uvw.x -= autoSkewX * (uvw.y - 0.5)
- */
-export function computeAutoSkewX(frames: PreprocessedFrame[]): number {
-  const n = frames.length;
-  if (n < 2) return 0;
-
-  let sumT = 0;
-  let sumX = 0;
-  let sumTX = 0;
-  let sumTT = 0;
-
-  for (let fi = 0; fi < n; fi++) {
-    const frame = frames[fi];
-    const t = fi / (n - 1); // normalized time 0–1
-
-    // Intensity-weighted average column position (normalized 0–1)
-    let weightedX = 0;
-    let totalW = 0;
-    const invWidth = 1.0 / frame.width;
-
-    for (let row = 0; row < frame.height; row++) {
-      const rowOff = row * frame.width;
-      for (let col = 0; col < frame.width; col++) {
-        const intensity = frame.intensity[rowOff + col];
-        if (intensity > 0.01) {
-          weightedX += col * invWidth * intensity;
-          totalW += intensity;
-        }
-      }
-    }
-
-    const centroidX = totalW > 0 ? weightedX / totalW : 0.5;
-
-    sumT += t;
-    sumX += centroidX;
-    sumTX += t * centroidX;
-    sumTT += t * t;
-  }
-
-  const denom = n * sumTT - sumT * sumT;
-  if (Math.abs(denom) < 1e-10) return 0;
-
-  const slope = (n * sumTX - sumT * sumX) / denom;
-
-  // Return negative slope to counteract the diagonal drift
-  return -slope;
 }
 
 // ─── Estimate memory ────────────────────────────────────────────────────────
