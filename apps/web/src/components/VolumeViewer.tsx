@@ -188,13 +188,13 @@ export function VolumeViewer({
     if (mode === 'spatial') {
       return {
         ...DEFAULT_RENDERER,
-        chromaticMode: 'sonar-original' as RendererSettings['chromaticMode'],
+        chromaticMode: 'high-contrast' as RendererSettings['chromaticMode'],
         opacityScale: 1.0,
-        threshold: 0.02,
-        densityScale: 1.3,
+        threshold: 0,
+        densityScale: 1.2,
         smoothing: 1.0,
-        ghostEnhancement: 0,
-        stepCount: 512,
+        ghostEnhancement: 3.0,
+        stepCount: 192,
         showBeam: false,
       };
     }
@@ -305,7 +305,7 @@ export function VolumeViewer({
   const isTemporalMode = isRenduB || isRenduC;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState((mode === 'spatial' || mode === 'classic') ? 1 : 4);
+  const [playSpeed, setPlaySpeed] = useState(mode === 'classic' ? 1 : 4);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
