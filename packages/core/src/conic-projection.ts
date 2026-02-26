@@ -290,15 +290,19 @@ export function buildInstrumentVolume(
   const halfAngle = (beam.beamAngleDeg / 2) * DEG2RAD;
   const maxRadius = coneRadiusAtDepth(beam.depthMaxM, halfAngle);
   const extentX = maxRadius * 2.5; // Extra room for Gaussian tails
-  // Use depth-proportional extent for Y so the volume has a sensible aspect ratio
-  // (frame count made Y dominate enormously, producing an invisible thin slab)
-  const extentY = beam.depthMaxM * 1.5;
   const extentZ = beam.depthMaxM;
 
-  // Adjust Y resolution to match frame count
+  // Y axis = time/frames: scale proportionally to frame count
+  // Use same voxel size as the Z axis so the volume grows naturally with video duration
+  const voxelSize = extentZ / grid.resZ;
+  const extentY = frames.length * voxelSize;
+
+  // Resolution on Y: one slice per frame, capped for memory
+  const resY = Math.min(frames.length, 512);
+
   const adjustedGrid: VolumeGridSettings = {
     ...grid,
-    resY: Math.min(grid.resY, frames.length),
+    resY,
   };
 
   const volume = createEmptyVolume(adjustedGrid, extentX, extentY, extentZ);
