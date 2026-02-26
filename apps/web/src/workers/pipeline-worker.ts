@@ -3,10 +3,11 @@
  *
  * Offloads heavy computation from the main thread:
  *   1. Frame preprocessing (bilateral denoise, gamma, Gaussian blur, median)
- *   2. Multi-mode projection: generates ALL render modes in a single pass
- *      - Mode A (Instrument): stacked cone volume — always generated
- *      - Mode B (Spatial): GPS-mapped spatial volume — generated when GPS mappings available
- *      - Mode C (Classic): no static volume, uses frames for live temporal playback
+ *   2. Conic projection + normalization (Mode B)
+ *
+ * Main thread sends ImageBitmaps (zero-copy Transferable) for each frame.
+ * Worker preprocesses each frame in parallel with video seeking,
+ * then runs projection when all frames are received.
  *
  * Protocol:
  *   Main → Worker: 'init' | 'frame' | 'done'
@@ -33,6 +34,7 @@ import type {
 let preprocessing: PreprocessingSettings;
 let beam: BeamSettings;
 let grid: VolumeGridSettings;
+let viewMode: 'instrument' | 'spatial' | 'classic';
 let trackTotalDistanceM: number;
 let mappings: FrameMapping[];
 
@@ -47,6 +49,7 @@ self.onmessage = (e: MessageEvent) => {
     preprocessing = msg.preprocessing;
     beam = msg.beam;
     grid = msg.grid;
+    viewMode = msg.viewMode;
     trackTotalDistanceM = msg.trackTotalDistanceM;
     mappings = msg.mappings;
     frames.length = 0;
@@ -79,65 +82,55 @@ self.onmessage = (e: MessageEvent) => {
       // Sort by index (safety, in case frames arrived out of order)
       frames.sort((a, b) => a.index - b.index);
 
-      // ── Mode A: build stacked instrument volume (always) ──
-      self.postMessage({ type: 'stage', stage: 'projecting' });
+      let normalizedData: Float32Array;
+      let dims: [number, number, number];
+      let ext: [number, number, number];
 
-      const instrumentResult = buildInstrumentVolume(frames, beam, grid, (current, total) => {
-        self.postMessage({ type: 'projection-progress', current, total });
-      });
-
-      // ── Mode B: spatial projection (always generated) ──
-      let spatialNormalized: Float32Array | null = null;
-      let spatialDims: [number, number, number] | null = null;
-      let spatialExtent: [number, number, number] | null = null;
-
-      const hasGPS = mappings && mappings.length > 0 && trackTotalDistanceM > 0;
-
-      {
-        self.postMessage({ type: 'stage', stage: 'projecting-spatial' });
+      if (viewMode === 'spatial') {
+        // ── Mode B: conic spatial projection ──
+        self.postMessage({ type: 'stage', stage: 'projecting' });
 
         const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
         const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-
-        // When no GPS, use frame count as synthetic distance (1m per frame)
-        const effectiveDistance = hasGPS ? trackTotalDistanceM : frames.length;
-        const adaptiveResY = Math.max(256, Math.min(1024, Math.round(effectiveDistance)));
+        const adaptiveResY = Math.max(256, Math.min(1024, Math.round(trackTotalDistanceM)));
         const spatialGrid: VolumeGridSettings = { ...grid, resY: adaptiveResY };
 
         const volume = createEmptyVolume(
           spatialGrid,
           maxRadius * 2.5,
-          effectiveDistance,
+          trackTotalDistanceM,
           beam.depthMaxM,
         );
 
-        // When no GPS, create synthetic mappings based on frame index
-        const effectiveMappings = hasGPS ? mappings : frames.map((f) => ({
-          frameIndex: f.index,
-          timeS: f.timeS,
-          distanceM: f.index, // 1m per frame as synthetic distance
-          lat: 0,
-          lon: 0,
-        }));
+        projectFramesSpatial(frames, mappings, volume, beam, (current, total) => {
+          self.postMessage({ type: 'projection-progress', current, total });
+        });
 
-        projectFramesSpatial(frames, effectiveMappings, volume, beam);
+        normalizedData = normalizeVolume(volume);
+        dims = volume.dimensions;
+        ext = volume.extent;
+      } else if (viewMode === 'classic') {
+        // ── Mode C: no static volume — frames are used for live temporal playback ──
+        normalizedData = new Float32Array(0);
+        dims = [grid.resX, grid.resY, grid.resZ];
+        ext = [1, 1, 1];
+      } else {
+        // ── Mode A: build stacked instrument volume (all frames along Y) ──
+        self.postMessage({ type: 'stage', stage: 'projecting' });
 
-        spatialNormalized = normalizeVolume(volume);
-        spatialDims = volume.dimensions;
-        spatialExtent = volume.extent;
+        const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
+          self.postMessage({ type: 'projection-progress', current, total });
+        });
+
+        normalizedData = result.normalized;
+        dims = result.dimensions;
+        ext = result.extent;
       }
-
-      // ── Mode C: no static volume — preprocessed frames passed directly ──
-      // (frames are transferred below)
 
       // Transfer all buffers (zero-copy back to main thread)
       const transferables: Transferable[] = [];
-
-      if (instrumentResult.normalized.buffer.byteLength > 0) {
-        transferables.push(instrumentResult.normalized.buffer);
-      }
-      if (spatialNormalized && spatialNormalized.buffer.byteLength > 0) {
-        transferables.push(spatialNormalized.buffer);
+      if (normalizedData.buffer.byteLength > 0) {
+        transferables.push(normalizedData.buffer);
       }
 
       const frameData = frames.map((f) => {
@@ -152,23 +145,7 @@ self.onmessage = (e: MessageEvent) => {
       });
 
       self.postMessage(
-        {
-          type: 'complete',
-          // Mode A (always present)
-          instrument: {
-            normalizedData: instrumentResult.normalized,
-            dims: instrumentResult.dimensions,
-            extent: instrumentResult.extent,
-          },
-          // Mode B (always present)
-          spatial: {
-            normalizedData: spatialNormalized,
-            dims: spatialDims,
-            extent: spatialExtent,
-          },
-          // Frames for Mode C + slice building
-          frames: frameData,
-        },
+        { type: 'complete', normalizedData, dims, extent: ext, frames: frameData },
         transferables,
       );
     } catch (err) {
