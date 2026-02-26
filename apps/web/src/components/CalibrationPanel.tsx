@@ -9,7 +9,7 @@
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
 import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
-import type { CalibrationConfig, Axis } from '../engine/volume-renderer.js';
+import type { CalibrationConfig } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
 
@@ -74,45 +74,6 @@ function Row({
           flexShrink: 0,
         }}
       />
-    </div>
-  );
-}
-
-// ─── Axis dropdown ──────────────────────────────────────────────────────────
-
-function AxisSelect({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: Axis;
-  onChange: (v: Axis) => void;
-}) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
-      <span style={{ width: '48px', fontSize: '10px', color: colors.text3, flexShrink: 0 }}>
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as Axis)}
-        style={{
-          flex: 1,
-          fontSize: '10px',
-          fontFamily: 'monospace',
-          background: 'rgba(255,255,255,0.05)',
-          border: `1px solid ${colors.border}`,
-          borderRadius: '4px',
-          color: colors.text1,
-          padding: '2px 4px',
-          cursor: 'pointer',
-        }}
-      >
-        <option value="x">X</option>
-        <option value="y">Y</option>
-        <option value="z">Z</option>
-      </select>
     </div>
   );
 }
@@ -229,12 +190,6 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Y" value={config.position.y} min={-2} max={2} step={0.01} onChange={(v) => update('position.y', v)} />
       <Row label="Z" value={config.position.z} min={-2} max={2} step={0.01} onChange={(v) => update('position.z', v)} />
 
-      {/* Rotation */}
-      <Section title="Rotation" />
-      <Row label="Rx" value={config.rotation.x} min={0} max={360} step={1} onChange={(v) => update('rotation.x', v)} />
-      <Row label="Ry" value={config.rotation.y} min={0} max={360} step={1} onChange={(v) => update('rotation.y', v)} />
-      <Row label="Rz" value={config.rotation.z} min={0} max={360} step={1} onChange={(v) => update('rotation.z', v)} />
-
       {/* Skew (shear correction) */}
       <Section title="Skew" />
       <Row label="X" value={config.skewX} min={-1} max={1} step={0.01} onChange={(v) => update('skewX', v)} />
@@ -244,12 +199,6 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Sx" value={config.scale.x} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.x', v)} />
       <Row label="Sy" value={config.scale.y} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.y', v)} />
       <Row label="Sz" value={config.scale.z} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.z', v)} />
-
-      {/* Axis Mapping */}
-      <Section title="Axis Mapping" />
-      <AxisSelect label="Lateral" value={config.axisMapping.lateral} onChange={(v) => update('axisMapping.lateral', v)} />
-      <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
-      <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
       {/* Camera */}
       <Section title="Camera" />
@@ -317,9 +266,7 @@ export function loadCalibration(): CalibrationConfig | null {
       ...DEFAULT_CALIBRATION,
       ...saved,
       position: { ...DEFAULT_CALIBRATION.position, ...(saved.position ?? {}) },
-      rotation: { ...DEFAULT_CALIBRATION.rotation, ...(saved.rotation ?? {}) },
       scale: { ...DEFAULT_CALIBRATION.scale, ...(saved.scale ?? {}) },
-      axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...(saved.axisMapping ?? {}) },
       camera: { ...DEFAULT_CALIBRATION.camera, ...(saved.camera ?? {}) },
       grid: { ...DEFAULT_CALIBRATION.grid, ...(saved.grid ?? {}) },
       axes: { ...DEFAULT_CALIBRATION.axes, ...(saved.axes ?? {}) },

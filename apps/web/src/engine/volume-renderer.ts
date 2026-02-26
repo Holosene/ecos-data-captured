@@ -22,14 +22,10 @@ import { generateLUT } from './transfer-function.js';
 
 // ─── Calibration config ─────────────────────────────────────────────────────
 
-export type Axis = 'x' | 'y' | 'z';
-
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number }; // degrees
   scale: { x: number; y: number; z: number };
   skewX: number; // manual shear correction (-1 to 1)
-  axisMapping: { lateral: Axis; track: Axis; depth: Axis };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -38,10 +34,8 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
-  rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
   skewX: 0,
-  axisMapping: { lateral: 'x', track: 'y', depth: 'z' },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -49,10 +43,6 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
 };
 
 export type CameraPreset = 'frontal' | 'horizontal' | 'vertical' | 'free';
-
-function axisToIndex(axis: Axis): number {
-  return axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
-}
 
 export class VolumeRenderer {
   private renderer: THREE.WebGLRenderer;
@@ -167,18 +157,10 @@ export class VolumeRenderer {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
+    // Position only — no rotation on mesh
     if (this.volumeMesh) {
-      // Position
       const p = config.position;
       this.volumeMesh.position.set(p.x, p.y, p.z);
-
-      // Rotation (degrees → radians)
-      const DEG = Math.PI / 180;
-      this.volumeMesh.rotation.set(
-        config.rotation.x * DEG,
-        config.rotation.y * DEG,
-        config.rotation.z * DEG,
-      );
     }
 
     // Recompute scale — direct from extent
@@ -197,13 +179,6 @@ export class VolumeRenderer {
 
       // Skew = auto + manual
       this.material.uniforms.uSkewX.value = this.autoSkewX + config.skewX;
-
-      // Axis permutation
-      this.material.uniforms.uAxisPerm.value.set(
-        axisToIndex(config.axisMapping.lateral),
-        axisToIndex(config.axisMapping.track),
-        axisToIndex(config.axisMapping.depth),
-      );
     }
 
     // Scene helpers
@@ -372,11 +347,6 @@ export class VolumeRenderer {
         uBeamAngle: { value: 0.175 },
         uTimeSlice: { value: 0.5 },
         uSkewX: { value: this.autoSkewX + this.calibration.skewX },
-        uAxisPerm: { value: new THREE.Vector3(
-          axisToIndex(this.calibration.axisMapping.lateral),
-          axisToIndex(this.calibration.axisMapping.track),
-          axisToIndex(this.calibration.axisMapping.depth),
-        ) },
       },
       side: THREE.BackSide,
       transparent: true,
@@ -385,15 +355,9 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Position + rotation from calibration
+    // Position only — no rotation on mesh
     const p = this.calibration.position;
     this.volumeMesh.position.set(p.x, p.y, p.z);
-    const DEG = Math.PI / 180;
-    this.volumeMesh.rotation.set(
-      this.calibration.rotation.x * DEG,
-      this.calibration.rotation.y * DEG,
-      this.calibration.rotation.z * DEG,
-    );
 
     this.scene.add(this.volumeMesh);
 
@@ -445,7 +409,6 @@ uniform bool uShowBeam;
 uniform float uBeamAngle;
 uniform float uTimeSlice;
 uniform float uSkewX;
-uniform vec3 uAxisPerm;
 
 in vec3 vWorldPos;
 in vec3 vLocalPos;
@@ -504,13 +467,6 @@ void main() {
       // Apply shear correction: straighten diagonal caused by sonar screen scroll
       vec3 texUvw = uvw;
       texUvw.x -= uSkewX * (texUvw.y - 0.5);
-
-      // Apply axis permutation (remap spatial axes to texture axes)
-      int px = int(uAxisPerm.x);
-      int py = int(uAxisPerm.y);
-      int pz = int(uAxisPerm.z);
-      texUvw = vec3(texUvw[px], texUvw[py], texUvw[pz]);
-
       texUvw = clamp(texUvw, vec3(0.0), vec3(1.0));
       float rawVal = sampleVolume(texUvw);
       float density = rawVal * uDensityScale;
