@@ -86,29 +86,41 @@ self.onmessage = (e: MessageEvent) => {
         self.postMessage({ type: 'projection-progress', current, total });
       });
 
-      // ── Mode B: spatial projection (only when GPS mappings available) ──
+      // ── Mode B: spatial projection (always generated) ──
       let spatialNormalized: Float32Array | null = null;
       let spatialDims: [number, number, number] | null = null;
       let spatialExtent: [number, number, number] | null = null;
 
       const hasGPS = mappings && mappings.length > 0 && trackTotalDistanceM > 0;
 
-      if (hasGPS) {
+      {
         self.postMessage({ type: 'stage', stage: 'projecting-spatial' });
 
         const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
         const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-        const adaptiveResY = Math.max(256, Math.min(1024, Math.round(trackTotalDistanceM)));
+
+        // When no GPS, use frame count as synthetic distance (1m per frame)
+        const effectiveDistance = hasGPS ? trackTotalDistanceM : frames.length;
+        const adaptiveResY = Math.max(256, Math.min(1024, Math.round(effectiveDistance)));
         const spatialGrid: VolumeGridSettings = { ...grid, resY: adaptiveResY };
 
         const volume = createEmptyVolume(
           spatialGrid,
           maxRadius * 2.5,
-          trackTotalDistanceM,
+          effectiveDistance,
           beam.depthMaxM,
         );
 
-        projectFramesSpatial(frames, mappings, volume, beam);
+        // When no GPS, create synthetic mappings based on frame index
+        const effectiveMappings = hasGPS ? mappings : frames.map((f) => ({
+          frameIndex: f.index,
+          timeS: f.timeS,
+          distanceM: f.index, // 1m per frame as synthetic distance
+          lat: 0,
+          lon: 0,
+        }));
+
+        projectFramesSpatial(frames, effectiveMappings, volume, beam);
 
         spatialNormalized = normalizeVolume(volume);
         spatialDims = volume.dimensions;
@@ -148,12 +160,12 @@ self.onmessage = (e: MessageEvent) => {
             dims: instrumentResult.dimensions,
             extent: instrumentResult.extent,
           },
-          // Mode B (null if no GPS)
-          spatial: hasGPS ? {
+          // Mode B (always present)
+          spatial: {
             normalizedData: spatialNormalized,
             dims: spatialDims,
             extent: spatialExtent,
-          } : null,
+          },
           // Frames for Mode C + slice building
           frames: frameData,
         },

@@ -148,7 +148,7 @@ export function ScanPage() {
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
-  // Mode B (spatial) data — null when no GPS
+  // Mode B (spatial) data — always present
   const [spatialData, setSpatialData] = useState<Float32Array | null>(null);
   const [spatialDims, setSpatialDims] = useState<[number, number, number]>([1, 1, 1]);
   const [spatialExtent, setSpatialExtent] = useState<[number, number, number]>([1, 1, 1]);
@@ -480,7 +480,7 @@ export function ScanPage() {
 
     const resultPromise = new Promise<{
       instrument: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] };
-      spatial: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] } | null;
+      spatial: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] };
       frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
     }>((resolve, reject) => {
       worker.onmessage = (e: MessageEvent) => {
@@ -583,12 +583,10 @@ export function ScanPage() {
     setVolumeDims(instrument.dims);
     setVolumeExtent(instrument.extent);
 
-    // Mode B data (null if no GPS)
-    if (spatial) {
-      setSpatialData(spatial.normalizedData);
-      setSpatialDims(spatial.dims);
-      setSpatialExtent(spatial.extent);
-    }
+    // Mode B data (always present)
+    setSpatialData(spatial.normalizedData);
+    setSpatialDims(spatial.dims);
+    setSpatialExtent(spatial.extent);
 
     // Frames for Mode C + slices
     setInstrumentFrames(preprocessedFrames);
@@ -861,9 +859,21 @@ export function ScanPage() {
                       </div>
                     </div>
                   ) : (
-                    /* Progress state — no percentage text, tall rounded bar */
+                    /* Progress state */
                     <>
-                      <ProgressBar value={progress.progress} showPercent={false} height={14} />
+                      <div style={{
+                        fontSize: '48px',
+                        fontWeight: 700,
+                        color: colors.text1,
+                        fontVariantNumeric: 'tabular-nums',
+                        lineHeight: 1,
+                        marginBottom: '20px',
+                        letterSpacing: '-0.02em',
+                      }}>
+                        {Math.round(progress.progress * 100)}%
+                      </div>
+
+                      <ProgressBar value={progress.progress} showPercent={false} />
 
                       <div style={{ marginTop: '32px' }}>
                         <Button
@@ -923,120 +933,35 @@ export function ScanPage() {
                       <div style={{ color: colors.text3, fontSize: '11px', lineHeight: 1.4 }}>
                         {hintMap[q]}
                       </div>
+                      <div style={{
+                        marginTop: '8px',
+                        display: 'flex',
+                        gap: '8px',
+                        fontSize: '10px',
+                        color: colors.text3,
+                        justifyContent: 'center',
+                      }}>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: selected ? `${color}20` : colors.surface,
+                        }}>
+                          {cfg.fps} fps
+                        </span>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: selected ? `${color}20` : colors.surface,
+                        }}>
+                          {cfg.grid.resX}&sup3;
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
               </div>
             </GlassPanel>
 
-            <div style={{ marginBottom: '12px' }}>
-              {/* Depth setting with exponential slider */}
-              <GlassPanel style={{ padding: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, margin: 0 }}>
-                    {t('v2.settings.depth')}
-                  </h3>
-                  <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontSize: '13px',
-                    color: colors.text2,
-                    cursor: 'pointer',
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={autoDepth}
-                      onChange={(e) => {
-                        setAutoDepth(e.target.checked);
-                        if (e.target.checked && detectedDepth !== null) {
-                          setBeam((b) => ({ ...b, depthMaxM: detectedDepth }));
-                          setDepthSliderIdx(depthToSliderIndex(detectedDepth));
-                        }
-                      }}
-                    />
-                    {t('v2.settings.autoDepth')}
-                  </label>
-                </div>
-
-                {autoDepth && detectedDepth !== null ? (
-                  <div style={{
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    background: 'rgba(68,136,255,0.08)',
-                    border: '1px solid rgba(68,136,255,0.15)',
-                    fontSize: '14px',
-                    color: colors.text1,
-                  }}>
-                    {t('v2.settings.detectedDepth')}: <strong>{detectedDepth}m</strong>
-                  </div>
-                ) : autoDepth ? (
-                  <div style={{
-                    padding: '12px 16px',
-                    borderRadius: '8px',
-                    background: 'rgba(255,180,0,0.08)',
-                    border: '1px solid rgba(255,180,0,0.2)',
-                    fontSize: '13px',
-                    color: colors.text2,
-                  }}>
-                    {t('v2.settings.depthNotDetected')}
-                  </div>
-                ) : null}
-
-                {!autoDepth && (
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 500, color: colors.text1 }}>
-                        {t('v2.config.depthMax')}
-                      </label>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text1, fontVariantNumeric: 'tabular-nums' }}>
-                        {DEPTH_STEPS[depthSliderIdx]}m
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={DEPTH_STEPS.length - 1}
-                      step={1}
-                      value={depthSliderIdx}
-                      onChange={(e) => {
-                        const idx = parseInt(e.target.value);
-                        setDepthSliderIdx(idx);
-                        setBeam((b) => ({ ...b, depthMaxM: DEPTH_STEPS[idx] }));
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: colors.text3, marginTop: '4px' }}>
-                      <span>{DEPTH_STEPS[0]}m</span>
-                      <span>{DEPTH_STEPS[DEPTH_STEPS.length - 1]}m</span>
-                    </div>
-                    {/* Graduation marks */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: colors.text3, marginTop: '2px', padding: '0 2px' }}>
-                      {[1, 5, 10, 20, 50, 100].map((m) => (
-                        <span key={m} style={{ opacity: 0.6 }}>{m}</span>
-                      ))}
-                    </div>
-                    <p style={{ color: colors.text3, fontSize: '12px', marginTop: '6px', lineHeight: 1.5 }}>
-                      {t('v2.settings.depthHint')}
-                    </p>
-                  </div>
-                )}
-              </GlassPanel>
-            </div>
-
-            {/* Info: all 3 render modes generated simultaneously */}
-            <div style={{
-              padding: '10px 14px',
-              marginBottom: '12px',
-              borderRadius: '8px',
-              background: colors.accentMuted,
-              border: `1px solid ${colors.accent}30`,
-              fontSize: '12px',
-              color: colors.text2,
-              lineHeight: 1.5,
-            }}>
-              {t('v2.settings.allModesInfo' as any) || 'Les 3 modes de rendu (Cône, Trace GPS, Projection) seront générés simultanément.'}
-            </div>
 
             {/* Synchronization section — only when GPX is loaded */}
             {state.gpxTrack && (
