@@ -38,6 +38,7 @@ export interface CalibrationConfig {
   grid: { y: number };
   axes: { size: number };
   bgColor: string;
+  bend?: { angle: number; axis: number };
 }
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
@@ -49,6 +50,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   grid: { y: -0.5 },
   axes: { size: 0.8 },
   bgColor: '#111111',
+  bend: { angle: 0, axis: 0 },
 };
 
 export const DEFAULT_CALIBRATION_B: CalibrationConfig = {
@@ -242,6 +244,10 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
+
+      // Bend deformation
+      this.material.uniforms.uBendAngle.value = (config.bend?.angle ?? 0) * Math.PI / 180;
+      this.material.uniforms.uBendAxis.value = config.bend?.axis ?? 0;
     }
 
     // Scene helpers
@@ -430,6 +436,8 @@ export class VolumeRenderer {
         uShowBeam: { value: this.settings.showBeam },
         uBeamAngle: { value: 0.175 },
         uTimeSlice: { value: 0.5 },
+        uBendAngle: { value: (this.calibration.bend?.angle ?? 0) * Math.PI / 180 },
+        uBendAxis: { value: this.calibration.bend?.axis ?? 0 },
       },
       side: THREE.BackSide,
       transparent: true,
@@ -497,11 +505,50 @@ uniform float uGhostEnhancement;
 uniform bool uShowBeam;
 uniform float uBeamAngle;
 uniform float uTimeSlice;
+uniform float uBendAngle;
+uniform int uBendAxis;
 
 in vec3 vWorldPos;
 in vec3 vLocalPos;
 
 out vec4 fragColor;
+
+// Inverse-bend: given a point in the curved display space,
+// return where to sample in the original straight volume.
+// Bends the track axis into a circular arc in the chosen plane.
+vec3 inverseBend(vec3 pos) {
+  if (abs(uBendAngle) < 0.001) return pos;
+
+  vec3 center = (uVolumeMin + uVolumeMax) * 0.5;
+  vec3 p = pos - center;
+
+  // XY plane: track=Y bends toward X
+  if (uBendAxis == 0) {
+    float L = uVolumeMax.y - uVolumeMin.y;
+    float R = L / uBendAngle;
+    float r = sqrt(p.x * p.x + (p.y + R) * (p.y + R));
+    float alpha = atan(p.x, p.y + R);
+    p = vec3(r - R, alpha * R, p.z);
+  }
+  // YZ plane: track=Y bends toward Z
+  else if (uBendAxis == 1) {
+    float L = uVolumeMax.y - uVolumeMin.y;
+    float R = L / uBendAngle;
+    float r = sqrt(p.z * p.z + (p.y + R) * (p.y + R));
+    float alpha = atan(p.z, p.y + R);
+    p = vec3(p.x, alpha * R, r - R);
+  }
+  // XZ plane: track=X bends toward Z
+  else {
+    float L = uVolumeMax.x - uVolumeMin.x;
+    float R = L / uBendAngle;
+    float r = sqrt(p.z * p.z + (p.x + R) * (p.x + R));
+    float alpha = atan(p.z, p.x + R);
+    p = vec3(alpha * R, p.y, r - R);
+  }
+
+  return p + center;
+}
 
 vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   vec3 invDir = 1.0 / dir;
@@ -549,6 +596,7 @@ void main() {
     if (accum.a >= 0.98) break;
 
     vec3 samplePos = rayOrigin + rayDir * t;
+    samplePos = inverseBend(samplePos);
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
     if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {

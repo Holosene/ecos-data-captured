@@ -249,6 +249,34 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <AxisSelect label="Depth" value={config.axisMapping.depth} onChange={(v) => update('axisMapping.depth', v)} />
       <AxisSelect label="Track" value={config.axisMapping.track} onChange={(v) => update('axisMapping.track', v)} />
 
+      {/* Bend */}
+      <Section title="Bend (courbure)" />
+      <Row label="Deg" value={config.bend?.angle ?? 0} min={-180} max={180} step={1} onChange={(v) => update('bend.angle', v)} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', height: '22px' }}>
+        <span style={{ width: '24px', fontSize: '10px', color: colors.text3, textAlign: 'right', flexShrink: 0 }}>
+          Plan
+        </span>
+        <select
+          value={config.bend?.axis ?? 0}
+          onChange={(e) => update('bend.axis', parseInt(e.target.value))}
+          style={{
+            flex: 1,
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            background: 'rgba(255,255,255,0.05)',
+            border: `1px solid ${colors.border}`,
+            borderRadius: '4px',
+            color: colors.text1,
+            padding: '2px 4px',
+            cursor: 'pointer',
+          }}
+        >
+          <option value={0}>XY (Y→X)</option>
+          <option value={1}>YZ (Y→Z)</option>
+          <option value={2}>XZ (X→Z)</option>
+        </select>
+      </div>
+
       {/* Camera */}
       <Section title="Camera" />
       <Row label="Dist" value={config.camera.dist} min={0.5} max={5} step={0.1} onChange={(v) => update('camera.dist', v)} />
