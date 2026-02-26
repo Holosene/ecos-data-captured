@@ -16,7 +16,7 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
+import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
@@ -184,10 +184,25 @@ export function VolumeViewer({
 }: VolumeViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<VolumeRenderer | VolumeRendererClassic | null>(null);
-  const [settings, setSettings] = useState<RendererSettings>({
-    ...DEFAULT_RENDERER,
-    showBeam: mode === 'instrument',
-    ghostEnhancement: mode === 'spatial' ? 0.5 : 0,
+  const [settings, setSettings] = useState<RendererSettings>(() => {
+    if (mode === 'spatial') {
+      return {
+        ...DEFAULT_RENDERER,
+        chromaticMode: 'high-contrast' as RendererSettings['chromaticMode'],
+        opacityScale: 1.0,
+        threshold: 0,
+        densityScale: 1.2,
+        smoothing: 1.0,
+        ghostEnhancement: 3.0,
+        stepCount: 192,
+        showBeam: false,
+      };
+    }
+    return {
+      ...DEFAULT_RENDERER,
+      showBeam: mode === 'instrument',
+      ghostEnhancement: 0,
+    };
   });
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>((mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal');
   const [autoThreshold, setAutoThreshold] = useState(false);
@@ -196,7 +211,11 @@ export function VolumeViewer({
 
   // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
   const [calibrationOpen, setCalibrationOpen] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationConfig>(() => loadCalibration() ?? { ...DEFAULT_CALIBRATION });
+  const [calibration, setCalibration] = useState<CalibrationConfig>(() => {
+    const saved = loadCalibration();
+    if (saved) return saved;
+    return mode === 'spatial' ? { ...DEFAULT_CALIBRATION_B } : { ...DEFAULT_CALIBRATION };
+  });
   const [calibrationSaved, setCalibrationSaved] = useState(false);
   const bPressCountRef = useRef(0);
   const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
