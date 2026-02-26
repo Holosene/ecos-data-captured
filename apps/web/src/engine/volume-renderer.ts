@@ -43,7 +43,7 @@ export interface CalibrationConfig {
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 0, y: 0, z: 0 },
-  scale: { x: 1, y: 1, z: 1 },
+  scale: { x: 2, y: 2, z: 2 },
   axisMapping: { lateral: 'x', depth: 'z', track: 'y' },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
