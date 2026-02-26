@@ -198,7 +198,9 @@ export function VolumeViewer({
   }, []);
 
   // Temporal playback state (Mode A)
-  const isTemporalMode = mode === 'instrument' && frames && frames.length > 0 && beam && grid;
+  // Disabled: 3D volume now uses the pre-built stacked volume from the worker.
+  // Playback only affects the 2D slice highlight, not the 3D volume data.
+  const isTemporalMode = false;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState(4);

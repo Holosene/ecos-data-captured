@@ -19,6 +19,7 @@ import {
   createEmptyVolume,
   projectFramesSpatial,
   normalizeVolume,
+  buildInstrumentVolume,
 } from '@echos/core';
 import type {
   PreprocessingSettings,
@@ -109,11 +110,16 @@ self.onmessage = (e: MessageEvent) => {
         dims = volume.dimensions;
         ext = volume.extent;
       } else {
-        // ── Mode A: no static volume — frames are used for live playback ──
-        normalizedData = new Float32Array(0);
-        // dims order: [lateral, track, depth] — matches grid directly, no swap
-        dims = [grid.resX, grid.resY, grid.resZ];
-        ext = [1, 1, 1];
+        // ── Mode A: build stacked instrument volume (all frames along Y) ──
+        self.postMessage({ type: 'stage', stage: 'projecting' });
+
+        const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
+          self.postMessage({ type: 'projection-progress', current, total });
+        });
+
+        normalizedData = result.normalized;
+        dims = result.dimensions;
+        ext = result.extent;
       }
 
       // Transfer all buffers (zero-copy back to main thread)
