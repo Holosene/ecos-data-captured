@@ -15,7 +15,7 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
-import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
+import { DEFAULT_RENDERER, computeAutoThreshold } from '@echos/core';
 import { VolumeRenderer, DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
@@ -80,6 +80,53 @@ function buildSliceVolumeFromFrames(
   }
 
   return { data, dimensions: [dimX, dimY, dimZ] };
+}
+
+// ─── Build a windowed volume for temporal playback ─────────────────────────
+// Same direct pixel stacking as buildSliceVolumeFromFrames, but for a
+// sliding window of frames. Produces visible echoes (no cone projection).
+// Layout: data[z * dimY * dimX + y * dimX + x]
+//   X = pixel col (lateral), Y = frame index (window), Z = pixel row (depth)
+
+function buildWindowVolume(
+  allFrames: PreprocessedFrame[],
+  centerIndex: number,
+  windowSize: number,
+): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
+  const half = Math.floor(windowSize / 2);
+  const start = Math.max(0, centerIndex - half);
+  const end = Math.min(allFrames.length, start + windowSize);
+  const windowFrames = allFrames.slice(start, end);
+
+  if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
+    return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
+  }
+
+  const dimX = windowFrames[0].width;    // lateral (beam columns)
+  const dimY = windowFrames.length;      // track (window frames)
+  const dimZ = windowFrames[0].height;   // depth (sonar rows)
+
+  const data = new Float32Array(dimX * dimY * dimZ);
+
+  for (let yi = 0; yi < dimY; yi++) {
+    const frame = windowFrames[yi];
+    for (let zi = 0; zi < dimZ; zi++) {
+      for (let xi = 0; xi < dimX; xi++) {
+        const srcIdx = zi * dimX + xi;
+        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
+        data[dstIdx] = frame.intensity[srcIdx] ?? 0;
+      }
+    }
+  }
+
+  // Extent: X and Z proportional to pixel dims, Y forced thick so the volume
+  // has visible depth even with few frames (12 frames vs 200+ pixels).
+  const aspect = dimX / dimZ;  // lateral vs depth pixel ratio
+  return {
+    normalized: data,
+    dimensions: [dimX, dimY, dimZ],
+    extent: [aspect, 0.5, 1],
+  };
 }
 
 // ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
@@ -203,9 +250,7 @@ export function VolumeViewer({
   }, []);
 
   // Temporal playback state (Mode A)
-  // Disabled: 3D volume now uses the pre-built stacked volume from the worker.
-  // Playback only affects the 2D slice highlight, not the 3D volume data.
-  const isTemporalMode = false;
+  const isTemporalMode = mode === 'instrument' && frames && frames.length > 0 && beam && grid;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [playSpeed, setPlaySpeed] = useState(4);
@@ -274,7 +319,7 @@ export function VolumeViewer({
   // Pre-computed frame projection cache for smooth playback
   const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
-  // Pre-compute frame projections ahead of current position
+  // Pre-compute windowed volumes ahead of current position
   useEffect(() => {
     if (!isTemporalMode) return;
 
@@ -286,7 +331,7 @@ export function VolumeViewer({
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames!.length || cache.has(idx)) continue;
-        const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
+        const result = buildWindowVolume(frames!, idx, WINDOW_SIZE);
         if (!cancelled) cache.set(idx, result);
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
@@ -298,22 +343,21 @@ export function VolumeViewer({
     })();
 
     return () => { cancelled = true; };
-  }, [isTemporalMode, currentFrame, frames, beam, grid]);
+  }, [isTemporalMode, currentFrame, frames]);
 
-  // Temporal projection: use cache or compute on-demand
+  // Temporal playback: build windowed volume and upload
   useEffect(() => {
     if (!isTemporalMode || !rendererRef.current) return;
 
     const cache = frameCacheRef.current;
     let result = cache.get(currentFrame);
     if (!result) {
-      result = projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
+      result = buildWindowVolume(frames!, currentFrame, WINDOW_SIZE);
       cache.set(currentFrame, result);
     }
 
-    // Upload conic-projected volume for 3D ray marching
     rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-  }, [isTemporalMode, currentFrame, frames, beam, grid]);
+  }, [isTemporalMode, currentFrame, frames]);
 
   // Playback animation loop
   useEffect(() => {
