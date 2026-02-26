@@ -1,15 +1,17 @@
 /**
- * ECHOS V2 — Volume Viewer Component
+ * ECHOS V2 — Volume Viewer Component (Redesigned)
  *
- * Main 3D viewer wrapping the WebGL ray marching engine.
- * Provides:
- *   - 3D ray-marched volume
- *   - Camera presets (frontal, horizontal, vertical, free)
- *   - Rendering controls (opacity, threshold, density, etc.)
- *   - Adaptive threshold (auto percentile-based)
- *   - Time scrubbing (Mode A: live playback through cone)
- *   - Orthogonal slice panels (XZ, XY, YZ) with v1-style inline presets (axis layout: X=track, Y=lateral, Z=depth)
- *   - Export panel (NRRD, PNG, CSV)
+ * Marketing-style presentation of 3 render modes:
+ *   - Cône (Instrument): static stacked cone volume
+ *   - Trace (Spatial): spatial volume (GPS or synthetic distance)
+ *   - Projection (Classic): windowed conic projection with temporal playback
+ *
+ * Design principles:
+ *   - Volumes presented as clean, borderless 3D elements
+ *   - Controls hidden by default — "Éditer" button reveals per-volume settings
+ *   - Grid/axes only visible in edit mode
+ *   - Leaflet-based interactive map for GPS visualization
+ *   - Calibration panel via "bbbbb" shortcut
  */
 
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
@@ -26,60 +28,51 @@ import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
 import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface VolumeViewerProps {
-  /** Static volume data (Rendu A, or fallback) */
+  /** Mode A (Instrument) data — always present */
   volumeData: Float32Array | null;
   dimensions: [number, number, number];
   extent: [number, number, number];
-  mode: 'instrument' | 'spatial' | 'classic';
-  /** Preprocessed frames for Rendu B (sliding window playback) */
+  /** Mode B (Spatial) data — always present */
+  spatialData?: Float32Array | null;
+  spatialDimensions?: [number, number, number];
+  spatialExtent?: [number, number, number];
+  /** Preprocessed frames for Mode C + slices */
   frames?: PreprocessedFrame[];
   beam?: BeamSettings;
   grid?: VolumeGridSettings;
+  /** GPX track for map */
+  gpxTrack?: { points: Array<{ lat: number; lon: number }>; totalDistanceM: number; durationS: number };
   onSettingsChange?: (settings: RendererSettings) => void;
-  /** Action callbacks from parent */
   onReconfigure?: () => void;
   onNewScan?: () => void;
 }
 
 const WINDOW_SIZE = 12;
 
-// ─── Build a v1-style stacked volume from raw preprocessed frames ──────────
-// This gives full pixel resolution for 2D slice views instead of the
-// low-res conic projection grid.
-// Layout: data[z * dimY * dimX + y * dimX + x]
-//   X = pixel col (lateral), Y = frame index (track/time), Z = pixel row (depth)
-
+// ─── Build v1-style stacked volume from raw preprocessed frames ──────────
 function buildSliceVolumeFromFrames(
   frameList: PreprocessedFrame[],
 ): { data: Float32Array; dimensions: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
-
-  const dimX = frameList[0].width;   // lateral (beam columns)
-  const dimY = frameList.length;     // track (frames) — stacking along Y
-  const dimZ = frameList[0].height;  // depth (sonar rows)
-
+  const dimX = frameList[0].width;
+  const dimY = frameList.length;
+  const dimZ = frameList[0].height;
   if (dimX === 0 || dimZ === 0) return null;
-
   const data = new Float32Array(dimX * dimY * dimZ);
   const strideZ = dimY * dimX;
-
-  // Optimized: copy row-by-row using subarray views instead of pixel-by-pixel.
-  // Layout: data[z * dimY * dimX + y * dimX + x]
-  // Each frame row (zi) of width dimX gets copied as a contiguous block.
   for (let yi = 0; yi < dimY; yi++) {
     const intensity = frameList[yi].intensity;
     const yiOffset = yi * dimX;
-
     for (let zi = 0; zi < dimZ; zi++) {
       const srcOffset = zi * dimX;
       const dstOffset = zi * strideZ + yiOffset;
-      // Copy entire row at once (dimX floats)
       data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
     }
   }
-
   return { data, dimensions: [dimX, dimY, dimZ] };
 }
 
@@ -129,8 +122,7 @@ function buildWindowVolume(
   };
 }
 
-// ─── SVG View Icons (harmonized, minimal line style) ──────────────────────
-
+// ─── SVG Icons ──────────────────────────────────────────────────────────
 const IconFrontal = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <rect x="2" y="2" width="12" height="12" rx="1" />
@@ -138,28 +130,34 @@ const IconFrontal = () => (
     <line x1="2" y1="8" x2="14" y2="8" opacity="0.4" />
   </svg>
 );
-
 const IconHorizontal = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 12L6 4H14L10 12H2Z" />
     <line x1="8" y1="4" x2="6" y2="12" opacity="0.4" />
   </svg>
 );
-
 const IconVertical = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <rect x="5" y="1" width="6" height="14" rx="1" />
     <line x1="8" y1="1" x2="8" y2="15" opacity="0.4" />
   </svg>
 );
-
 const IconFree = () => (
   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
     <path d="M4 12L2 7L8 4L14 7L12 12H4Z" />
-    <path d="M8 4V1" />
-    <path d="M8 4L14 7" />
-    <path d="M8 4L2 7" />
+    <path d="M8 4V1" /><path d="M8 4L14 7" /><path d="M8 4L2 7" />
     <path d="M8 9L8 12" opacity="0.4" />
+  </svg>
+);
+const IconEdit = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+const IconClose = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 
@@ -170,92 +168,350 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
   { key: 'free', labelKey: 'v2.camera.free', Icon: IconFree },
 ];
 
+// Mode definitions — clean labels, no color coding
+const MODE_DEFS = [
+  { key: 'instrument' as const, label: 'Cône', desc: 'Empilement statique' },
+  { key: 'spatial' as const, label: 'Trace', desc: 'Déroulé spatial' },
+  { key: 'classic' as const, label: 'Projection', desc: 'Fenêtre temporelle' },
+] as const;
+
+// ─── Leaflet Map component ─────────────────────────────────────────────────
+function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>; theme: string }) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+    if (points.length < 2) return;
+
+    const map = L.map(mapContainerRef.current, {
+      zoomControl: false,
+      attributionControl: false,
+      scrollWheelZoom: false,
+    });
+
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+
+    const latLngs = points.map((p) => L.latLng(p.lat, p.lon));
+    const polyline = L.polyline(latLngs, {
+      color: colors.accent,
+      weight: 3,
+      opacity: 0.8,
+      smoothFactor: 1.5,
+    }).addTo(map);
+
+    // Start marker
+    L.circleMarker(latLngs[0], {
+      radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
+    }).addTo(map);
+
+    // End marker
+    L.circleMarker(latLngs[latLngs.length - 1], {
+      radius: 5, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 0,
+    }).addTo(map);
+
+    map.fitBounds(polyline.getBounds(), { padding: [30, 30], maxZoom: 16 });
+
+    map.on('click', () => map.scrollWheelZoom.enable());
+    map.on('mouseout', () => map.scrollWheelZoom.disable());
+
+    mapInstanceRef.current = map;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, [points, theme]);
+
+  // Swap tiles on theme change
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.eachLayer((layer) => {
+      if (layer instanceof L.TileLayer) layer.remove();
+    });
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+  }, [theme]);
+
+  return (
+    <div
+      ref={mapContainerRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        borderRadius: '16px',
+        overflow: 'hidden',
+      }}
+    />
+  );
+}
+
+// ─── Edit controls panel (floating overlay) ─────────────────────────────
+function EditPanel({
+  settings,
+  cameraPreset,
+  autoThreshold,
+  activeMode,
+  showGhostSlider,
+  showBeamToggle,
+  showSpeedSlider,
+  playSpeed,
+  chromaticModes,
+  lang,
+  t,
+  onUpdateSetting,
+  onCameraPreset,
+  onAutoThreshold,
+  onPlaySpeed,
+  onClose,
+}: {
+  settings: RendererSettings;
+  cameraPreset: CameraPreset;
+  autoThreshold: boolean;
+  activeMode: string;
+  showGhostSlider: boolean;
+  showBeamToggle: boolean;
+  showSpeedSlider: boolean;
+  playSpeed: number;
+  chromaticModes: ChromaticMode[];
+  lang: string;
+  t: (key: any) => string;
+  onUpdateSetting: (key: keyof RendererSettings, value: number | boolean | string) => void;
+  onCameraPreset: (preset: CameraPreset) => void;
+  onAutoThreshold: (enabled: boolean) => void;
+  onPlaySpeed: (speed: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      width: '320px',
+      zIndex: 20,
+      display: 'flex',
+      flexDirection: 'column',
+      animation: 'echos-fade-in 200ms ease',
+    }}>
+      <GlassPanel style={{
+        padding: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        flex: 1,
+        overflowY: 'auto',
+        borderRadius: '0 16px 16px 0',
+        backdropFilter: 'blur(24px)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
+            {t('v2.controls.title')}
+          </h3>
+          <button
+            onClick={onClose}
+            style={{
+              width: '28px', height: '28px', borderRadius: '8px',
+              border: `1px solid ${colors.border}`, background: colors.surface,
+              color: colors.text2, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <IconClose />
+          </button>
+        </div>
+
+        {/* Camera presets */}
+        <div style={{ display: 'flex', gap: '4px' }}>
+          {CAMERA_PRESETS.map((p) => (
+            <button
+              key={p.key}
+              onClick={() => onCameraPreset(p.key)}
+              title={t(p.labelKey as TranslationKey)}
+              style={{
+                width: '30px', height: '30px', borderRadius: '8px',
+                border: `1px solid ${cameraPreset === p.key ? colors.accent : colors.border}`,
+                background: cameraPreset === p.key ? colors.accentMuted : colors.surface,
+                color: cameraPreset === p.key ? colors.accent : colors.text3,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 150ms ease',
+              }}
+            >
+              <p.Icon />
+            </button>
+          ))}
+        </div>
+
+        {/* Chromatic mode */}
+        <div>
+          <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+            {t('v2.controls.palette')}
+          </label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {chromaticModes.map((m: ChromaticMode) => (
+              <button
+                key={m}
+                onClick={() => onUpdateSetting('chromaticMode', m)}
+                style={{
+                  padding: '5px 10px', borderRadius: '16px',
+                  border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                  background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                  color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                  fontSize: '11px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                  transition: 'all 150ms ease',
+                }}
+              >
+                {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Sliders */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+          <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+              <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAutoThreshold(e.target.checked)} style={{ width: '12px', height: '12px' }} />
+                {t('v2.controls.auto')}
+              </label>
+            </div>
+            <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { onAutoThreshold(false); onUpdateSetting('threshold', v); }} />
+          </div>
+          <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('densityScale', v)} />
+          <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => onUpdateSetting('smoothing', v)} />
+          <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => onUpdateSetting('stepCount', v)} />
+          {showGhostSlider && (
+            <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => onUpdateSetting('ghostEnhancement', v)} />
+          )}
+        </div>
+
+        {showBeamToggle && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+            <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onUpdateSetting('showBeam', e.target.checked)} />
+            {t('v2.controls.showBeam')}
+          </label>
+        )}
+
+        {showSpeedSlider && (
+          <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        )}
+      </GlassPanel>
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 export function VolumeViewer({
   volumeData,
   dimensions,
   extent,
-  mode,
+  spatialData,
+  spatialDimensions,
+  spatialExtent,
   frames,
   beam,
   grid,
+  gpxTrack,
   onSettingsChange,
   onReconfigure,
   onNewScan,
 }: VolumeViewerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<VolumeRenderer | VolumeRendererClassic | null>(null);
-  const [settings, setSettings] = useState<RendererSettings>(() => {
-    if (mode === 'spatial') {
-      return {
-        ...DEFAULT_RENDERER,
-        chromaticMode: 'high-contrast' as RendererSettings['chromaticMode'],
-        opacityScale: 1.0,
-        threshold: 0,
-        densityScale: 1.2,
-        smoothing: 1.0,
-        ghostEnhancement: 3.0,
-        stepCount: 192,
-        showBeam: false,
-      };
-    }
-    if (mode === 'classic') {
-      return {
-        ...DEFAULT_RENDERER,
-        chromaticMode: 'sonar-original' as RendererSettings['chromaticMode'],
-        opacityScale: 1.0,
-        threshold: 0.02,
-        densityScale: 1.3,
-        smoothing: 1.0,
-        ghostEnhancement: 0,
-        stepCount: 512,
-        showBeam: false,
-      };
-    }
-    return {
+  // Refs for the 3 viewport containers
+  const containerARef = useRef<HTMLDivElement>(null);
+  const containerBRef = useRef<HTMLDivElement>(null);
+  const containerCRef = useRef<HTMLDivElement>(null);
+
+  // Renderers
+  const rendererARef = useRef<VolumeRenderer | null>(null);
+  const rendererBRef = useRef<VolumeRenderer | null>(null);
+  const rendererCRef = useRef<VolumeRendererClassic | null>(null);
+
+  // Edit mode: which volume is currently being edited (null = none)
+  const [editingMode, setEditingMode] = useState<'instrument' | 'spatial' | 'classic' | null>(null);
+
+  // Per-mode settings — each mode has its EXACT configuration from 7024cc8
+  const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>({
+    instrument: {
       ...DEFAULT_RENDERER,
-      showBeam: mode === 'instrument',
+      showBeam: true,
       ghostEnhancement: 0,
-    };
+    },
+    spatial: {
+      ...DEFAULT_RENDERER,
+      chromaticMode: 'high-contrast' as ChromaticMode,
+      opacityScale: 1.0,
+      threshold: 0,
+      densityScale: 1.2,
+      smoothing: 1.0,
+      ghostEnhancement: 3.0,
+      stepCount: 192,
+      showBeam: false,
+    },
+    classic: {
+      ...DEFAULT_RENDERER,
+      chromaticMode: 'sonar-original' as ChromaticMode,
+      opacityScale: 1.0,
+      threshold: 0.02,
+      densityScale: 1.3,
+      smoothing: 1.0,
+      ghostEnhancement: 0,
+      stepCount: 512,
+      showBeam: false,
+    },
   });
-  const [cameraPreset, setCameraPreset] = useState<CameraPreset>((mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal');
+  const [modeCamera, setModeCamera] = useState<Record<string, CameraPreset>>({
+    instrument: 'frontal',
+    spatial: 'horizontal',
+    classic: 'frontal',
+  });
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
 
-  // ─── Calibration (hidden dev tool: press "b" x5 to toggle) ──────────
+  // Calibration (hidden dev tool: press "b" x5)
   const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [calibration, setCalibration] = useState<CalibrationConfig>(() => {
     const saved = loadCalibration();
-    if (saved) return saved;
-    if (mode === 'spatial') return { ...DEFAULT_CALIBRATION_B };
-    if (mode === 'classic') return { ...DEFAULT_CALIBRATION_C };
-    return { ...DEFAULT_CALIBRATION };
+    return saved ?? { ...DEFAULT_CALIBRATION };
   });
   const [calibrationSaved, setCalibrationSaved] = useState(false);
   const bPressCountRef = useRef(0);
   const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // "b" x5 toggle + Ctrl+S save + arrow keys orbit
+  // Keyboard shortcuts
   useEffect(() => {
-    const ORBIT_SPEED = 0.05; // radians per key press
-
+    const ORBIT_SPEED = 0.05;
     const handleKey = (e: KeyboardEvent) => {
-      // Arrow keys — orbit camera
-      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && rendererRef.current) {
+      const activeRenderer = editingMode === 'instrument' ? rendererARef.current
+        : editingMode === 'spatial' ? rendererBRef.current
+        : editingMode === 'classic' ? rendererCRef.current
+        : null;
+
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && activeRenderer) {
         e.preventDefault();
         switch (e.key) {
-          case 'ArrowLeft':  rendererRef.current.rotateBy( ORBIT_SPEED, 0); break;
-          case 'ArrowRight': rendererRef.current.rotateBy(-ORBIT_SPEED, 0); break;
-          case 'ArrowUp':    rendererRef.current.rotateBy(0,  ORBIT_SPEED); break;
-          case 'ArrowDown':  rendererRef.current.rotateBy(0, -ORBIT_SPEED); break;
+          case 'ArrowLeft':  activeRenderer.rotateBy( ORBIT_SPEED, 0); break;
+          case 'ArrowRight': activeRenderer.rotateBy(-ORBIT_SPEED, 0); break;
+          case 'ArrowUp':    activeRenderer.rotateBy(0,  ORBIT_SPEED); break;
+          case 'ArrowDown':  activeRenderer.rotateBy(0, -ORBIT_SPEED); break;
         }
         return;
       }
 
-      // Ctrl+S / Cmd+S — save calibration
       if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
         e.preventDefault();
-        const cal = rendererRef.current?.getCalibration() ?? calibration;
+        const cal = rendererARef.current?.getCalibration() ?? calibration;
         saveCalibration(cal);
         downloadCalibration(cal);
         setCalibrationSaved(true);
@@ -263,7 +519,6 @@ export function VolumeViewer({
         return;
       }
 
-      // Press "b" 5 times within 2 seconds
       if (e.key === 'b' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         bPressCountRef.current += 1;
         if (bPressTimerRef.current) clearTimeout(bPressTimerRef.current);
@@ -274,92 +529,152 @@ export function VolumeViewer({
         }
       }
 
-      // Escape closes calibration
-      if (e.key === 'Escape' && calibrationOpen) {
-        setCalibrationOpen(false);
+      if (e.key === 'Escape') {
+        if (calibrationOpen) setCalibrationOpen(false);
+        else if (editingMode) setEditingMode(null);
       }
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration]);
+  }, [calibrationOpen, calibration, editingMode]);
 
-  // Sync renderer background color with theme
+  // Theme sync
   useEffect(() => {
-    if (!rendererRef.current) return;
-    const bgColor = theme === 'light' ? '#fafafa' : '#111111';
-    rendererRef.current.setCalibration({ ...calibration, bgColor });
-  }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    [rendererARef, rendererBRef, rendererCRef].forEach((ref) => {
+      if (ref.current) {
+        const cal = ref.current === rendererARef.current ? { ...DEFAULT_CALIBRATION, bgColor }
+          : ref.current === rendererBRef.current ? { ...DEFAULT_CALIBRATION_B, bgColor }
+          : { ...DEFAULT_CALIBRATION_C, bgColor };
+        ref.current.setCalibration(cal);
+      }
+    });
+  }, [theme]);
 
-  // Apply calibration to renderer when it changes
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
     setCalibration(cal);
     setCalibrationSaved(false);
-    rendererRef.current?.setCalibration(cal);
+    rendererARef.current?.setCalibration(cal);
   }, []);
 
-  // Rendu B: temporal playback with sliding window (active when mode === 'spatial')
-  const isRenduB = mode === 'spatial' && frames && frames.length > 0;
-  // Rendu C: temporal playback with conic projection (active when mode === 'classic')
-  const isRenduC = mode === 'classic' && frames && frames.length > 0 && !!beam && !!grid;
-  // Any temporal mode active?
-  const isTemporalMode = isRenduB || isRenduC;
+  // Temporal playback state
+  const hasFrames = !!(frames && frames.length > 0);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(mode === 'classic' ? 1 : 4);
+  const [playSpeed, setPlaySpeed] = useState(4);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
-  // Volume data for 2D orthogonal slices:
-  // - Mode A: built from ALL raw frames at full pixel resolution (v1-style stacking)
-  // - Mode B: uses conic-projected data
+  // Slice data
   const [sliceVolumeData, setSliceVolumeData] = useState<Float32Array | null>(null);
   const [sliceDimensions, setSliceDimensions] = useState<[number, number, number]>([1, 1, 1]);
 
-  // Build full-resolution slice volume from ALL frames once (v1 approach).
-  // This gives proper resolution on every axis instead of the 12-frame window.
   const fullSliceVolume = useMemo(() => {
     if (!frames || frames.length === 0) return null;
     return buildSliceVolumeFromFrames(frames);
   }, [frames]);
 
-  // Initialize renderer
+  // ─── Initialize 3 renderers (each with its OWN engine + calibration from 7024cc8) ──
   useEffect(() => {
-    if (!containerRef.current) return;
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
 
-    const renderer = mode === 'classic'
-      ? new VolumeRendererClassic(containerRef.current, settings, calibration)
-      : new VolumeRenderer(containerRef.current, settings, calibration);
-    rendererRef.current = renderer;
+    // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
+    if (containerARef.current && !rendererARef.current) {
+      rendererARef.current = new VolumeRenderer(containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor });
+      rendererARef.current.setCameraPreset('frontal');
+      rendererARef.current.setGridAxesVisible(false);
+    }
 
-    const defaultPreset = (mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal';
-    renderer.setCameraPreset(defaultPreset);
+    // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B, camera 'horizontal'
+    // Uses frames for buildWindowVolume temporal playback (NOT static spatial data)
+    if (containerBRef.current && !rendererBRef.current && hasFrames) {
+      rendererBRef.current = new VolumeRenderer(containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor });
+      rendererBRef.current.setCameraPreset('horizontal');
+      rendererBRef.current.setGridAxesVisible(false);
+    }
+
+    // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C, camera 'frontal'
+    // Uses frames for projectFrameWindow temporal playback
+    if (containerCRef.current && !rendererCRef.current && hasFrames) {
+      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor });
+      rendererCRef.current.setCameraPreset('frontal');
+      rendererCRef.current.setGridAxesVisible(false);
+    }
 
     return () => {
-      renderer.dispose();
-      rendererRef.current = null;
+      rendererARef.current?.dispose(); rendererARef.current = null;
+      rendererBRef.current?.dispose(); rendererBRef.current = null;
+      rendererCRef.current?.dispose(); rendererCRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasFrames]);
 
-  // Update beam wireframe when beam settings are available
+  // Toggle grid/axes visibility based on edit mode
   useEffect(() => {
-    if (!rendererRef.current || !beam) return;
-    rendererRef.current.updateBeamGeometry(beam.beamAngleDeg / 2, beam.depthMaxM);
+    rendererARef.current?.setGridAxesVisible(editingMode === 'instrument');
+    rendererBRef.current?.setGridAxesVisible(editingMode === 'spatial');
+    rendererCRef.current?.setGridAxesVisible(editingMode === 'classic');
+  }, [editingMode]);
+
+  // Upload beam wireframe
+  useEffect(() => {
+    if (!beam) return;
+    rendererARef.current?.updateBeamGeometry(beam.beamAngleDeg / 2, beam.depthMaxM);
   }, [beam]);
 
-  // Rendu A: upload static volume data from worker (skip for temporal modes B/C)
+  // Upload Mode A data
   useEffect(() => {
-    if (!rendererRef.current || !volumeData || volumeData.length === 0 || isTemporalMode) return;
-    rendererRef.current.uploadVolume(volumeData, dimensions, extent);
-
+    if (!rendererARef.current || !volumeData || volumeData.length === 0) return;
+    rendererARef.current.uploadVolume(volumeData, dimensions, extent);
     if (autoThreshold) {
       const threshold = computeAutoThreshold(volumeData, 85);
-      updateSetting('threshold', threshold);
+      // Apply directly to Mode A settings (doesn't need editingMode)
+      setModeSettings((prev) => ({ ...prev, instrument: { ...prev.instrument, threshold } }));
+      rendererARef.current?.updateSettings({ threshold });
     }
-  }, [volumeData, dimensions, extent, isTemporalMode]);
+  }, [volumeData, dimensions, extent]);
 
-  // Set slice data: use full-frame volume (v1-style stacking) when frames are
-  // available (both Mode A and Mode B), fall back to projected volume otherwise.
+  // ─── Mode B: sliding window temporal playback (buildWindowVolume) ────────
+  // Exactly as in 7024cc8: pre-compute windowed volumes ahead of current position
+  const frameCacheBRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
+
+  useEffect(() => {
+    if (!hasFrames || !frames || frames.length === 0) return;
+
+    const cache = frameCacheBRef.current;
+    const lookAhead = 16;
+    let cancelled = false;
+    (async () => {
+      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
+        const idx = currentFrame + offset;
+        if (idx >= frames.length || cache.has(idx)) continue;
+        const result = buildWindowVolume(frames, idx, WINDOW_SIZE);
+        if (!cancelled) cache.set(idx, result);
+        if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+      }
+
+      const minKeep = Math.max(0, currentFrame - 4);
+      for (const key of cache.keys()) {
+        if (key < minKeep) cache.delete(key);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [currentFrame, frames, hasFrames]);
+
+  // Mode B: build windowed volume and upload to renderer
+  useEffect(() => {
+    if (!rendererBRef.current || !hasFrames || !frames || frames.length === 0) return;
+
+    const cache = frameCacheBRef.current;
+    const cached = cache.get(currentFrame);
+    const vol = cached ?? buildWindowVolume(frames, currentFrame, WINDOW_SIZE);
+    if (!cached) cache.set(currentFrame, vol);
+
+    rendererBRef.current.uploadVolume(vol.normalized, vol.dimensions, vol.extent);
+  }, [currentFrame, frames, hasFrames]);
+
+  // Slice data
   useEffect(() => {
     if (fullSliceVolume) {
       setSliceVolumeData(fullSliceVolume.data);
@@ -370,142 +685,85 @@ export function VolumeViewer({
     }
   }, [fullSliceVolume, volumeData, dimensions]);
 
-  // Pre-computed frame projection cache for smooth playback
-  const frameCacheRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
-
-  // Rendu B: pre-compute windowed volumes ahead of current position
-  useEffect(() => {
-    if (!isRenduB) return;
-
-    const cache = frameCacheRef.current;
-    const lookAhead = 16;
-
-    let cancelled = false;
-    (async () => {
-      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
-        const idx = currentFrame + offset;
-        if (idx >= frames!.length || cache.has(idx)) continue;
-        const result = buildWindowVolume(frames!, idx, WINDOW_SIZE);
-        if (!cancelled) cache.set(idx, result);
-        if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
-      }
-
-      const minKeep = Math.max(0, currentFrame - 4);
-      for (const key of cache.keys()) {
-        if (key < minKeep) cache.delete(key);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [isRenduB, currentFrame, frames]);
-
-  // Rendu B: build windowed volume and upload
-  useEffect(() => {
-    if (!isRenduB || !rendererRef.current) return;
-
-    const cache = frameCacheRef.current;
-    let result = cache.get(currentFrame);
-    if (!result) {
-      result = buildWindowVolume(frames!, currentFrame, WINDOW_SIZE);
-      cache.set(currentFrame, result);
-    }
-
-    rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-  }, [isRenduB, currentFrame, frames]);
-
-  // Rendu C: pre-compute conic projections ahead of current position
+  // ─── Mode C: temporal projection + cache ────────────────────────────
   const frameCacheCRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
   useEffect(() => {
-    if (!isRenduC) return;
-
+    if (!hasFrames || !beam || !grid) return;
     const cache = frameCacheCRef.current;
-    const lookAhead = 16;
-
     let cancelled = false;
     (async () => {
-      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
+      for (let offset = 0; offset <= 16 && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames!.length || cache.has(idx)) continue;
         const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
         if (!cancelled) cache.set(idx, result);
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
-
       const minKeep = Math.max(0, currentFrame - 4);
-      for (const key of cache.keys()) {
-        if (key < minKeep) cache.delete(key);
-      }
+      for (const key of cache.keys()) { if (key < minKeep) cache.delete(key); }
     })();
-
     return () => { cancelled = true; };
-  }, [isRenduC, currentFrame, frames, beam, grid]);
+  }, [currentFrame, frames, beam, grid, hasFrames]);
 
-  // Rendu C: conic-project current frame and upload
   useEffect(() => {
-    if (!isRenduC || !rendererRef.current) return;
-
+    if (!rendererCRef.current || !hasFrames || !beam || !grid) return;
     const cache = frameCacheCRef.current;
-    let result = cache.get(currentFrame);
-    if (!result) {
-      result = projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
-      cache.set(currentFrame, result);
-    }
+    const cached = cache.get(currentFrame);
+    const vol = cached ?? projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
+    if (!cached) cache.set(currentFrame, vol);
+    rendererCRef.current.uploadVolume(vol.normalized, vol.dimensions, vol.extent);
+  }, [currentFrame, frames, beam, grid, hasFrames]);
 
-    rendererRef.current.uploadVolume(result.normalized, result.dimensions, result.extent);
-  }, [isRenduC, currentFrame, frames, beam, grid]);
-
-  // Playback animation loop (Rendu B + Rendu C)
+  // Playback loop
   useEffect(() => {
-    if (!isTemporalMode) return;
+    if (!hasFrames) return;
     playingRef.current = playing;
     currentFrameRef.current = currentFrame;
-
     if (!playing) return;
-
     let lastTime = 0;
     const intervalMs = 1000 / playSpeed;
     let rafId: number;
-
     const tick = (timestamp: number) => {
       if (!playingRef.current) return;
       if (timestamp - lastTime >= intervalMs) {
         lastTime = timestamp;
         const next = currentFrameRef.current + 1;
-        if (next >= frames!.length) {
-          setPlaying(false);
-          return;
-        }
+        if (next >= frames!.length) { setPlaying(false); return; }
         currentFrameRef.current = next;
         setCurrentFrame(next);
       }
       rafId = requestAnimationFrame(tick);
     };
-
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [playing, playSpeed, isTemporalMode, frames, currentFrame]);
+  }, [playing, playSpeed, hasFrames, frames, currentFrame]);
 
-  // Update settings
+  // Settings update — per-mode
   const updateSetting = useCallback(
     (key: keyof RendererSettings, value: number | boolean | string) => {
-      setSettings((prev: RendererSettings) => {
-        const next = { ...prev, [key]: value };
-        rendererRef.current?.updateSettings({ [key]: value });
-        onSettingsChange?.(next);
+      if (!editingMode) return;
+      setModeSettings((prev) => {
+        const modeKey = editingMode;
+        const next = { ...prev, [modeKey]: { ...prev[modeKey], [key]: value } };
+        if (modeKey === 'instrument') rendererARef.current?.updateSettings({ [key]: value });
+        else if (modeKey === 'spatial') rendererBRef.current?.updateSettings({ [key]: value });
+        else if (modeKey === 'classic') rendererCRef.current?.updateSettings({ [key]: value });
+        onSettingsChange?.(next[modeKey]);
         return next;
       });
     },
-    [onSettingsChange],
+    [onSettingsChange, editingMode],
   );
 
-  // Camera preset
   const handleCameraPreset = useCallback((preset: CameraPreset) => {
-    setCameraPreset(preset);
-    rendererRef.current?.setCameraPreset(preset);
-  }, []);
+    if (!editingMode) return;
+    setModeCamera((prev) => ({ ...prev, [editingMode]: preset }));
+    if (editingMode === 'instrument') rendererARef.current?.setCameraPreset(preset);
+    else if (editingMode === 'spatial') rendererBRef.current?.setCameraPreset(preset);
+    else if (editingMode === 'classic') rendererCRef.current?.setCameraPreset(preset);
+  }, [editingMode]);
 
-  // Auto threshold toggle
   const handleAutoThreshold = useCallback((enabled: boolean) => {
     setAutoThreshold(enabled);
     if (enabled && sliceVolumeData && sliceVolumeData.length > 0) {
@@ -514,300 +772,238 @@ export function VolumeViewer({
     }
   }, [sliceVolumeData, updateSetting]);
 
-  // Screenshot capture
   const handleCaptureScreenshot = useCallback(() => {
-    return rendererRef.current?.captureScreenshot() ?? null;
+    return rendererARef.current?.captureScreenshot() ?? null;
   }, []);
 
   const chromaticModes = getChromaticModes();
   const totalFrames = frames?.length ?? 0;
-  const currentTimeS = isTemporalMode && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
+  const currentTimeS = hasFrames && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {/* Volume viewer title */}
-      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: colors.text1 }}>
-        {t('v2.viewer.title')}
-      </h3>
+  const showB = hasFrames;
+  const showC = hasFrames && !!beam && !!grid;
 
-      {/* Main row: 3D viewport + controls */}
-      <div style={{ display: 'flex', gap: '10px', height: 'calc(100vh - 190px)', minHeight: '400px' }}>
-        {/* 3D viewport */}
-        <div
-          ref={containerRef}
-          style={{
-            flex: 1,
-            borderRadius: '12px',
-            overflow: 'hidden',
-            border: `1px solid ${colors.border}`,
-            background: theme === 'light' ? '#fafafa' : '#111111',
-            position: 'relative',
-          }}
-        >
-          {/* Mode badge */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '10px',
-              left: '10px',
-              padding: '3px 10px',
-              borderRadius: '16px',
-              background: mode === 'classic' ? 'rgba(34,204,136,0.2)' : mode === 'instrument' ? 'rgba(68,136,255,0.2)' : 'rgba(255,136,68,0.2)',
-              border: `1px solid ${mode === 'classic' ? 'rgba(34,204,136,0.4)' : mode === 'instrument' ? 'rgba(68,136,255,0.4)' : 'rgba(255,136,68,0.4)'}`,
-              color: mode === 'classic' ? '#22cc88' : mode === 'instrument' ? '#4488ff' : '#ff8844',
-              fontSize: '11px',
-              fontWeight: 500,
-              zIndex: 10,
-              pointerEvents: 'none',
-            }}
-          >
-            {mode === 'classic' ? 'Rendu C' : mode === 'instrument' ? 'Rendu A' : 'Rendu B'}
+  // Background that matches the page for borderless feel
+  const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+
+  // ─── Render a single volume section ─────────────────────────────────
+  const renderVolumeSection = (
+    mode: 'instrument' | 'spatial' | 'classic',
+    containerRef: React.RefObject<HTMLDivElement | null>,
+    title: string,
+    subtitle: string,
+    height: string,
+  ) => {
+    const isEditing = editingMode === mode;
+    return (
+      <section
+        key={mode}
+        style={{
+          position: 'relative',
+          marginBottom: '48px',
+        }}
+      >
+        {/* Title area */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          marginBottom: '16px',
+          padding: '0 4px',
+        }}>
+          <div>
+            <h2 style={{
+              margin: 0,
+              fontSize: '24px',
+              fontWeight: 700,
+              color: colors.text1,
+              letterSpacing: '-0.02em',
+            }}>
+              {title}
+            </h2>
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: '14px',
+              color: colors.text3,
+            }}>
+              {subtitle}
+            </p>
           </div>
-
-          {/* Camera preset buttons */}
-          <div
+          <button
+            onClick={() => setEditingMode(isEditing ? null : mode)}
             style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
               display: 'flex',
-              gap: '4px',
-              zIndex: 10,
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 16px',
+              borderRadius: '10px',
+              border: `1px solid ${isEditing ? colors.accent : colors.border}`,
+              background: isEditing ? colors.accentMuted : 'transparent',
+              color: isEditing ? colors.accent : colors.text2,
+              fontSize: '13px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 200ms ease',
             }}
           >
-            {CAMERA_PRESETS.map((p) => (
-              <button
-                key={p.key}
-                onClick={() => handleCameraPreset(p.key)}
-                title={t(p.labelKey as TranslationKey)}
-                style={{
-                  width: '30px',
-                  height: '30px',
-                  borderRadius: '8px',
-                  border: `1px solid ${cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.12)'}`,
-                  background: cameraPreset === p.key ? 'rgba(68,136,255,0.2)' : 'rgba(10,10,15,0.7)',
-                  color: cameraPreset === p.key ? colors.accent : 'rgba(255,255,255,0.5)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backdropFilter: 'blur(8px)',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                <p.Icon />
-              </button>
-            ))}
-          </div>
+            {isEditing ? <IconClose /> : <IconEdit />}
+            {isEditing ? 'Fermer' : 'Éditer'}
+          </button>
+        </div>
 
-          {!volumeData && !isTemporalMode && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: colors.text3,
-                fontSize: '15px',
-              }}
-            >
-              {t('v2.viewer.noData')}
+        {/* Viewport — clean, borderless, blends with page */}
+        <div style={{ position: 'relative', overflow: 'hidden' }}>
+          <div
+            ref={containerRef}
+            style={{
+              width: '100%',
+              height,
+              borderRadius: '16px',
+              overflow: 'hidden',
+              background: viewportBg,
+              cursor: 'grab',
+              transition: 'box-shadow 300ms ease',
+              boxShadow: isEditing
+                ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                : theme === 'light'
+                  ? '0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 2px 20px rgba(0,0,0,0.3)',
+            }}
+          />
+
+          {/* Edit panel overlay */}
+          {isEditing && (
+            <EditPanel
+              settings={modeSettings[mode]}
+              cameraPreset={modeCamera[mode]}
+              autoThreshold={autoThreshold}
+              activeMode={mode}
+              showGhostSlider={mode === 'spatial'}
+              showBeamToggle={mode === 'instrument'}
+              showSpeedSlider={mode === 'classic' && hasFrames}
+              playSpeed={playSpeed}
+              chromaticModes={chromaticModes}
+              lang={lang}
+              t={t}
+              onUpdateSetting={updateSetting}
+              onCameraPreset={handleCameraPreset}
+              onAutoThreshold={handleAutoThreshold}
+              onPlaySpeed={setPlaySpeed}
+              onClose={() => setEditingMode(null)}
+            />
+          )}
+
+          {/* Calibration panel overlay (dev tool) */}
+          {isEditing && calibrationOpen && mode === 'instrument' && (
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: '360px', zIndex: 25 }}>
+              <CalibrationPanel
+                config={calibration}
+                onChange={handleCalibrationChange}
+                onClose={() => setCalibrationOpen(false)}
+                saved={calibrationSaved}
+              />
             </div>
           )}
         </div>
+      </section>
+    );
+  };
 
-        {/* Controls / Calibration panel */}
-        <div
-          className="echos-controls-panel"
-          style={{
-            width: '480px',
-            minWidth: '480px',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-          }}
-        >
-          {calibrationOpen ? (
-            <CalibrationPanel
-              config={calibration}
-              onChange={handleCalibrationChange}
-              onClose={() => setCalibrationOpen(false)}
-              saved={calibrationSaved}
-            />
-          ) : (
-            <GlassPanel style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-              <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-                {t('v2.controls.title')}
-              </h3>
-
-              {/* Chromatic mode — pill buttons in a row */}
-              <div>
-                <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
-                  {t('v2.controls.palette')}
-                </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {chromaticModes.map((m: ChromaticMode) => (
-                    <button
-                      key={m}
-                      onClick={() => updateSetting('chromaticMode', m)}
-                      style={{
-                        padding: '5px 11px',
-                        borderRadius: '20px',
-                        border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                        background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                        color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        transition: 'all 150ms ease',
-                      }}
-                    >
-                      {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Two-column layout for sliders to reduce height */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-                <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('opacityScale', v)} />
-
-                {/* Threshold with auto toggle */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-                    <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <input
-                        type="checkbox"
-                        checked={autoThreshold}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleAutoThreshold(e.target.checked)}
-                        style={{ width: '12px', height: '12px' }}
-                      />
-                      {t('v2.controls.auto')}
-                    </label>
-                  </div>
-                  <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { setAutoThreshold(false); updateSetting('threshold', v); }} />
-                </div>
-
-                <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => updateSetting('densityScale', v)} />
-                <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => updateSetting('smoothing', v)} />
-
-                {mode === 'spatial' && (
-                  <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => updateSetting('ghostEnhancement', v)} />
-                )}
-
-                <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
-              </div>
-
-              {mode === 'instrument' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-                  <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
-                  {t('v2.controls.showBeam')}
-                </label>
-              )}
-
-              {isTemporalMode && (
-                <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
-              )}
-
-              {/* Calibration toggle button */}
-              <button
-                onClick={() => setCalibrationOpen(true)}
-                style={{
-                  marginTop: '8px',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  border: `1px solid rgba(255,136,68,0.3)`,
-                  background: 'rgba(255,136,68,0.08)',
-                  color: '#ff8844',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                Calibration
-              </button>
-            </GlassPanel>
-          )}
-        </div>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Page title */}
+      <div style={{ marginBottom: '40px', textAlign: 'center' }}>
+        <h1 style={{
+          margin: 0,
+          fontSize: 'clamp(28px, 3.5vw, 42px)',
+          fontWeight: 700,
+          color: colors.text1,
+          letterSpacing: '-0.03em',
+        }}>
+          {t('v2.viewer.title')}
+        </h1>
       </div>
 
-      {/* Timeline bar (Rendu B + Rendu C temporal playback) */}
-      {isTemporalMode && totalFrames > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '10px',
-            padding: '6px 12px',
-            background: colors.surface,
-            borderRadius: '8px',
-            border: `1px solid ${colors.border}`,
-            flexShrink: 0,
-          }}
-        >
+      {/* Volume sections — marketing-style, stacked vertically */}
+      {renderVolumeSection('instrument', containerARef, 'Cône', 'Empilement statique — Volume acoustique reconstruit', 'clamp(400px, 50vh, 600px)')}
+      {showB && renderVolumeSection('spatial', containerBRef, 'Trace', 'Déroulé spatial — Projection le long du parcours', 'clamp(350px, 45vh, 550px)')}
+      {showC && renderVolumeSection('classic', containerCRef, 'Projection', 'Fenêtre temporelle — Projection conique glissante', 'clamp(350px, 45vh, 550px)')}
+
+      {/* Timeline bar (Mode C temporal playback) */}
+      {hasFrames && totalFrames > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '12px',
+          padding: '10px 16px', background: colors.surface, borderRadius: '12px',
+          border: `1px solid ${colors.border}`, marginBottom: '48px',
+        }}>
           <button
             onClick={() => {
               if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
               setPlaying((p) => !p);
             }}
             style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
+              width: '32px', height: '32px', borderRadius: '50%',
               border: `1px solid ${colors.accent}`,
               background: playing ? colors.accentMuted : 'transparent',
-              color: colors.accent,
-              cursor: 'pointer',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
+              color: colors.accent, cursor: 'pointer', fontSize: '13px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
             {playing ? '||' : '\u25B6'}
           </button>
-
-          <div style={{ fontSize: '11px', color: colors.text2, fontVariantNumeric: 'tabular-nums', minWidth: '50px', flexShrink: 0 }}>
+          <div style={{ fontSize: '12px', color: colors.text2, fontVariantNumeric: 'tabular-nums', minWidth: '55px', flexShrink: 0 }}>
             {currentTimeS.toFixed(1)}s
           </div>
-
           <input
-            type="range"
-            min={0}
-            max={totalFrames - 1}
-            value={currentFrame}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              setPlaying(false);
-              setCurrentFrame(Number(e.target.value));
-            }}
+            type="range" min={0} max={totalFrames - 1} value={currentFrame}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
             style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
           />
-
-          <div style={{ fontSize: '10px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+          <div style={{ fontSize: '11px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
             {currentFrame + 1}/{totalFrames}
           </div>
         </div>
       )}
 
-      {/* Orthogonal slice panels — v1-style with inline presets */}
+      {/* GPS Map section */}
+      {gpxTrack && gpxTrack.points.length > 1 && (
+        <section style={{ marginBottom: '48px' }}>
+          <div style={{ marginBottom: '16px', padding: '0 4px' }}>
+            <h2 style={{
+              margin: 0,
+              fontSize: '24px',
+              fontWeight: 700,
+              color: colors.text1,
+              letterSpacing: '-0.02em',
+            }}>
+              Carte
+            </h2>
+            <p style={{ margin: '4px 0 0', fontSize: '14px', color: colors.text3 }}>
+              Tracé GPS — {gpxTrack.totalDistanceM.toFixed(0)}m parcourus
+            </p>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '340px',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: theme === 'light'
+              ? '0 2px 20px rgba(0,0,0,0.06)'
+              : '0 2px 20px rgba(0,0,0,0.3)',
+          }}>
+            <GpsMap points={gpxTrack.points} theme={theme} />
+          </div>
+        </section>
+      )}
+
+      {/* Orthogonal slice panels */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
-        <div style={{ marginTop: '32px' }}>
-          <SlicePanel
-            volumeData={sliceVolumeData}
-            dimensions={sliceDimensions}
-          />
+        <div style={{ marginBottom: '32px' }}>
+          <SlicePanel volumeData={sliceVolumeData} dimensions={sliceDimensions} />
         </div>
       )}
 
-      {/* Export panel — at bottom */}
-      <div style={{ marginTop: '32px' }} />
+      {/* Export panel */}
       <ExportPanel
         volumeData={sliceVolumeData}
         dimensions={sliceDimensions}
@@ -815,7 +1011,35 @@ export function VolumeViewer({
         onCaptureScreenshot={handleCaptureScreenshot}
       />
 
-      {/* Bottom spacing + action buttons */}
+      {/* Poster button */}
+      <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center' }}>
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={() => {
+            const sessionData = {
+              timestamp: new Date().toISOString(),
+              gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
+              dimensions,
+              extent,
+              beam,
+              grid,
+              settings: modeSettings,
+            };
+            const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `echos-session-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+        >
+          Poster
+        </Button>
+      </div>
+
+      {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0, paddingBottom: '24px' }}>
