@@ -186,7 +186,7 @@ export function VolumeViewer({
   const rendererRef = useRef<VolumeRenderer | VolumeRendererClassic | null>(null);
   const [settings, setSettings] = useState<RendererSettings>({
     ...DEFAULT_RENDERER,
-    showBeam: mode === 'instrument' || mode === 'classic',
+    showBeam: mode === 'instrument',
     ghostEnhancement: mode === 'spatial' ? 0.5 : 0,
   });
   const [cameraPreset, setCameraPreset] = useState<CameraPreset>((mode === 'instrument' || mode === 'classic') ? 'frontal' : 'horizontal');
@@ -608,7 +608,7 @@ export function VolumeViewer({
                 <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => updateSetting('stepCount', v)} />
               </div>
 
-              {(mode === 'instrument' || mode === 'classic') && (
+              {mode === 'instrument' && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
                   <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSetting('showBeam', e.target.checked)} />
                   {t('v2.controls.showBeam')}

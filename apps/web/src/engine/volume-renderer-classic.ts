@@ -1,12 +1,14 @@
 /**
- * ECHOS — Classic Volume Renderer (cdef367 engine)
+ * ECHOS — Classic Volume Renderer (0223f6b engine)
  *
- * This is the volumetric engine from the cdef367 commit:
- *   - No mesh rotation: X=lateral, Y=time/distance, Z=depth
- *   - Camera frontal on Y axis looking at XZ face
- *   - Camera position in local (mesh) space for ray marching
- *   - Visual cone wireframe for beam overlay
- *   - FOV 50, near plane 0.01
+ * This is the volumetric engine from commit 0223f6b:
+ *   - Full CalibrationConfig support (position, scale, camera, grid, axes, bgColor)
+ *   - Camera frontal on Z axis, up=(0,1,0)
+ *   - Camera position in world space
+ *   - Shader-only beam (no wireframe cone)
+ *   - FOV from calibration (default 30), near plane 0.1
+ *   - Mesh position from calibration
+ *   - Dynamic axes/grid helpers
  *
  * Same public API as VolumeRenderer so VolumeViewer can use either.
  */
@@ -30,6 +32,7 @@ export class VolumeRendererClassic {
   private volumeMesh: THREE.Mesh | null = null;
   private material: THREE.RawShaderMaterial | null = null;
   private beamGroup: THREE.Group;
+  private lastBeamParams: { halfAngleDeg: number; depthMax: number } | null = null;
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
@@ -40,14 +43,16 @@ export class VolumeRendererClassic {
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
   private calibration: CalibrationConfig;
+  private gridHelper: THREE.GridHelper;
+  private axesHelper: THREE.AxesHelper;
 
   constructor(
     container: HTMLElement,
     initialSettings?: Partial<RendererSettings>,
-    _initialCalibration?: CalibrationConfig,
+    initialCalibration?: CalibrationConfig,
   ) {
     this.settings = { ...DEFAULT_RENDERER, ...initialSettings };
-    this.calibration = _initialCalibration ?? { ...DEFAULT_CALIBRATION };
+    this.calibration = initialCalibration ?? { ...DEFAULT_CALIBRATION };
 
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
@@ -57,17 +62,17 @@ export class VolumeRendererClassic {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x0a0a0f, 1);
+    this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
     container.appendChild(this.renderer.domElement);
 
-    // Scene
+    // Scene (no fog — clean rendering)
     this.scene = new THREE.Scene();
 
-    // Camera — classic FOV 50, near 0.01
+    // Camera
     this.camera = new THREE.PerspectiveCamera(
-      50,
+      this.calibration.camera.fov,
       container.clientWidth / container.clientHeight,
-      0.01,
+      0.1,
       100,
     );
 
@@ -96,14 +101,20 @@ export class VolumeRendererClassic {
     this.scene.add(this.beamGroup);
 
     // Axes helper
-    const axes = new THREE.AxesHelper(0.3);
-    axes.position.set(-0.6, -0.6, -0.6);
-    this.scene.add(axes);
+    const axesBaseSize = 0.3;
+    this.axesHelper = new THREE.AxesHelper(axesBaseSize);
+    this.axesHelper.scale.setScalar(this.calibration.axes.size / axesBaseSize);
+    this.axesHelper.position.set(
+      -this.calibration.axes.size,
+      -this.calibration.axes.size,
+      -this.calibration.axes.size,
+    );
+    this.scene.add(this.axesHelper);
 
     // Grid helper
-    const gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
-    gridHelper.position.y = -0.5;
-    this.scene.add(gridHelper);
+    this.gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+    this.gridHelper.position.y = this.calibration.grid.y;
+    this.scene.add(this.gridHelper);
 
     // Default camera
     this.setCameraPreset('frontal');
@@ -116,42 +127,91 @@ export class VolumeRendererClassic {
     ro.observe(container);
   }
 
-  // ─── Camera Presets (classic: frontal from Y axis) ─────────────────────
+  // ─── Calibration ──────────────────────────────────────────────────────
+
+  setCalibration(config: CalibrationConfig): void {
+    this.calibration = config;
+
+    // Position only — no rotation on mesh
+    if (this.volumeMesh) {
+      const p = config.position;
+      this.volumeMesh.position.set(p.x, p.y, p.z);
+    }
+
+    // Recompute scale — direct from extent
+    if (this.material) {
+      const maxExtent = Math.max(...this.extent);
+      const scale = new THREE.Vector3(
+        this.extent[0] / maxExtent,   // X = lateral
+        this.extent[1] / maxExtent,   // Y = track
+        this.extent[2] / maxExtent,   // Z = depth
+      );
+      this.volumeScale = scale;
+      const halfScale = scale.clone().multiplyScalar(0.5);
+      this.material.uniforms.volumeScale.value.copy(scale);
+      this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
+      this.material.uniforms.uVolumeMax.value.copy(halfScale);
+    }
+
+    // Scene helpers
+    const axesBaseSize = 0.3;
+    this.axesHelper.scale.setScalar(config.axes.size / axesBaseSize);
+    this.axesHelper.position.set(-config.axes.size, -config.axes.size, -config.axes.size);
+    this.gridHelper.position.y = config.grid.y;
+
+    // Background color
+    this.renderer.setClearColor(new THREE.Color(config.bgColor), 1);
+
+    // Camera FOV
+    this.camera.fov = config.camera.fov;
+    this.camera.updateProjectionMatrix();
+
+    // Refresh beam geometry if parameters were set
+    if (this.lastBeamParams) {
+      this.updateBeamGeometry(this.lastBeamParams.halfAngleDeg, this.lastBeamParams.depthMax);
+    }
+  }
+
+  getCalibration(): CalibrationConfig {
+    return JSON.parse(JSON.stringify(this.calibration));
+  }
+
+  // ─── Camera Presets ─────────────────────────────────────────────────────
 
   setCameraPreset(preset: CameraPreset): void {
     this.currentPreset = preset;
     const s = this.volumeScale;
     const maxDim = Math.max(s.x, s.y, s.z) || 1;
+    const distMul = this.calibration.camera.dist;
 
-    // Volume axes (no rotation): X=lateral, Y=time/distance, Z=depth
-    // Wide face = XZ (lateral × depth), viewed from Y axis
     switch (preset) {
       case 'frontal': {
-        const dist = maxDim * 1.6;
-        this.camera.position.set(0, dist, 0);
-        this.camera.up.set(0, 0, -1); // depth (Z) points down
+        const dist = maxDim * distMul;
+        this.camera.position.set(0, 0, dist);
+        this.camera.up.set(0, 1, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'horizontal': {
-        const dist = maxDim * 1.5;
-        this.camera.position.set(dist * 0.3, dist * 0.85, dist * 0.5);
+        const dist = maxDim * (distMul * 0.94);
+        const angle25 = (25 * Math.PI) / 180;
+        this.camera.position.set(
+          dist * 0.3,
+          dist * Math.sin(angle25),
+          dist * Math.cos(angle25),
+        );
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'vertical': {
-        const dist = maxDim * 1.6;
+        const dist = maxDim * distMul;
         this.camera.position.set(dist, 0, 0);
         this.controls.target.set(0, 0, 0);
         break;
       }
       case 'free': {
-        const dist = maxDim * 1.2;
-        this.camera.position.set(
-          s.x * dist,
-          s.y * 0.7 * dist,
-          s.z * dist,
-        );
+        const dist = maxDim * (distMul * 0.75);
+        this.camera.position.set(dist, dist * 0.7, dist);
         this.controls.target.set(0, 0, 0);
         break;
       }
@@ -188,6 +248,8 @@ export class VolumeRendererClassic {
     }
 
     const [dimX, dimY, dimZ] = dimensions;
+    console.log('[ECHOS-C] uploadVolume — dimX (lateral):', dimX, 'dimY (track):', dimY, 'dimZ (depth):', dimZ);
+    console.log('[ECHOS-C] uploadVolume — extent:', extent, '— data length:', data.length, '— expected:', dimX * dimY * dimZ);
     this.volumeTexture = new THREE.Data3DTexture(data, dimX, dimY, dimZ);
     this.volumeTexture.format = THREE.RedFormat;
     this.volumeTexture.type = THREE.FloatType;
@@ -198,6 +260,7 @@ export class VolumeRendererClassic {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
+    // If mesh exists and dimensions/extent haven't changed, just update the texture
     if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
       this.material.uniforms.uVolume.value = this.volumeTexture;
       return;
@@ -222,11 +285,12 @@ export class VolumeRendererClassic {
 
     const maxExtent = Math.max(...this.extent);
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,
-      this.extent[1] / maxExtent,
-      this.extent[2] / maxExtent,
+      this.extent[0] / maxExtent,   // X = lateral
+      this.extent[1] / maxExtent,   // Y = track
+      this.extent[2] / maxExtent,   // Z = depth
     );
     this.volumeScale = scale;
+    console.log('[ECHOS-C] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 
@@ -261,10 +325,13 @@ export class VolumeRendererClassic {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // No rotation: X=lateral, Y=time, Z=depth (natural data layout)
-    this.scene.add(this.volumeMesh);
-    this.volumeMesh.updateMatrixWorld(true);
+    // Position only — no rotation on mesh
+    const p = this.calibration.position;
+    this.volumeMesh.position.set(p.x, p.y, p.z);
 
+    this.scene.add(this.volumeMesh);
+
+    // Set camera on first mesh creation only (preserve user rotation during playback)
     if (!this.meshCreated) {
       this.setCameraPreset(this.currentPreset);
       this.meshCreated = true;
@@ -422,47 +489,16 @@ void main() {
     }
   }
 
-  // ─── Beam wireframe (classic: visible cone geometry) ──────────────────
+  // ─── Beam wireframe ───────────────────────────────────────────────────
 
   updateBeamGeometry(halfAngleDeg: number, depthMax: number): void {
+    this.lastBeamParams = { halfAngleDeg, depthMax };
     this.beamGroup.clear();
 
-    if (!this.settings.showBeam) return;
-
     const halfAngle = (halfAngleDeg * Math.PI) / 180;
-    const segments = 32;
-    const radius = depthMax * Math.tan(halfAngle);
-
-    const coneGeom = new THREE.ConeGeometry(radius, depthMax, segments, 1, true);
-    const wireframeMat = new THREE.MeshBasicMaterial({
-      color: 0x4488ff,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-    });
-
-    const cone = new THREE.Mesh(coneGeom, wireframeMat);
-    cone.rotation.x = Math.PI;
-    cone.position.y = -depthMax / 2;
-    this.beamGroup.add(cone);
-
     if (this.material) {
       this.material.uniforms.uBeamAngle.value = halfAngle;
     }
-  }
-
-  // ─── Calibration (compatibility stub — classic ignores most fields) ────
-
-  setCalibration(config: CalibrationConfig): void {
-    this.calibration = config;
-    // Classic renderer only respects background color
-    if (config.bgColor) {
-      this.renderer.setClearColor(new THREE.Color(config.bgColor), 1);
-    }
-  }
-
-  getCalibration(): CalibrationConfig {
-    return JSON.parse(JSON.stringify(this.calibration));
   }
 
   // ─── Snapshot for export ──────────────────────────────────────────────
@@ -472,7 +508,7 @@ void main() {
     return this.renderer.domElement.toDataURL('image/png');
   }
 
-  // ─── Render loop (classic: camera in local mesh space) ────────────────
+  // ─── Render loop ──────────────────────────────────────────────────────
 
   private animate = (): void => {
     if (this.disposed) return;
@@ -480,11 +516,8 @@ void main() {
 
     this.controls.update();
 
-    if (this.material && this.volumeMesh) {
-      // Camera position must be in volume local space for correct ray marching
-      const camLocal = this.camera.position.clone();
-      this.volumeMesh.worldToLocal(camLocal);
-      this.material.uniforms.uCameraPos.value.copy(camLocal);
+    if (this.material) {
+      this.material.uniforms.uCameraPos.value.copy(this.camera.position);
     }
 
     this.renderer.render(this.scene, this.camera);

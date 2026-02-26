@@ -267,7 +267,7 @@ export const translations = {
     'v2.mode.spatial': 'Trace Spatiale',
     'v2.mode.spatialDesc': 'Déroulez l\u2019enregistrement dans l\u2019espace 3D le long de la trace GPS. Accumulation fantôme multi-passes.',
     'v2.mode.classic': 'Moteur Classique',
-    'v2.mode.classicDesc': 'Moteur volumétrique original (cdef367). Caméra frontale axe Y, cône filaire, ray marching en espace local.',
+    'v2.mode.classicDesc': 'Moteur volumétrique 0223f6b. Caméra frontale axe Z, calibration complète, ray marching en espace monde.',
 
     // V2 Pipeline
     'v2.pipeline.title': 'Génération en cours\u2026',
@@ -618,7 +618,7 @@ export const translations = {
     'v2.mode.spatial': 'Spatial Trace',
     'v2.mode.spatialDesc': 'Unroll the recording into 3D space along the GPS trace. Multi-pass ghost accumulation.',
     'v2.mode.classic': 'Classic Engine',
-    'v2.mode.classicDesc': 'Original volumetric engine (cdef367). Frontal Y-axis camera, wireframe cone, local-space ray marching.',
+    'v2.mode.classicDesc': 'Volumetric engine from 0223f6b. Frontal Z-axis camera, full calibration, world-space ray marching.',
 
     // V2 Pipeline
     'v2.pipeline.title': 'Generating\u2026',
