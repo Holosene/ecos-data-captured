@@ -24,6 +24,7 @@ import type {
   BeamSettings,
   VolumeGridSettings,
   PipelineV2Progress,
+  ViewMode,
   CropRect,
   FrameMapping,
 } from '@echos/core';
@@ -111,6 +112,7 @@ export function ScanPage() {
   const { t } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
+  const [viewMode, setViewMode] = useState<ViewMode>('instrument'); // Mode A by default
 
   // Settings — driven by quality preset
   const [quality, setQuality] = useState<QualityPreset>('medium');
@@ -142,17 +144,11 @@ export function ScanPage() {
   cropRef.current = crop;
   scaleRef.current = scale;
 
-  // Processing state — multi-mode data
+  // Processing state
   const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
-  // Mode A (instrument) data
   const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
   const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
   const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
-  // Mode B (spatial) data — always present
-  const [spatialData, setSpatialData] = useState<Float32Array | null>(null);
-  const [spatialDims, setSpatialDims] = useState<[number, number, number]>([1, 1, 1]);
-  const [spatialExtent, setSpatialExtent] = useState<[number, number, number]>([1, 1, 1]);
-  // Preprocessed frames for Mode C + slices
   const [instrumentFrames, setInstrumentFrames] = useState<Array<{
     index: number; timeS: number; intensity: Float32Array; width: number; height: number;
   }> | null>(null);
@@ -472,6 +468,7 @@ export function ScanPage() {
       preprocessing,
       beam,
       grid,
+      viewMode,
       trackTotalDistanceM,
       mappings,
     });
@@ -479,8 +476,9 @@ export function ScanPage() {
     let extractionDone = false;
 
     const resultPromise = new Promise<{
-      instrument: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] };
-      spatial: { normalizedData: Float32Array; dims: [number, number, number]; extent: [number, number, number] };
+      normalizedData: Float32Array;
+      dims: [number, number, number];
+      extent: [number, number, number];
       frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
     }>((resolve, reject) => {
       worker.onmessage = (e: MessageEvent) => {
@@ -491,13 +489,13 @@ export function ScanPage() {
             const p = EXTRACT_WEIGHT + (msg.count / totalFrames) * PROJECT_WEIGHT * 0.5;
             setProgress({ stage: 'preprocessing', progress: Math.min(p, 0.95), message: t('v2.pipeline.extracting'), currentFrame: msg.count, totalFrames });
           }
-        } else if (msg.type === 'stage') {
+        } else if (msg.type === 'stage' && msg.stage === 'projecting') {
           setProgress({ stage: 'projecting', progress: EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5, message: t('v2.pipeline.projecting') });
         } else if (msg.type === 'projection-progress') {
           const p = EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5 + (msg.current / msg.total) * PROJECT_WEIGHT * 0.5;
           setProgress({ stage: 'projecting', progress: Math.min(p, 0.98), message: t('v2.pipeline.projecting'), currentFrame: msg.current, totalFrames: msg.total });
         } else if (msg.type === 'complete') {
-          resolve({ instrument: msg.instrument, spatial: msg.spatial, frames: msg.frames });
+          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
         } else if (msg.type === 'error') {
           reject(new Error(msg.message));
         }
@@ -576,22 +574,14 @@ export function ScanPage() {
 
     if (abortRef.current) return;
 
-    const { instrument, spatial, frames: preprocessedFrames } = result;
+    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
 
-    // Mode A data
-    setVolumeData(instrument.normalizedData);
-    setVolumeDims(instrument.dims);
-    setVolumeExtent(instrument.extent);
-
-    // Mode B data (always present)
-    setSpatialData(spatial.normalizedData);
-    setSpatialDims(spatial.dims);
-    setSpatialExtent(spatial.extent);
-
-    // Frames for Mode C + slices
     setInstrumentFrames(preprocessedFrames);
+    setVolumeData(normalizedData);
+    setVolumeDims(dims);
+    setVolumeExtent(extent);
 
-    dispatch({ type: 'SET_V2_VOLUME', data: instrument.normalizedData, dimensions: instrument.dims, extent: instrument.extent });
+    dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
     setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
 
     // Show completion state briefly before transitioning
@@ -620,7 +610,7 @@ export function ScanPage() {
         totalDistanceM: track?.totalDistanceM ?? 0,
         durationS: track?.durationS ?? state.videoDurationS,
         frameCount: preprocessedFrames.length,
-        gridDimensions: instrument.dims,
+        gridDimensions: dims,
         preprocessing,
         beam,
       },
@@ -634,7 +624,7 @@ export function ScanPage() {
       setStepBarAnimating(true);
       setTimeout(() => setStepBarVisible(false), 500);
     }, 600);
-  }, [state, crop, preprocessing, beam, grid, fpsExtraction, dispatch, t]);
+  }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
 
@@ -962,6 +952,68 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
+            {/* Mode selection */}
+            <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
+              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
+                {t('v2.config.viewMode')}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                <button
+                  onClick={() => setViewMode('instrument')}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '12px',
+                    border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
+                    background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                    Mode A — {t('v2.mode.instrument')}
+                  </div>
+                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                    {t('v2.mode.instrumentDesc')}
+                  </div>
+                </button>
+                <button
+                  onClick={() => setViewMode('spatial')}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '12px',
+                    border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
+                    background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                    Mode B — {t('v2.mode.spatial')}
+                  </div>
+                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                    {t('v2.mode.spatialDesc')}
+                  </div>
+                </button>
+                <button
+                  onClick={() => setViewMode('classic')}
+                  style={{
+                    padding: '12px',
+                    borderRadius: '12px',
+                    border: `2px solid ${viewMode === 'classic' ? colors.accent : colors.border}`,
+                    background: viewMode === 'classic' ? colors.accentMuted : 'transparent',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                    Mode C — {t('v2.mode.classic')}
+                  </div>
+                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                    {t('v2.mode.classicDesc')}
+                  </div>
+                </button>
+              </div>
+            </GlassPanel>
 
             {/* Synchronization section — only when GPX is loaded */}
             {state.gpxTrack && (
@@ -1121,13 +1173,10 @@ export function ScanPage() {
               volumeData={volumeData}
               dimensions={volumeDims}
               extent={volumeExtent}
-              spatialData={spatialData}
-              spatialDimensions={spatialDims}
-              spatialExtent={spatialExtent}
+              mode={viewMode}
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}
-              gpxTrack={state.gpxTrack ?? undefined}
               onReconfigure={() => {
                 setStepBarVisible(true);
                 setStepBarAnimating(false);
@@ -1138,7 +1187,6 @@ export function ScanPage() {
                 setStepBarAnimating(false);
                 setPhase('import');
                 setVolumeData(null);
-                setSpatialData(null);
                 setFrameReady(false);
               }}
             />
