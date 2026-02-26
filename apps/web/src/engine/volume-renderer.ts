@@ -27,7 +27,14 @@ export interface CalibrationConfig {
   rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
   axisMapping: { lateral: 'x' | 'y' | 'z'; depth: 'x' | 'y' | 'z'; track: 'x' | 'y' | 'z' };
-  camera: { dist: number; fov: number };
+  camera: {
+    dist: number;
+    fov: number;
+    orbit?: {
+      posX: number; posY: number; posZ: number;
+      targetX: number; targetY: number; targetZ: number;
+    };
+  };
   grid: { y: number };
   axes: { size: number };
   bgColor: string;
@@ -144,6 +151,14 @@ export class VolumeRenderer {
     // Default camera
     this.setCameraPreset('frontal');
 
+    // Restore saved orbit camera position (from Ctrl+S save)
+    if (this.calibration.camera.orbit) {
+      const o = this.calibration.camera.orbit;
+      this.camera.position.set(o.posX, o.posY, o.posZ);
+      this.controls.target.set(o.targetX, o.targetY, o.targetZ);
+      this.controls.update();
+    }
+
     // Start render loop
     this.animate();
 
@@ -170,13 +185,13 @@ export class VolumeRenderer {
       );
     }
 
-    // Recompute scale — direct from extent (Règle 5)
+    // Recompute scale — extent * calibration scale
     if (this.material) {
       const maxExtent = Math.max(...this.extent);
       const scale = new THREE.Vector3(
-        this.extent[0] / maxExtent,   // X = lateral
-        this.extent[1] / maxExtent,   // Y = track
-        this.extent[2] / maxExtent,   // Z = depth
+        (this.extent[0] / maxExtent) * config.scale.x,
+        (this.extent[1] / maxExtent) * config.scale.y,
+        (this.extent[2] / maxExtent) * config.scale.z,
       );
       this.volumeScale = scale;
       const halfScale = scale.clone().multiplyScalar(0.5);
@@ -205,7 +220,17 @@ export class VolumeRenderer {
   }
 
   getCalibration(): CalibrationConfig {
-    return JSON.parse(JSON.stringify(this.calibration));
+    const cal: CalibrationConfig = JSON.parse(JSON.stringify(this.calibration));
+    // Capture current orbit camera state
+    cal.camera.orbit = {
+      posX: this.camera.position.x,
+      posY: this.camera.position.y,
+      posZ: this.camera.position.z,
+      targetX: this.controls.target.x,
+      targetY: this.controls.target.y,
+      targetZ: this.controls.target.z,
+    };
+    return cal;
   }
 
   // ─── Camera Presets ─────────────────────────────────────────────────────
@@ -317,10 +342,11 @@ export class VolumeRenderer {
     }
 
     const maxExtent = Math.max(...this.extent);
+    const cal = this.calibration;
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,   // X = track
-      this.extent[1] / maxExtent,   // Y = lateral
-      this.extent[2] / maxExtent,   // Z = depth
+      (this.extent[0] / maxExtent) * cal.scale.x,
+      (this.extent[1] / maxExtent) * cal.scale.y,
+      (this.extent[2] / maxExtent) * cal.scale.z,
     );
     this.volumeScale = scale;
     console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
