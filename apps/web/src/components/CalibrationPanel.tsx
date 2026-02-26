@@ -190,9 +190,10 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Y" value={config.position.y} min={-2} max={2} step={0.01} onChange={(v) => update('position.y', v)} />
       <Row label="Z" value={config.position.z} min={-2} max={2} step={0.01} onChange={(v) => update('position.z', v)} />
 
-      {/* Skew (shear correction) */}
-      <Section title="Skew" />
-      <Row label="X" value={config.skewX} min={-1} max={1} step={0.01} onChange={(v) => update('skewX', v)} />
+      {/* Sliding window */}
+      <Section title="Window" />
+      <Row label="Size" value={config.window.size} min={0.02} max={1} step={0.01} onChange={(v) => update('window.size', v)} />
+      <Row label="Speed" value={config.window.speed} min={0.01} max={0.5} step={0.01} onChange={(v) => update('window.speed', v)} />
 
       {/* Scale */}
       <Section title="Scale" />
@@ -267,6 +268,7 @@ export function loadCalibration(): CalibrationConfig | null {
       ...saved,
       position: { ...DEFAULT_CALIBRATION.position, ...(saved.position ?? {}) },
       scale: { ...DEFAULT_CALIBRATION.scale, ...(saved.scale ?? {}) },
+      window: { ...DEFAULT_CALIBRATION.window, ...((saved as Record<string, unknown>).window as Record<string, unknown> ?? {}) },
       camera: { ...DEFAULT_CALIBRATION.camera, ...(saved.camera ?? {}) },
       grid: { ...DEFAULT_CALIBRATION.grid, ...(saved.grid ?? {}) },
       axes: { ...DEFAULT_CALIBRATION.axes, ...(saved.axes ?? {}) },

@@ -152,7 +152,6 @@ export function ScanPage() {
   const [instrumentFrames, setInstrumentFrames] = useState<Array<{
     index: number; timeS: number; intensity: Float32Array; width: number; height: number;
   }> | null>(null);
-  const [autoSkewX, setAutoSkewX] = useState(0);
   const abortRef = useRef(false);
 
   // Step bar animation state
@@ -481,7 +480,6 @@ export function ScanPage() {
       normalizedData: Float32Array;
       dims: [number, number, number];
       extent: [number, number, number];
-      autoSkewX: number;
       frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
     }>((resolve, reject) => {
       worker.onmessage = (e: MessageEvent) => {
@@ -498,7 +496,7 @@ export function ScanPage() {
           const p = EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5 + (msg.current / msg.total) * PROJECT_WEIGHT * 0.5;
           setProgress({ stage: 'projecting', progress: Math.min(p, 0.98), message: t('v2.pipeline.projecting'), currentFrame: msg.current, totalFrames: msg.total });
         } else if (msg.type === 'complete') {
-          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, autoSkewX: msg.autoSkewX ?? 0, frames: msg.frames });
+          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
         } else if (msg.type === 'error') {
           reject(new Error(msg.message));
         }
@@ -577,13 +575,12 @@ export function ScanPage() {
 
     if (abortRef.current) return;
 
-    const { normalizedData, dims, extent, autoSkewX: computedSkewX, frames: preprocessedFrames } = result;
+    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
 
     setInstrumentFrames(preprocessedFrames);
     setVolumeData(normalizedData);
     setVolumeDims(dims);
     setVolumeExtent(extent);
-    setAutoSkewX(computedSkewX);
 
     dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
     setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
@@ -1262,7 +1259,6 @@ export function ScanPage() {
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}
-              autoSkewX={autoSkewX}
               onReconfigure={() => {
                 setStepBarVisible(true);
                 setStepBarAnimating(false);

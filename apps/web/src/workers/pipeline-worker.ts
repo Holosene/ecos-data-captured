@@ -85,7 +85,6 @@ self.onmessage = (e: MessageEvent) => {
       let normalizedData: Float32Array;
       let dims: [number, number, number];
       let ext: [number, number, number];
-      let autoSkewX = 0;
 
       if (viewMode === 'spatial') {
         // ── Mode B: conic spatial projection ──
@@ -121,7 +120,6 @@ self.onmessage = (e: MessageEvent) => {
         normalizedData = result.normalized;
         dims = result.dimensions;
         ext = result.extent;
-        autoSkewX = result.autoSkewX;
       }
 
       // Transfer all buffers (zero-copy back to main thread)
@@ -142,7 +140,7 @@ self.onmessage = (e: MessageEvent) => {
       });
 
       self.postMessage(
-        { type: 'complete', normalizedData, dims, extent: ext, autoSkewX, frames: frameData },
+        { type: 'complete', normalizedData, dims, extent: ext, frames: frameData },
         transferables,
       );
     } catch (err) {

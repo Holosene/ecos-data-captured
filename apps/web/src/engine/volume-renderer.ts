@@ -25,7 +25,7 @@ import { generateLUT } from './transfer-function.js';
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
-  skewX: number; // manual shear correction (-1 to 1)
+  window: { size: number; speed: number };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -35,7 +35,7 @@ export interface CalibrationConfig {
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
-  skewX: 0,
+  window: { size: 0.15, speed: 0.08 },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -68,7 +68,11 @@ export class VolumeRenderer {
   private calibration: CalibrationConfig;
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
-  private autoSkewX: number = 0;
+
+  // Sliding window animation state
+  private windowPos: number = 0;      // animation progress (0 → 1+windowSize)
+  private windowPlaying: boolean = true;
+  private lastAnimTime: number = 0;
 
   constructor(
     container: HTMLElement,
@@ -176,9 +180,6 @@ export class VolumeRenderer {
       this.material.uniforms.volumeScale.value.copy(scale);
       this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
       this.material.uniforms.uVolumeMax.value.copy(halfScale);
-
-      // Skew = auto + manual
-      this.material.uniforms.uSkewX.value = this.autoSkewX + config.skewX;
     }
 
     // Scene helpers
@@ -214,9 +215,10 @@ export class VolumeRenderer {
 
     switch (preset) {
       case 'frontal': {
+        // Look down the Y axis (track/frame axis) — cone face (X-Z) visible
         const dist = maxDim * distMul;
-        this.camera.position.set(0, 0, dist);
-        this.camera.up.set(0, 1, 0);
+        this.camera.position.set(0, dist, 0);
+        this.camera.up.set(0, 0, -1);
         this.controls.target.set(0, 0, 0);
         break;
       }
@@ -346,7 +348,8 @@ export class VolumeRenderer {
         uShowBeam: { value: this.settings.showBeam },
         uBeamAngle: { value: 0.175 },
         uTimeSlice: { value: 0.5 },
-        uSkewX: { value: this.autoSkewX + this.calibration.skewX },
+        uWindowMin: { value: 0.0 },
+        uWindowMax: { value: this.calibration.window.size },
       },
       side: THREE.BackSide,
       transparent: true,
@@ -408,7 +411,8 @@ uniform float uGhostEnhancement;
 uniform bool uShowBeam;
 uniform float uBeamAngle;
 uniform float uTimeSlice;
-uniform float uSkewX;
+uniform float uWindowMin;
+uniform float uWindowMax;
 
 in vec3 vWorldPos;
 in vec3 vLocalPos;
@@ -463,12 +467,9 @@ void main() {
     vec3 samplePos = rayOrigin + rayDir * t;
     vec3 uvw = (samplePos - uVolumeMin) / (uVolumeMax - uVolumeMin);
 
-    if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))) {
-      // Apply shear correction: straighten diagonal caused by sonar screen scroll
-      vec3 texUvw = uvw;
-      texUvw.x -= uSkewX * (texUvw.y - 0.5);
-      texUvw = clamp(texUvw, vec3(0.0), vec3(1.0));
-      float rawVal = sampleVolume(texUvw);
+    if (all(greaterThanEqual(uvw, vec3(0.0))) && all(lessThanEqual(uvw, vec3(1.0)))
+        && uvw.y >= uWindowMin && uvw.y <= uWindowMax) {
+      float rawVal = sampleVolume(uvw);
       float density = rawVal * uDensityScale;
       density += rawVal * rawVal * uGhostEnhancement * 3.0;
 
@@ -524,11 +525,22 @@ void main() {
     }
   }
 
-  /** Set auto-computed skew from centroid analysis (combined with manual calibration.skewX) */
-  setAutoSkewX(value: number): void {
-    this.autoSkewX = value;
+  /** Control the sliding window animation */
+  setWindowPlaying(playing: boolean): void {
+    this.windowPlaying = playing;
+    if (playing) this.lastAnimTime = 0; // reset delta on resume
+  }
+
+  isWindowPlaying(): boolean {
+    return this.windowPlaying;
+  }
+
+  /** Reset window to start */
+  resetWindow(): void {
+    this.windowPos = 0;
     if (this.material) {
-      this.material.uniforms.uSkewX.value = this.autoSkewX + this.calibration.skewX;
+      this.material.uniforms.uWindowMin.value = 0.0;
+      this.material.uniforms.uWindowMax.value = Math.min(this.calibration.window.size, 1.0);
     }
   }
 
@@ -561,6 +573,25 @@ void main() {
 
     if (this.material) {
       this.material.uniforms.uCameraPos.value.copy(this.camera.position);
+
+      // Sliding window animation along Y (track/frame axis)
+      if (this.windowPlaying) {
+        const now = performance.now() / 1000;
+        const dt = this.lastAnimTime > 0 ? Math.min(now - this.lastAnimTime, 0.1) : 0;
+        this.lastAnimTime = now;
+
+        const wSize = this.calibration.window.size;
+        const totalCycle = 1.0 + wSize; // ramp-up + cruise + ramp-down
+        this.windowPos += this.calibration.window.speed * dt;
+        if (this.windowPos > totalCycle) {
+          this.windowPos -= totalCycle; // loop
+        }
+
+        const wMin = Math.max(this.windowPos - wSize, 0.0);
+        const wMax = Math.min(this.windowPos, 1.0);
+        this.material.uniforms.uWindowMin.value = wMin;
+        this.material.uniforms.uWindowMax.value = wMax;
+      }
     }
 
     this.renderer.render(this.scene, this.camera);
