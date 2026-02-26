@@ -225,8 +225,8 @@ export function ScanPage() {
     [dispatch],
   );
 
-  // Mode A (instrument) only requires video; Mode B (spatial) requires video + GPX
-  const canConfigure = !!state.videoFile && (viewMode === 'instrument' || !!state.gpxTrack);
+  // Both Rendu A and Rendu B only require video; GPX is optional
+  const canConfigure = !!state.videoFile;
 
   // ─── Crop tool: auto-detect + visual canvas ───────────────────────────
 
@@ -409,9 +409,8 @@ export function ScanPage() {
   const workerRef = useRef<Worker | null>(null);
 
   const runPipeline = useCallback(async () => {
-    // Mode A (instrument) only needs video; Mode B (spatial) needs video + GPX
+    // Both renderers only need video; GPX is optional
     if (!state.videoFile) return;
-    if (viewMode === 'spatial' && !state.gpxTrack) return;
     abortRef.current = false;
     setPhase('processing');
 
