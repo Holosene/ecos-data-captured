@@ -347,6 +347,7 @@ export const translations = {
     // Common
     'common.back': 'Retour',
     'common.next': 'Suivant',
+    'common.optional': 'optionnel',
   },
 
   en: {
@@ -695,6 +696,7 @@ export const translations = {
     // Common
     'common.back': 'Back',
     'common.next': 'Next',
+    'common.optional': 'optional',
   },
 } as const;
 

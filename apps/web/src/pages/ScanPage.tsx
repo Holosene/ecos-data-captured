@@ -26,6 +26,7 @@ import type {
   PipelineV2Progress,
   ViewMode,
   CropRect,
+  FrameMapping,
 } from '@echos/core';
 import {
   DEFAULT_PREPROCESSING,
@@ -224,7 +225,8 @@ export function ScanPage() {
     [dispatch],
   );
 
-  const canConfigure = !!state.videoFile && !!state.gpxTrack;
+  // Mode A (instrument) only requires video; Mode B (spatial) requires video + GPX
+  const canConfigure = !!state.videoFile && (viewMode === 'instrument' || !!state.gpxTrack);
 
   // ─── Crop tool: auto-detect + visual canvas ───────────────────────────
 
@@ -407,7 +409,9 @@ export function ScanPage() {
   const workerRef = useRef<Worker | null>(null);
 
   const runPipeline = useCallback(async () => {
-    if (!state.videoFile || !state.gpxTrack) return;
+    // Mode A (instrument) only needs video; Mode B (spatial) needs video + GPX
+    if (!state.videoFile) return;
+    if (viewMode === 'spatial' && !state.gpxTrack) return;
     abortRef.current = false;
     setPhase('processing');
 
@@ -416,8 +420,7 @@ export function ScanPage() {
     video.src = URL.createObjectURL(state.videoFile);
     await new Promise<void>((r) => { video.oncanplaythrough = () => r(); });
 
-    const track = state.gpxTrack!;
-    const syncCtx = createSyncContext(track, state.videoDurationS, state.sync);
+    const track = state.gpxTrack;
 
     const totalFrames = Math.floor(state.videoDurationS * fpsExtraction);
     const frameTimes = Array.from({ length: totalFrames }, (_, i) => ({
@@ -425,7 +428,23 @@ export function ScanPage() {
       timeS: i / fpsExtraction,
     }));
 
-    const mappings = mapAllFrames(syncCtx, frameTimes);
+    // Compute GPS mappings only when GPX is available (required for Mode B, optional for Mode A)
+    let mappings: FrameMapping[];
+    let trackTotalDistanceM = 0;
+    if (track) {
+      const syncCtx = createSyncContext(track, state.videoDurationS, state.sync);
+      mappings = mapAllFrames(syncCtx, frameTimes);
+      trackTotalDistanceM = track.totalDistanceM;
+    } else {
+      // Mode A without GPX: dummy mappings (not used by instrument projection)
+      mappings = frameTimes.map(({ index, timeS }) => ({
+        frameIndex: index,
+        timeS,
+        distanceM: 0,
+        lat: 0,
+        lon: 0,
+      }));
+    }
 
     // Unified progress: extraction = 0-70%, projection = 70-100%
     const EXTRACT_WEIGHT = 0.7;
@@ -451,7 +470,7 @@ export function ScanPage() {
       beam,
       grid,
       viewMode,
-      trackTotalDistanceM: track.totalDistanceM,
+      trackTotalDistanceM,
       mappings,
     });
 
@@ -570,13 +589,15 @@ export function ScanPage() {
     await new Promise((r) => setTimeout(r, 1200));
 
     const sessionId = crypto.randomUUID();
-    const gpxPoints = track.points.map((p) => ({ lat: p.lat, lon: p.lon }));
-    const bounds: [number, number, number, number] = [
-      Math.min(...gpxPoints.map((p) => p.lat)),
-      Math.min(...gpxPoints.map((p) => p.lon)),
-      Math.max(...gpxPoints.map((p) => p.lat)),
-      Math.max(...gpxPoints.map((p) => p.lon)),
-    ];
+    const gpxPoints = track ? track.points.map((p) => ({ lat: p.lat, lon: p.lon })) : undefined;
+    const bounds: [number, number, number, number] = gpxPoints
+      ? [
+          Math.min(...gpxPoints.map((p) => p.lat)),
+          Math.min(...gpxPoints.map((p) => p.lon)),
+          Math.max(...gpxPoints.map((p) => p.lat)),
+          Math.max(...gpxPoints.map((p) => p.lon)),
+        ]
+      : [0, 0, 0, 0];
 
     dispatch({
       type: 'ADD_SESSION',
@@ -585,10 +606,10 @@ export function ScanPage() {
         name: state.videoFile!.name.replace(/\.\w+$/, ''),
         createdAt: new Date().toISOString(),
         videoFileName: state.videoFile!.name,
-        gpxFileName: state.gpxFile!.name,
+        gpxFileName: state.gpxFile?.name ?? '',
         bounds,
-        totalDistanceM: track.totalDistanceM,
-        durationS: track.durationS,
+        totalDistanceM: track?.totalDistanceM ?? 0,
+        durationS: track?.durationS ?? state.videoDurationS,
         frameCount: preprocessedFrames.length,
         gridDimensions: dims,
         preprocessing,
@@ -662,9 +683,14 @@ export function ScanPage() {
                 />
               </GlassPanel>
 
-              <GlassPanel style={{ padding: '24px' }}>
+              <GlassPanel style={{ padding: '24px', opacity: viewMode === 'instrument' && !state.gpxFile ? 0.6 : 1 }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
+                  {viewMode === 'instrument' && (
+                    <span style={{ fontWeight: 400, fontSize: '12px', color: colors.text3, marginLeft: '8px' }}>
+                      ({t('common.optional')})
+                    </span>
+                  )}
                 </h3>
                 <FileDropZone
                   accept=".gpx"
@@ -1064,7 +1090,8 @@ export function ScanPage() {
               </GlassPanel>
             </div>
 
-            {/* Synchronization section — two trim sliders */}
+            {/* Synchronization section — only when GPX is loaded */}
+            {state.gpxTrack && (
             <GlassPanel style={{ padding: '14px', marginBottom: '10px' }}>
               <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
                 {t('v2.sync.title')}
@@ -1178,6 +1205,7 @@ export function ScanPage() {
                 />
               </div>
             </GlassPanel>
+            )}
 
             {/* Summary */}
             <GlassPanel style={{ padding: '12px', marginBottom: '12px' }}>
@@ -1200,7 +1228,7 @@ export function ScanPage() {
                 </div>
                 <div>
                   <div style={{ color: colors.text3, fontSize: '11px', marginBottom: '2px' }}>{t('v2.preview.distance')}</div>
-                  <div style={{ color: colors.text1, fontWeight: 500 }}>{state.gpxTrack?.totalDistanceM.toFixed(0)}m</div>
+                  <div style={{ color: colors.text1, fontWeight: 500 }}>{state.gpxTrack ? `${state.gpxTrack.totalDistanceM.toFixed(0)}m` : '-'}</div>
                 </div>
                 <div>
                   <div style={{ color: colors.text3, fontSize: '11px', marginBottom: '2px' }}>{t('v2.config.memory')}</div>
