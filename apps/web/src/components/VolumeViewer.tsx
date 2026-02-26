@@ -191,7 +191,7 @@ export function VolumeViewer({
         chromaticMode: 'high-contrast' as RendererSettings['chromaticMode'],
         opacityScale: 1.0,
         threshold: 0,
-        densityScale: 1.2,
+        densityScale: 1.4,
         smoothing: 1.0,
         ghostEnhancement: 3.0,
         stepCount: 192,
@@ -290,7 +290,7 @@ export function VolumeViewer({
   const isTemporalMode = isRenduB || isRenduC;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(4);
+  const [playSpeed, setPlaySpeed] = useState(mode === 'spatial' ? 1 : 4);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
