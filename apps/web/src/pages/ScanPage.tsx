@@ -51,6 +51,48 @@ function phaseToStepIndex(phase: ScanPhase): number {
   return PIPELINE_STEP_KEYS.findIndex((s) => s.key === phase);
 }
 
+// ─── Quality presets ─────────────────────────────────────────────────────────
+
+type QualityPreset = 'minimal' | 'medium' | 'complete';
+
+interface QualityConfig {
+  fps: number;
+  grid: VolumeGridSettings;
+  preprocessing: PreprocessingSettings;
+}
+
+const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
+  minimal: {
+    fps: 1,
+    grid: { resX: 64, resY: 64, resZ: 64 },
+    preprocessing: {
+      upscaleFactor: 1,
+      denoiseStrength: 0,
+      gamma: 0.9,
+      gaussianSigma: 0,
+      deblockStrength: 0,
+    },
+  },
+  medium: {
+    fps: 2,
+    grid: { resX: 96, resY: 96, resZ: 96 },
+    preprocessing: {
+      upscaleFactor: 1,
+      denoiseStrength: 0.08,
+      gamma: 0.9,
+      gaussianSigma: 0.2,
+      deblockStrength: 0,
+    },
+  },
+  complete: {
+    fps: 4,
+    grid: { resX: 128, resY: 128, resZ: 128 },
+    preprocessing: {
+      ...DEFAULT_PREPROCESSING,
+    },
+  },
+};
+
 // Exponential depth steps: fine resolution at shallow depths
 const DEPTH_STEPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40, 50, 60, 80, 100];
 
@@ -71,12 +113,14 @@ export function ScanPage() {
   const [phase, setPhase] = useState<ScanPhase>('import');
   const [viewMode, setViewMode] = useState<ViewMode>('instrument'); // Mode A by default
 
-  // Settings
-  const [preprocessing] = useState<PreprocessingSettings>({ ...DEFAULT_PREPROCESSING });
+  // Settings — driven by quality preset
+  const [quality, setQuality] = useState<QualityPreset>('medium');
+  const activeConfig = QUALITY_PRESETS[quality];
+  const preprocessing = activeConfig.preprocessing;
+  const grid = activeConfig.grid;
+  const fpsExtraction = activeConfig.fps;
   const [beam, setBeam] = useState<BeamSettings>({ ...DEFAULT_BEAM });
-  const [grid] = useState<VolumeGridSettings>({ ...DEFAULT_GRID });
   const [crop, setCrop] = useState<CropRect>({ x: 0, y: 0, width: 640, height: 480 });
-  const [fpsExtraction] = useState(4);
 
   // Auto-depth
   const [autoDepth, setAutoDepth] = useState(false);
@@ -819,6 +863,65 @@ export function ScanPage() {
             <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.5, maxWidth: '700px' }}>
               {t('v2.settings.desc')}
             </p>
+
+            {/* Quality preset selector */}
+            <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
+              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
+                {t('v2.quality.title' as any)}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                {(['minimal', 'medium', 'complete'] as const).map((q) => {
+                  const selected = quality === q;
+                  const cfg = QUALITY_PRESETS[q];
+                  const accentMap = { minimal: '#22c55e', medium: colors.accent, complete: '#f59e0b' };
+                  const color = accentMap[q];
+                  return (
+                    <button
+                      key={q}
+                      onClick={() => setQuality(q)}
+                      style={{
+                        padding: '14px',
+                        borderRadius: '12px',
+                        border: `2px solid ${selected ? color : colors.border}`,
+                        background: selected ? `${color}15` : 'transparent',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 150ms ease',
+                      }}
+                    >
+                      <div style={{ color: selected ? color : colors.text1, fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>
+                        {t(`v2.quality.${q}` as any)}
+                      </div>
+                      <div style={{ color: colors.text3, fontSize: '11px', lineHeight: 1.5 }}>
+                        {t(`v2.quality.${q}Desc` as any)}
+                      </div>
+                      <div style={{
+                        marginTop: '8px',
+                        display: 'flex',
+                        gap: '8px',
+                        fontSize: '10px',
+                        color: colors.text3,
+                      }}>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: selected ? `${color}20` : colors.surface,
+                        }}>
+                          {cfg.fps} fps
+                        </span>
+                        <span style={{
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          background: selected ? `${color}20` : colors.surface,
+                        }}>
+                          {cfg.grid.resX}&sup3;
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </GlassPanel>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
               {/* Mode selection */}

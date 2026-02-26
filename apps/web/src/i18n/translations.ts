@@ -253,6 +253,13 @@ export const translations = {
     'v2.config.memory': 'Mémoire estimée',
     'v2.config.viewMode': 'Mode de visualisation',
     'v2.config.generate': 'Générer le volume',
+    'v2.quality.title': 'Qualité de rendu',
+    'v2.quality.minimal': 'Rapide',
+    'v2.quality.minimalDesc': '1 image/s, grille 64\u00b3, sans débruitage. Aperçu en quelques secondes.',
+    'v2.quality.medium': 'Équilibré',
+    'v2.quality.mediumDesc': '2 images/s, grille 96\u00b3, débruitage léger. Bon compromis vitesse/qualité.',
+    'v2.quality.complete': 'Complet',
+    'v2.quality.completeDesc': '4 images/s, grille 128\u00b3, prétraitement complet. Qualité maximale, plus long.',
 
     // V2 Modes
     'v2.mode.instrument': 'Volume Instrument',
@@ -594,6 +601,13 @@ export const translations = {
     'v2.config.memory': 'Estimated Memory',
     'v2.config.viewMode': 'Visualization Mode',
     'v2.config.generate': 'Generate Volume',
+    'v2.quality.title': 'Render Quality',
+    'v2.quality.minimal': 'Fast',
+    'v2.quality.minimalDesc': '1 fps, 64\u00b3 grid, no denoise. Preview in seconds.',
+    'v2.quality.medium': 'Balanced',
+    'v2.quality.mediumDesc': '2 fps, 96\u00b3 grid, light denoise. Good speed/quality trade-off.',
+    'v2.quality.complete': 'Full',
+    'v2.quality.completeDesc': '4 fps, 128\u00b3 grid, full preprocessing. Max quality, slower.',
 
     // V2 Modes
     'v2.mode.instrument': 'Instrument Volume',
