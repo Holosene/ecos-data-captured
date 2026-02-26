@@ -152,13 +152,13 @@ export class VolumeRendererClassic {
       );
     }
 
-    // Recompute scale — direct from extent (no calibration scale to preserve ray-march quality)
+    // Recompute scale — extent * calibration scale
     if (this.material) {
       const maxExtent = Math.max(...this.extent);
       const scale = new THREE.Vector3(
-        this.extent[0] / maxExtent,
-        this.extent[1] / maxExtent,
-        this.extent[2] / maxExtent,
+        (this.extent[0] / maxExtent) * config.scale.x,
+        (this.extent[1] / maxExtent) * config.scale.y,
+        (this.extent[2] / maxExtent) * config.scale.z,
       );
       this.volumeScale = scale;
       const halfScale = scale.clone().multiplyScalar(0.5);
@@ -320,10 +320,11 @@ export class VolumeRendererClassic {
     }
 
     const maxExtent = Math.max(...this.extent);
+    const cal = this.calibration;
     const scale = new THREE.Vector3(
-      this.extent[0] / maxExtent,
-      this.extent[1] / maxExtent,
-      this.extent[2] / maxExtent,
+      (this.extent[0] / maxExtent) * cal.scale.x,
+      (this.extent[1] / maxExtent) * cal.scale.y,
+      (this.extent[2] / maxExtent) * cal.scale.z,
     );
     this.volumeScale = scale;
     console.log('[ECHOS-C] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
