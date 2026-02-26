@@ -36,6 +36,8 @@ interface VolumeViewerProps {
   frames?: PreprocessedFrame[];
   beam?: BeamSettings;
   grid?: VolumeGridSettings;
+  /** Auto-computed skew correction from centroid analysis (Mode A) */
+  autoSkewX?: number;
   onSettingsChange?: (settings: RendererSettings) => void;
   /** Action callbacks from parent */
   onReconfigure?: () => void;
@@ -131,6 +133,7 @@ export function VolumeViewer({
   frames,
   beam,
   grid,
+  autoSkewX = 0,
   onSettingsChange,
   onReconfigure,
   onNewScan,
@@ -247,6 +250,12 @@ export function VolumeViewer({
     if (!rendererRef.current || !beam) return;
     rendererRef.current.updateBeamGeometry(beam.beamAngleDeg / 2, beam.depthMaxM);
   }, [beam]);
+
+  // Pass auto-computed skew correction to renderer
+  useEffect(() => {
+    if (!rendererRef.current) return;
+    rendererRef.current.setAutoSkewX(autoSkewX);
+  }, [autoSkewX]);
 
   // Upload static volume data (Mode B or non-temporal Mode A)
   useEffect(() => {

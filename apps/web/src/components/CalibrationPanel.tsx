@@ -9,11 +9,9 @@
 import React, { useCallback } from 'react';
 import { colors } from '@echos/ui';
 import { DEFAULT_CALIBRATION } from '../engine/volume-renderer.js';
-import type { CalibrationConfig } from '../engine/volume-renderer.js';
+import type { CalibrationConfig, Axis } from '../engine/volume-renderer.js';
 
 const STORAGE_KEY = 'echos-calibration-v2';
-
-type Axis = 'x' | 'y' | 'z';
 
 interface CalibrationPanelProps {
   config: CalibrationConfig;
@@ -237,6 +235,10 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       <Row label="Ry" value={config.rotation.y} min={0} max={360} step={1} onChange={(v) => update('rotation.y', v)} />
       <Row label="Rz" value={config.rotation.z} min={0} max={360} step={1} onChange={(v) => update('rotation.z', v)} />
 
+      {/* Skew (shear correction) */}
+      <Section title="Skew" />
+      <Row label="X" value={config.skewX} min={-1} max={1} step={0.01} onChange={(v) => update('skewX', v)} />
+
       {/* Scale */}
       <Section title="Scale" />
       <Row label="Sx" value={config.scale.x} min={0.1} max={3} step={0.01} onChange={(v) => update('scale.x', v)} />
@@ -305,13 +307,23 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
   );
 }
 
-/** Load calibration from localStorage (merges with defaults for forward-compatibility) */
+/** Load calibration from localStorage (deep-merges with defaults for forward-compatibility) */
 export function loadCalibration(): CalibrationConfig | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const saved = JSON.parse(raw) as Partial<CalibrationConfig>;
-    return { ...DEFAULT_CALIBRATION, ...saved } as CalibrationConfig;
+    return {
+      ...DEFAULT_CALIBRATION,
+      ...saved,
+      position: { ...DEFAULT_CALIBRATION.position, ...(saved.position ?? {}) },
+      rotation: { ...DEFAULT_CALIBRATION.rotation, ...(saved.rotation ?? {}) },
+      scale: { ...DEFAULT_CALIBRATION.scale, ...(saved.scale ?? {}) },
+      axisMapping: { ...DEFAULT_CALIBRATION.axisMapping, ...(saved.axisMapping ?? {}) },
+      camera: { ...DEFAULT_CALIBRATION.camera, ...(saved.camera ?? {}) },
+      grid: { ...DEFAULT_CALIBRATION.grid, ...(saved.grid ?? {}) },
+      axes: { ...DEFAULT_CALIBRATION.axes, ...(saved.axes ?? {}) },
+    };
   } catch {
     return null;
   }
