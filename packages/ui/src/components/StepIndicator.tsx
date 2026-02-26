@@ -10,9 +10,11 @@ export interface StepIndicatorProps {
   steps: Step[];
   currentStep: number;
   onStepClick?: (index: number) => void;
+  /** Progress of processing between currentStep and currentStep+1 (0-1). Shows as partial fill on the connector line. */
+  processingProgress?: number;
 }
 
-export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicatorProps) {
+export function StepIndicator({ steps, currentStep, onStepClick, processingProgress }: StepIndicatorProps) {
   return (
     <div
       style={{
@@ -105,18 +107,37 @@ export function StepIndicator({ steps, currentStep, onStepClick }: StepIndicator
               </span>
             </button>
 
-            {/* Connector line */}
+            {/* Connector line — supports partial fill during processing */}
             {i < steps.length - 1 && (
               <div
                 style={{
                   flex: 1,
                   height: '2px',
                   minWidth: '24px',
-                  background: i < currentStep ? colors.accent : colors.border,
-                  transition: `background ${transitions.normal}`,
+                  background: colors.border,
                   marginBottom: '32px',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '1px',
                 }}
-              />
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    height: '100%',
+                    background: colors.accent,
+                    borderRadius: '1px',
+                    transition: `width ${transitions.normal}`,
+                    width: i < currentStep
+                      ? '100%'
+                      : (i === currentStep && processingProgress !== undefined && processingProgress > 0)
+                        ? `${Math.min(100, processingProgress * 100)}%`
+                        : '0%',
+                  }}
+                />
+              </div>
             )}
           </React.Fragment>
         );

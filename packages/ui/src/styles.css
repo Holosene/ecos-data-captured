@@ -61,28 +61,28 @@
   --cta-bg-soft: rgba(138, 124, 255, 0.55);
 }
 
-/* Light mode overrides */
+/* Light mode overrides — improved contrast hierarchy */
 [data-theme="light"] {
-  --c-black: #FAFAFA;
+  --c-black: #F5F5F7;
   --c-white: #111111;
   --c-accent: #4221CE;
   --c-accent-hover: #5835E4;
-  --c-accent-muted: rgba(66, 33, 206, 0.15);
+  --c-accent-muted: rgba(66, 33, 206, 0.12);
   --c-surface: #FFFFFF;
-  --c-surface-hover: #F2F2F8;
-  --c-surface-raised: #EAEAF2;
-  --c-border: rgba(0, 0, 0, 0.10);
-  --c-border-hover: rgba(0, 0, 0, 0.18);
-  --c-border-active: rgba(0, 0, 0, 0.28);
-  --c-text-1: #111111;
-  --c-text-2: rgba(17, 17, 17, 0.65);
-  --c-text-3: rgba(17, 17, 17, 0.52);
+  --c-surface-hover: #EDEDF4;
+  --c-surface-raised: #E4E4EE;
+  --c-border: rgba(0, 0, 0, 0.14);
+  --c-border-hover: rgba(0, 0, 0, 0.22);
+  --c-border-active: rgba(0, 0, 0, 0.34);
+  --c-text-1: #0A0A0A;
+  --c-text-2: rgba(10, 10, 10, 0.72);
+  --c-text-3: rgba(10, 10, 10, 0.58);
   --color-primary: #4221CE;
-  --color-black: #FAFAFA;
+  --color-black: #F5F5F7;
   --color-white: #111111;
   --color-surface: #FFFFFF;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
 
   /* Topbar gradient — light liquid glass */
   --topbar-bg:
@@ -97,8 +97,8 @@
   --cta-bg-soft: rgba(66, 33, 206, 0.55);
 }
 [data-theme="light"] body {
-  background: #FAFAFA;
-  color: #111111;
+  background: #F5F5F7;
+  color: #0A0A0A;
 }
 
 /* Topbar with liquid glass — sits above the scrolling main content */
@@ -472,9 +472,9 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Controls panel — half-size scrollbar */
 .echos-controls-panel::-webkit-scrollbar { width: 3px; height: 3px; background: transparent; }
 .echos-controls-panel::-webkit-scrollbar-track { background: transparent; }
-.echos-controls-panel::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 2px; }
-.echos-controls-panel::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+.echos-controls-panel::-webkit-scrollbar-thumb { background: var(--c-border-hover); border-radius: 2px; }
+.echos-controls-panel::-webkit-scrollbar-thumb:hover { background: var(--c-border-active); }
 .echos-controls-panel {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+  scrollbar-color: var(--c-border-hover) transparent;
 }
