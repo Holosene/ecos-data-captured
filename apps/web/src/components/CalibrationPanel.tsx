@@ -222,7 +222,7 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
       </div>
 
       <div style={{ fontSize: '9px', color: colors.text3, marginBottom: '4px' }}>
-        b x5 toggle | Ctrl+S save
+        Ctrl+S save + download | Esc close
       </div>
 
       {/* Position */}

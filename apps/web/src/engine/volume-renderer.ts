@@ -24,7 +24,9 @@ import { generateLUT } from './transfer-function.js';
 
 export interface CalibrationConfig {
   position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number };
   scale: { x: number; y: number; z: number };
+  axisMapping: { lateral: 'x' | 'y' | 'z'; depth: 'x' | 'y' | 'z'; track: 'x' | 'y' | 'z' };
   camera: { dist: number; fov: number };
   grid: { y: number };
   axes: { size: number };
@@ -33,7 +35,9 @@ export interface CalibrationConfig {
 
 export const DEFAULT_CALIBRATION: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
+  axisMapping: { lateral: 'x', depth: 'z', track: 'y' },
   camera: { dist: 2, fov: 30 },
   grid: { y: -0.5 },
   axes: { size: 0.8 },
@@ -154,10 +158,16 @@ export class VolumeRenderer {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Position only — no rotation on mesh (Règle 4)
+    // Position + rotation on mesh
     if (this.volumeMesh) {
       const p = config.position;
       this.volumeMesh.position.set(p.x, p.y, p.z);
+      const DEG = Math.PI / 180;
+      this.volumeMesh.rotation.set(
+        config.rotation.x * DEG,
+        config.rotation.y * DEG,
+        config.rotation.z * DEG,
+      );
     }
 
     // Recompute scale — direct from extent (Règle 5)
@@ -348,9 +358,15 @@ export class VolumeRenderer {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Position only — no rotation on mesh (Règle 4)
+    // Position + rotation from calibration
     const p = this.calibration.position;
     this.volumeMesh.position.set(p.x, p.y, p.z);
+    const DEG = Math.PI / 180;
+    this.volumeMesh.rotation.set(
+      this.calibration.rotation.x * DEG,
+      this.calibration.rotation.y * DEG,
+      this.calibration.rotation.z * DEG,
+    );
 
     this.scene.add(this.volumeMesh);
 
@@ -539,8 +555,12 @@ void main() {
 
     this.controls.update();
 
-    if (this.material) {
-      this.material.uniforms.uCameraPos.value.copy(this.camera.position);
+    if (this.material && this.volumeMesh) {
+      // Transform camera position into mesh local space for correct ray marching
+      // when position/rotation calibration is applied
+      const camLocal = this.camera.position.clone();
+      this.volumeMesh.worldToLocal(camLocal);
+      this.material.uniforms.uCameraPos.value.copy(camLocal);
     }
 
     this.renderer.render(this.scene, this.camera);

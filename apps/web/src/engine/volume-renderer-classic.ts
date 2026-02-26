@@ -132,10 +132,16 @@ export class VolumeRendererClassic {
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
 
-    // Position only — no rotation on mesh
+    // Position + rotation on mesh
     if (this.volumeMesh) {
       const p = config.position;
       this.volumeMesh.position.set(p.x, p.y, p.z);
+      const DEG = Math.PI / 180;
+      this.volumeMesh.rotation.set(
+        config.rotation.x * DEG,
+        config.rotation.y * DEG,
+        config.rotation.z * DEG,
+      );
     }
 
     // Recompute scale — direct from extent
@@ -325,9 +331,15 @@ export class VolumeRendererClassic {
 
     this.volumeMesh = new THREE.Mesh(geometry, this.material);
 
-    // Position only — no rotation on mesh
+    // Position + rotation from calibration
     const p = this.calibration.position;
     this.volumeMesh.position.set(p.x, p.y, p.z);
+    const DEG = Math.PI / 180;
+    this.volumeMesh.rotation.set(
+      this.calibration.rotation.x * DEG,
+      this.calibration.rotation.y * DEG,
+      this.calibration.rotation.z * DEG,
+    );
 
     this.scene.add(this.volumeMesh);
 

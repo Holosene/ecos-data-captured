@@ -664,6 +664,26 @@ export function VolumeViewer({
               {isTemporalMode && (
                 <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => setPlaySpeed(v)} />
               )}
+
+              {/* Calibration toggle button */}
+              <button
+                onClick={() => setCalibrationOpen(true)}
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  border: `1px solid rgba(255,136,68,0.3)`,
+                  background: 'rgba(255,136,68,0.08)',
+                  color: '#ff8844',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}
+              >
+                Calibration
+              </button>
             </GlassPanel>
           )}
         </div>
