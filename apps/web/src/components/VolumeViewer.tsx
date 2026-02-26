@@ -16,7 +16,7 @@ import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { GlassPanel, Slider, Button, colors } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
-import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B } from '../engine/volume-renderer.js';
+import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B, DEFAULT_CALIBRATION_C } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
@@ -198,6 +198,19 @@ export function VolumeViewer({
         showBeam: false,
       };
     }
+    if (mode === 'classic') {
+      return {
+        ...DEFAULT_RENDERER,
+        chromaticMode: 'sonar-original' as RendererSettings['chromaticMode'],
+        opacityScale: 1.0,
+        threshold: 0.02,
+        densityScale: 1.3,
+        smoothing: 1.0,
+        ghostEnhancement: 0,
+        stepCount: 512,
+        showBeam: false,
+      };
+    }
     return {
       ...DEFAULT_RENDERER,
       showBeam: mode === 'instrument',
@@ -214,7 +227,9 @@ export function VolumeViewer({
   const [calibration, setCalibration] = useState<CalibrationConfig>(() => {
     const saved = loadCalibration();
     if (saved) return saved;
-    return mode === 'spatial' ? { ...DEFAULT_CALIBRATION_B } : { ...DEFAULT_CALIBRATION };
+    if (mode === 'spatial') return { ...DEFAULT_CALIBRATION_B };
+    if (mode === 'classic') return { ...DEFAULT_CALIBRATION_C };
+    return { ...DEFAULT_CALIBRATION };
   });
   const [calibrationSaved, setCalibrationSaved] = useState(false);
   const bPressCountRef = useRef(0);
@@ -290,7 +305,7 @@ export function VolumeViewer({
   const isTemporalMode = isRenduB || isRenduC;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(mode === 'spatial' ? 1 : 4);
+  const [playSpeed, setPlaySpeed] = useState((mode === 'spatial' || mode === 'classic') ? 1 : 4);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
