@@ -22,10 +22,13 @@ export interface SyncContext {
   gpxDurationS: number;
   videoDurationS: number;
   offsetS: number;
+  trimStartS: number;
+  trimEndS: number;
 }
 
 /**
  * Create a sync context from track and settings.
+ * Applies trimStartS / trimEndS to reduce the effective GPX window.
  */
 export function createSyncContext(
   track: GpxTrack,
@@ -33,11 +36,16 @@ export function createSyncContext(
   sync: SyncSettings,
 ): SyncContext {
   const enrichedPoints = enrichTrackpoints(track);
+  const trimStart = sync.trimStartS ?? 0;
+  const trimEnd = sync.trimEndS ?? 0;
+  const effectiveDuration = Math.max(1, track.durationS - trimStart - trimEnd);
   return {
     enrichedPoints,
-    gpxDurationS: track.durationS,
+    gpxDurationS: effectiveDuration,
     videoDurationS,
     offsetS: sync.offsetS,
+    trimStartS: trimStart,
+    trimEndS: trimEnd,
   };
 }
 
@@ -52,7 +60,8 @@ export function mapFrameToPosition(
   // Linear time mapping: video time → GPX elapsed time
   const adjustedTimeS = frameTimeS - ctx.offsetS;
   const timeRatio = ctx.gpxDurationS / ctx.videoDurationS;
-  const gpxElapsedS = adjustedTimeS * timeRatio;
+  // Shift into the trimmed GPX window
+  const gpxElapsedS = ctx.trimStartS + adjustedTimeS * timeRatio;
 
   const { distanceM, lat, lon } = interpolateDistance(ctx.enrichedPoints, gpxElapsedS);
 

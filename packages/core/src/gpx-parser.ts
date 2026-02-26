@@ -21,6 +21,8 @@ export function parseGpx(xmlString: string): GpxTrack {
   }
 
   const trackName = doc.querySelector('trk > name')?.textContent ?? undefined;
+
+  // Collect all trackpoints across all <trk> and <trkseg> elements
   const trkpts = doc.querySelectorAll('trkpt');
 
   if (trkpts.length === 0) {
@@ -28,6 +30,14 @@ export function parseGpx(xmlString: string): GpxTrack {
   }
 
   const points: GpxTrackpoint[] = [];
+  let skippedNoCoords = 0;
+  let skippedNanCoords = 0;
+  let skippedNoTime = 0;
+  let skippedInvalidTime = 0;
+
+  // Also collect ALL timestamps (even from points we might skip for other reasons)
+  // to detect if points are being dropped at boundaries
+  const allTimestamps: number[] = [];
 
   trkpts.forEach((trkpt) => {
     const latAttr = trkpt.getAttribute('lat');
@@ -35,25 +45,37 @@ export function parseGpx(xmlString: string): GpxTrack {
     const timeEl = trkpt.querySelector('time');
     const eleEl = trkpt.querySelector('ele');
 
+    // Collect timestamp even before lat/lon validation
+    if (timeEl?.textContent) {
+      const ts = new Date(timeEl.textContent.trim()).getTime();
+      if (!isNaN(ts)) {
+        allTimestamps.push(ts);
+      }
+    }
+
     if (!latAttr || !lonAttr) {
-      return; // skip malformed point
+      skippedNoCoords++;
+      return;
     }
 
     const lat = parseFloat(latAttr);
     const lon = parseFloat(lonAttr);
 
     if (isNaN(lat) || isNaN(lon)) {
+      skippedNanCoords++;
       return;
     }
 
     let time: Date;
     if (timeEl?.textContent) {
-      time = new Date(timeEl.textContent);
+      time = new Date(timeEl.textContent.trim());
       if (isNaN(time.getTime())) {
-        return; // skip invalid timestamp
+        skippedInvalidTime++;
+        return;
       }
     } else {
-      return; // we need timestamps for sync
+      skippedNoTime++;
+      return;
     }
 
     const ele = eleEl?.textContent ? parseFloat(eleEl.textContent) : undefined;
@@ -61,9 +83,21 @@ export function parseGpx(xmlString: string): GpxTrack {
     points.push({ lat, lon, time, ele: isNaN(ele as number) ? undefined : ele });
   });
 
+  const totalSkipped = skippedNoCoords + skippedNanCoords + skippedNoTime + skippedInvalidTime;
+
+  // Log diagnostics
+  console.log(
+    `[GPX] Parsed ${points.length}/${trkpts.length} trackpoints` +
+    (totalSkipped > 0
+      ? ` (dropped ${totalSkipped}: noCoords=${skippedNoCoords}, nanCoords=${skippedNanCoords}, noTime=${skippedNoTime}, invalidTime=${skippedInvalidTime})`
+      : ''),
+  );
+
   if (points.length < 2) {
     throw new Error(
-      `GPX file has only ${points.length} valid trackpoint(s). Need at least 2 for distance computation.`,
+      `GPX file has only ${points.length} valid trackpoint(s) out of ${trkpts.length} total. ` +
+      `Dropped: noCoords=${skippedNoCoords}, nanCoords=${skippedNanCoords}, noTime=${skippedNoTime}, invalidTime=${skippedInvalidTime}. ` +
+      `Need at least 2 for distance computation.`,
     );
   }
 
@@ -75,6 +109,31 @@ export function parseGpx(xmlString: string): GpxTrack {
   const startTime = points[0].time;
   const endTime = points[points.length - 1].time;
   const durationS = (endTime.getTime() - startTime.getTime()) / 1000;
+
+  // Check if any timestamps were outside the valid points' time range
+  // (indicates points were dropped at the boundaries, affecting duration)
+  if (allTimestamps.length > points.length) {
+    const allMin = Math.min(...allTimestamps);
+    const allMax = Math.max(...allTimestamps);
+    const fullSpanS = (allMax - allMin) / 1000;
+    if (Math.abs(fullSpanS - durationS) > 1) {
+      console.warn(
+        `[GPX] Duration mismatch: valid points span ${durationS.toFixed(1)}s, ` +
+        `but all timestamps (including dropped points) span ${fullSpanS.toFixed(1)}s. ` +
+        `Some boundary points were dropped.`,
+      );
+    }
+  }
+
+  // Check for segment gaps (pauses in recording)
+  const trksegs = doc.querySelectorAll('trkseg');
+  if (trksegs.length > 1) {
+    console.log(`[GPX] File contains ${trksegs.length} track segments (possible pauses in recording).`);
+  }
+
+  console.log(
+    `[GPX] Time range: ${startTime.toISOString()} → ${endTime.toISOString()} = ${durationS.toFixed(1)}s (${(durationS / 60).toFixed(1)} min)`,
+  );
 
   return {
     name: trackName,
