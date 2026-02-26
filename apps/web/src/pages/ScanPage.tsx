@@ -13,8 +13,6 @@ import { GlassPanel, Button, FileDropZone, ProgressBar, Slider, StepIndicator, c
 import {
   parseGpx,
   enrichTrackpoints,
-  createSyncContext,
-  mapAllFrames,
   estimateVolumeMemoryMB,
   autoDetectCropRegion,
   autoDetectDepthMax,
@@ -24,9 +22,7 @@ import type {
   BeamSettings,
   VolumeGridSettings,
   PipelineV2Progress,
-  ViewMode,
   CropRect,
-  FrameMapping,
 } from '@echos/core';
 import {
   DEFAULT_PREPROCESSING,
@@ -112,7 +108,7 @@ export function ScanPage() {
   const { t } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
-  const [viewMode, setViewMode] = useState<ViewMode>('instrument'); // Mode A by default
+  // All 3 modes generated simultaneously — no mode selection needed
 
   // Settings — driven by quality preset
   const [quality, setQuality] = useState<QualityPreset>('medium');
@@ -427,24 +423,6 @@ export function ScanPage() {
       timeS: i / fpsExtraction,
     }));
 
-    // Compute GPS mappings only when GPX is available (required for Mode B, optional for Mode A)
-    let mappings: FrameMapping[];
-    let trackTotalDistanceM = 0;
-    if (track) {
-      const syncCtx = createSyncContext(track, state.videoDurationS, state.sync);
-      mappings = mapAllFrames(syncCtx, frameTimes);
-      trackTotalDistanceM = track.totalDistanceM;
-    } else {
-      // Mode A without GPX: dummy mappings (not used by instrument projection)
-      mappings = frameTimes.map(({ index, timeS }) => ({
-        frameIndex: index,
-        timeS,
-        distanceM: 0,
-        lat: 0,
-        lon: 0,
-      }));
-    }
-
     // Unified progress: extraction = 0-70%, projection = 70-100%
     const EXTRACT_WEIGHT = 0.7;
     const PROJECT_WEIGHT = 0.3;
@@ -468,9 +446,6 @@ export function ScanPage() {
       preprocessing,
       beam,
       grid,
-      viewMode,
-      trackTotalDistanceM,
-      mappings,
     });
 
     let extractionDone = false;
@@ -624,7 +599,7 @@ export function ScanPage() {
       setStepBarAnimating(true);
       setTimeout(() => setStepBarVisible(false), 500);
     }, 600);
-  }, [state, crop, preprocessing, beam, grid, fpsExtraction, viewMode, dispatch, t]);
+  }, [state, crop, preprocessing, beam, grid, fpsExtraction, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
 
@@ -952,66 +927,35 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            {/* Mode selection */}
+            {/* Mode info — all 3 modes generated simultaneously */}
             <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
               <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
                 {t('v2.config.viewMode')}
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                <button
-                  onClick={() => setViewMode('instrument')}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'instrument' ? colors.accent : colors.border}`,
-                    background: viewMode === 'instrument' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode A — {t('v2.mode.instrument')}
+                {[
+                  { label: `Mode A — ${t('v2.mode.instrument')}`, desc: t('v2.mode.instrumentDesc') },
+                  { label: `Mode B — ${t('v2.mode.spatial')}`, desc: t('v2.mode.spatialDesc') },
+                  { label: `Mode C — ${t('v2.mode.classic')}`, desc: t('v2.mode.classicDesc') },
+                ].map((m) => (
+                  <div
+                    key={m.label}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '12px',
+                      border: `2px solid ${colors.accent}`,
+                      background: colors.accentMuted,
+                      textAlign: 'left',
+                    }}
+                  >
+                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
+                      {m.label}
+                    </div>
+                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
+                      {m.desc}
+                    </div>
                   </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.instrumentDesc')}
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('spatial')}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'spatial' ? colors.accent : colors.border}`,
-                    background: viewMode === 'spatial' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode B — {t('v2.mode.spatial')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.spatialDesc')}
-                  </div>
-                </button>
-                <button
-                  onClick={() => setViewMode('classic')}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '12px',
-                    border: `2px solid ${viewMode === 'classic' ? colors.accent : colors.border}`,
-                    background: viewMode === 'classic' ? colors.accentMuted : 'transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                  }}
-                >
-                  <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                    Mode C — {t('v2.mode.classic')}
-                  </div>
-                  <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                    {t('v2.mode.classicDesc')}
-                  </div>
-                </button>
+                ))}
               </div>
             </GlassPanel>
 
@@ -1173,7 +1117,6 @@ export function ScanPage() {
               volumeData={volumeData}
               dimensions={volumeDims}
               extent={volumeExtent}
-              mode={viewMode}
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}

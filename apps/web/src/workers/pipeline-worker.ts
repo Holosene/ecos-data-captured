@@ -16,9 +16,6 @@
 
 import { preprocessFrame } from '@echos/core';
 import {
-  createEmptyVolume,
-  projectFramesSpatial,
-  normalizeVolume,
   buildInstrumentVolume,
 } from '@echos/core';
 import type {
@@ -26,7 +23,6 @@ import type {
   BeamSettings,
   VolumeGridSettings,
   PreprocessedFrame,
-  FrameMapping,
 } from '@echos/core';
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -34,9 +30,6 @@ import type {
 let preprocessing: PreprocessingSettings;
 let beam: BeamSettings;
 let grid: VolumeGridSettings;
-let viewMode: 'instrument' | 'spatial' | 'classic';
-let trackTotalDistanceM: number;
-let mappings: FrameMapping[];
 
 const frames: PreprocessedFrame[] = [];
 
@@ -49,9 +42,6 @@ self.onmessage = (e: MessageEvent) => {
     preprocessing = msg.preprocessing;
     beam = msg.beam;
     grid = msg.grid;
-    viewMode = msg.viewMode;
-    trackTotalDistanceM = msg.trackTotalDistanceM;
-    mappings = msg.mappings;
     frames.length = 0;
     return;
   }
@@ -82,50 +72,17 @@ self.onmessage = (e: MessageEvent) => {
       // Sort by index (safety, in case frames arrived out of order)
       frames.sort((a, b) => a.index - b.index);
 
-      let normalizedData: Float32Array;
-      let dims: [number, number, number];
-      let ext: [number, number, number];
+      // Always build Mode A (instrument) static volume.
+      // Mode B + C are computed in real-time from frames in the VolumeViewer.
+      self.postMessage({ type: 'stage', stage: 'projecting' });
 
-      if (viewMode === 'spatial') {
-        // ── Mode B: conic spatial projection ──
-        self.postMessage({ type: 'stage', stage: 'projecting' });
+      const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
+        self.postMessage({ type: 'projection-progress', current, total });
+      });
 
-        const halfAngle = (beam.beamAngleDeg / 2) * Math.PI / 180;
-        const maxRadius = beam.depthMaxM * Math.tan(halfAngle);
-        const adaptiveResY = Math.max(256, Math.min(1024, Math.round(trackTotalDistanceM)));
-        const spatialGrid: VolumeGridSettings = { ...grid, resY: adaptiveResY };
-
-        const volume = createEmptyVolume(
-          spatialGrid,
-          maxRadius * 2.5,
-          trackTotalDistanceM,
-          beam.depthMaxM,
-        );
-
-        projectFramesSpatial(frames, mappings, volume, beam, (current, total) => {
-          self.postMessage({ type: 'projection-progress', current, total });
-        });
-
-        normalizedData = normalizeVolume(volume);
-        dims = volume.dimensions;
-        ext = volume.extent;
-      } else if (viewMode === 'classic') {
-        // ── Mode C: no static volume — frames are used for live temporal playback ──
-        normalizedData = new Float32Array(0);
-        dims = [grid.resX, grid.resY, grid.resZ];
-        ext = [1, 1, 1];
-      } else {
-        // ── Mode A: build stacked instrument volume (all frames along Y) ──
-        self.postMessage({ type: 'stage', stage: 'projecting' });
-
-        const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
-          self.postMessage({ type: 'projection-progress', current, total });
-        });
-
-        normalizedData = result.normalized;
-        dims = result.dimensions;
-        ext = result.extent;
-      }
+      const normalizedData = result.normalized;
+      const dims = result.dimensions;
+      const ext = result.extent;
 
       // Transfer all buffers (zero-copy back to main thread)
       const transferables: Transferable[] = [];
