@@ -15,7 +15,7 @@
  */
 
 import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { GlassPanel, Slider, Button, colors } from '@echos/ui';
+import { GlassPanel, Slider, Button, colors, fonts } from '@echos/ui';
 import type { RendererSettings, ChromaticMode, PreprocessedFrame, BeamSettings, VolumeGridSettings } from '@echos/core';
 import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@echos/core';
 import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B, DEFAULT_CALIBRATION_C } from '../engine/volume-renderer.js';
@@ -226,6 +226,8 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
     map.on('mouseout', () => map.scrollWheelZoom.disable());
 
     mapInstanceRef.current = map;
+    // Leaflet needs a layout pass to compute correct size in CSS grid
+    setTimeout(() => map.invalidateSize(), 200);
 
     return () => {
       map.remove();
@@ -259,155 +261,102 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
   );
 }
 
-// ─── Edit controls panel (floating overlay) ─────────────────────────────
-function EditPanel({
-  settings,
-  cameraPreset,
-  autoThreshold,
-  activeMode,
-  showGhostSlider,
-  showBeamToggle,
-  showSpeedSlider,
-  playSpeed,
-  chromaticModes,
-  lang,
-  t,
-  onUpdateSetting,
-  onCameraPreset,
-  onAutoThreshold,
-  onPlaySpeed,
-  onClose,
+// ─── Settings controls (rendered as fragment, parent provides container) ──
+function SettingsControls({
+  settings, cameraPreset, autoThreshold, showGhostSlider,
+  showBeamToggle, showSpeedSlider, playSpeed, chromaticModes,
+  lang, t, onUpdateSetting, onCameraPreset, onAutoThreshold, onPlaySpeed,
 }: {
-  settings: RendererSettings;
-  cameraPreset: CameraPreset;
-  autoThreshold: boolean;
-  activeMode: string;
-  showGhostSlider: boolean;
-  showBeamToggle: boolean;
-  showSpeedSlider: boolean;
-  playSpeed: number;
-  chromaticModes: ChromaticMode[];
-  lang: string;
-  t: (key: any) => string;
+  settings: RendererSettings; cameraPreset: CameraPreset;
+  autoThreshold: boolean; showGhostSlider: boolean;
+  showBeamToggle: boolean; showSpeedSlider: boolean;
+  playSpeed: number; chromaticModes: ChromaticMode[];
+  lang: string; t: (key: any) => string;
   onUpdateSetting: (key: keyof RendererSettings, value: number | boolean | string) => void;
   onCameraPreset: (preset: CameraPreset) => void;
   onAutoThreshold: (enabled: boolean) => void;
   onPlaySpeed: (speed: number) => void;
-  onClose: () => void;
 }) {
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      animation: 'echos-fade-in 200ms ease',
-      minWidth: 0,
-    }}>
-      <GlassPanel style={{
-        padding: '12px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '8px',
-        flex: 1,
-        overflowY: 'auto',
-        borderRadius: '16px',
-        backdropFilter: 'blur(24px)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '13px', color: colors.text1, fontWeight: 600 }}>
-            {t('v2.controls.title')}
-          </h3>
+    <>
+      {/* Camera presets */}
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+        {CAMERA_PRESETS.map((p) => (
           <button
-            onClick={onClose}
+            key={p.key}
+            onClick={() => onCameraPreset(p.key)}
+            title={t(p.labelKey as TranslationKey)}
             style={{
               width: '28px', height: '28px', borderRadius: '8px',
-              border: `1px solid ${colors.border}`, background: colors.surface,
-              color: colors.text2, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: `1px solid ${cameraPreset === p.key ? colors.accent : colors.border}`,
+              background: cameraPreset === p.key ? colors.accentMuted : colors.surface,
+              color: cameraPreset === p.key ? colors.accent : colors.text3,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 150ms ease',
             }}
           >
-            <IconClose />
+            <p.Icon />
           </button>
-        </div>
+        ))}
+      </div>
 
-        {/* Camera presets */}
-        <div style={{ display: 'flex', gap: '4px' }}>
-          {CAMERA_PRESETS.map((p) => (
+      {/* Chromatic mode */}
+      <div>
+        <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
+          {t('v2.controls.palette')}
+        </label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {chromaticModes.map((m: ChromaticMode) => (
             <button
-              key={p.key}
-              onClick={() => onCameraPreset(p.key)}
-              title={t(p.labelKey as TranslationKey)}
+              key={m}
+              onClick={() => onUpdateSetting('chromaticMode', m)}
               style={{
-                width: '30px', height: '30px', borderRadius: '8px',
-                border: `1px solid ${cameraPreset === p.key ? colors.accent : colors.border}`,
-                background: cameraPreset === p.key ? colors.accentMuted : colors.surface,
-                color: cameraPreset === p.key ? colors.accent : colors.text3,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '4px 8px', borderRadius: '16px',
+                border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                fontSize: '10px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                 transition: 'all 150ms ease',
               }}
             >
-              <p.Icon />
+              {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Chromatic mode */}
+      {/* Sliders */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
         <div>
-          <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
-            {t('v2.controls.palette')}
-          </label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {chromaticModes.map((m: ChromaticMode) => (
-              <button
-                key={m}
-                onClick={() => onUpdateSetting('chromaticMode', m)}
-                style={{
-                  padding: '5px 10px', borderRadius: '16px',
-                  border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                  background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                  color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                  fontSize: '11px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-              </button>
-            ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+            <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAutoThreshold(e.target.checked)} style={{ width: '12px', height: '12px' }} />
+              {t('v2.controls.auto')}
+            </label>
           </div>
+          <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { onAutoThreshold(false); onUpdateSetting('threshold', v); }} />
         </div>
-
-        {/* Sliders */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
-              <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAutoThreshold(e.target.checked)} style={{ width: '12px', height: '12px' }} />
-                {t('v2.controls.auto')}
-              </label>
-            </div>
-            <Slider label="" value={settings.threshold} min={0} max={0.5} step={0.01} onChange={(v: number) => { onAutoThreshold(false); onUpdateSetting('threshold', v); }} />
-          </div>
-          <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('densityScale', v)} />
-          <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => onUpdateSetting('smoothing', v)} />
-          <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => onUpdateSetting('stepCount', v)} />
-          {showGhostSlider && (
-            <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => onUpdateSetting('ghostEnhancement', v)} />
-          )}
-        </div>
-
-        {showBeamToggle && (
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
-            <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onUpdateSetting('showBeam', e.target.checked)} />
-            {t('v2.controls.showBeam')}
-          </label>
+        <Slider label={t('v2.controls.density')} value={settings.densityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('densityScale', v)} />
+        <Slider label={t('v2.controls.smoothing')} value={settings.smoothing} min={0} max={1.0} step={0.05} onChange={(v: number) => onUpdateSetting('smoothing', v)} />
+        <Slider label={t('v2.controls.steps')} value={settings.stepCount} min={64} max={512} step={32} onChange={(v: number) => onUpdateSetting('stepCount', v)} />
+        {showGhostSlider && (
+          <Slider label={t('v2.controls.ghost')} value={settings.ghostEnhancement} min={0} max={3.0} step={0.1} onChange={(v: number) => onUpdateSetting('ghostEnhancement', v)} />
         )}
+      </div>
 
-        {showSpeedSlider && (
-          <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
-        )}
-      </GlassPanel>
-    </div>
+      {showBeamToggle && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: colors.text2, cursor: 'pointer' }}>
+          <input type="checkbox" checked={settings.showBeam} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onUpdateSetting('showBeam', e.target.checked)} />
+          {t('v2.controls.showBeam')}
+        </label>
+      )}
+
+      {showSpeedSlider && (
+        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+      )}
+    </>
   );
 }
 
@@ -479,44 +428,94 @@ export function VolumeViewer({
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
 
-  // ─── Micro-interaction (Stage 1 only): CSS perspective tilt ─────────
+  // ─── Micro-interaction (Stage 1): rotate volume via rotateBy + zoom bounce ──
+  const getRenderer = useCallback((mode: string) => {
+    if (mode === 'instrument') return rendererARef.current;
+    if (mode === 'spatial') return rendererBRef.current;
+    if (mode === 'classic') return rendererCRef.current;
+    return null;
+  }, []);
+
   const microRefs = useRef<Record<string, {
-    wrapperEl: HTMLDivElement | null;
     startX: number; startY: number;
+    totalAz: number; totalPol: number;
     dragging: boolean;
+    springRafId: number | null;
   }>>({
-    instrument: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
-    spatial: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
-    classic: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
+    instrument: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
+    spatial: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
+    classic: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
   });
 
   const handleMicroPointerDown = useCallback((mode: string, e: React.PointerEvent) => {
     const micro = microRefs.current[mode];
+    if (micro.springRafId !== null) { cancelAnimationFrame(micro.springRafId); micro.springRafId = null; }
     micro.dragging = true;
     micro.startX = e.clientX;
     micro.startY = e.clientY;
-    if (micro.wrapperEl) micro.wrapperEl.style.transition = 'none';
+    micro.totalAz = 0;
+    micro.totalPol = 0;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }, []);
 
   const handleMicroPointerMove = useCallback((mode: string, e: React.PointerEvent) => {
     const micro = microRefs.current[mode];
-    if (!micro.dragging || !micro.wrapperEl) return;
-    const dx = (e.clientX - micro.startX) * 0.04;
-    const dy = (e.clientY - micro.startY) * 0.04;
-    const max = 8;
-    const rotY = Math.max(-max, Math.min(max, dx));
-    const rotX = Math.max(-max, Math.min(max, -dy));
-    micro.wrapperEl.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
-  }, []);
+    if (!micro.dragging) return;
+    const renderer = getRenderer(mode);
+    if (!renderer) return;
+    const sensitivity = 0.003;
+    const maxAngle = 0.3; // ~17° max total
+    const newAz = Math.max(-maxAngle, Math.min(maxAngle, (e.clientX - micro.startX) * sensitivity));
+    const newPol = Math.max(-maxAngle, Math.min(maxAngle, -(e.clientY - micro.startY) * sensitivity));
+    renderer.rotateBy(newAz - micro.totalAz, newPol - micro.totalPol);
+    micro.totalAz = newAz;
+    micro.totalPol = newPol;
+  }, [getRenderer]);
 
   const handleMicroPointerUp = useCallback((mode: string) => {
     const micro = microRefs.current[mode];
     micro.dragging = false;
-    if (micro.wrapperEl) {
-      micro.wrapperEl.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
-      micro.wrapperEl.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
-    }
+    // Spring-back: animate camera back to original position
+    const startAz = micro.totalAz;
+    const startPol = micro.totalPol;
+    const totalSteps = 20;
+    let step = 0;
+    let prevAz = startAz;
+    let prevPol = startPol;
+    const springBack = () => {
+      step++;
+      const t = step / totalSteps;
+      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const targetAz = startAz * (1 - ease);
+      const targetPol = startPol * (1 - ease);
+      const renderer = getRenderer(mode);
+      if (renderer) renderer.rotateBy(targetAz - prevAz, targetPol - prevPol);
+      prevAz = targetAz;
+      prevPol = targetPol;
+      if (step < totalSteps) { micro.springRafId = requestAnimationFrame(springBack); }
+      else { micro.totalAz = 0; micro.totalPol = 0; micro.springRafId = null; }
+    };
+    micro.springRafId = requestAnimationFrame(springBack);
+  }, [getRenderer]);
+
+  const handleMicroWheel = useCallback((mode: string, e: React.WheelEvent) => {
+    const ref = mode === 'instrument' ? containerARef : mode === 'spatial' ? containerBRef : containerCRef;
+    const el = ref.current;
+    if (!el) return;
+    const factor = e.deltaY > 0 ? 0.97 : 1.03;
+    const current = parseFloat(el.dataset.microScale ?? '1');
+    const newScale = Math.max(0.94, Math.min(1.06, current * factor));
+    el.dataset.microScale = String(newScale);
+    el.style.transition = 'none';
+    el.style.transform = `scale(${newScale})`;
+    const prev = parseInt(el.dataset.zoomTimer ?? '0');
+    if (prev) clearTimeout(prev);
+    const id = window.setTimeout(() => {
+      el.dataset.microScale = '1';
+      el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      el.style.transform = 'scale(1)';
+    }, 200);
+    el.dataset.zoomTimer = String(id);
   }, []);
 
   // Calibration (hidden dev tool: press "b" x5)
@@ -827,8 +826,7 @@ export function VolumeViewer({
   const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
-  const encapsulatedBg = theme === 'light' ? '#e8e8ec' : '#141418';
-  const volumeHeight = 'clamp(500px, 65vh, 800px)';
+  const volumeHeight = 'clamp(550px, 70vh, 900px)';
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
@@ -838,14 +836,11 @@ export function VolumeViewer({
     sectionIndex: number,
   ) => {
     const isExpanded = editingMode === mode;
-    const isTemporal = mode === 'classic' || mode === 'spatial';
     const volumeOnLeft = sectionIndex % 2 === 0;
+    const isTemporal = mode === 'classic' || mode === 'spatial';
 
     return (
-      <section
-        key={mode}
-        style={{ marginBottom: '64px' }}
-      >
+      <section key={mode} style={{ marginBottom: '72px' }}>
         {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
         <div style={{
           display: 'grid',
@@ -856,47 +851,37 @@ export function VolumeViewer({
           <div style={{
             gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
             gridRow: '1',
+            position: 'relative',
           }}>
-            {/* Micro-interaction wrapper (CSS perspective tilt in Stage 1) */}
             <div
-              ref={(el) => { if (el) microRefs.current[mode].wrapperEl = el; }}
+              ref={containerRef}
               style={{
-                position: 'relative',
-                transform: 'perspective(800px) rotateX(0deg) rotateY(0deg)',
-                transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                width: '100%',
+                height: volumeHeight,
+                borderRadius: '16px',
+                overflow: 'hidden',
+                background: viewportBg,
+                cursor: isExpanded ? 'grab' : 'default',
+                pointerEvents: isExpanded ? 'auto' : 'none',
+                transition: 'box-shadow 400ms ease, border-color 400ms ease',
+                boxShadow: isExpanded
+                  ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                  : 'none',
+                border: isExpanded ? `1px solid ${colors.accent}50` : 'none',
               }}
-            >
-              <div
-                ref={containerRef}
-                style={{
-                  width: '100%',
-                  height: volumeHeight,
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  background: isExpanded ? encapsulatedBg : viewportBg,
-                  cursor: isExpanded ? 'grab' : 'default',
-                  pointerEvents: isExpanded ? 'auto' : 'none',
-                  transition: 'background 400ms ease, box-shadow 300ms ease, border-color 300ms ease',
-                  boxShadow: isExpanded
-                    ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
-                    : theme === 'light'
-                      ? '0 2px 20px rgba(0,0,0,0.06)'
-                      : '0 2px 20px rgba(0,0,0,0.3)',
-                  border: isExpanded ? `1px solid ${colors.accent}50` : '1px solid transparent',
-                }}
-              />
+            />
 
-              {/* Micro-interaction overlay (Stage 1 — captures pointer for tilt) */}
-              {!isExpanded && (
-                <div
-                  style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
-                  onPointerDown={(e) => handleMicroPointerDown(mode, e)}
-                  onPointerMove={(e) => handleMicroPointerMove(mode, e)}
-                  onPointerUp={() => handleMicroPointerUp(mode)}
-                  onPointerLeave={() => handleMicroPointerUp(mode)}
-                />
-              )}
-            </div>
+            {/* Stage 1 overlay — captures pointer for micro-rotation + zoom bounce */}
+            {!isExpanded && (
+              <div
+                style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
+                onPointerDown={(e) => handleMicroPointerDown(mode, e)}
+                onPointerMove={(e) => handleMicroPointerMove(mode, e)}
+                onPointerUp={() => handleMicroPointerUp(mode)}
+                onPointerLeave={() => handleMicroPointerUp(mode)}
+                onWheel={(e) => handleMicroWheel(mode, e)}
+              />
+            )}
           </div>
 
           {/* ── Settings column: 1 column ───────────────────────── */}
@@ -905,149 +890,202 @@ export function VolumeViewer({
             gridRow: '1',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
           }}>
-            {/* Title capsule + chevron */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '10px 14px',
-              background: colors.surface,
-              borderRadius: '16px',
-              border: `1px solid ${colors.border}`,
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <h2 style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontWeight: 700,
-                  color: colors.text1,
-                  letterSpacing: '-0.02em',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {title}
-                </h2>
-                <p style={{
-                  margin: '2px 0 0',
-                  fontSize: '11px',
-                  color: colors.text3,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}>
-                  {subtitle}
-                </p>
+            {/* ── Stage 1: Plain title + chevron (NO background) ── */}
+            {!isExpanded && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                paddingTop: '8px',
+              }}>
+                <div>
+                  <h2 style={{
+                    margin: 0,
+                    fontFamily: fonts.display,
+                    fontSize: 'clamp(26px, 2.5vw, 40px)',
+                    fontWeight: 700,
+                    color: colors.text1,
+                    letterSpacing: '-0.02em',
+                    lineHeight: 1.1,
+                  }}>
+                    {title}
+                  </h2>
+                  <p style={{
+                    margin: '6px 0 0',
+                    fontSize: '14px',
+                    color: colors.text3,
+                    lineHeight: 1.4,
+                  }}>
+                    {subtitle}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setEditingMode(mode)}
+                  style={{
+                    width: '36px', height: '36px',
+                    borderRadius: '50%',
+                    border: `1px solid ${colors.border}`,
+                    background: 'transparent',
+                    color: colors.text2,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'border-color 200ms ease, color 200ms ease',
+                  }}
+                >
+                  <IconChevronDown />
+                </button>
               </div>
-              <button
-                onClick={() => setEditingMode(isExpanded ? null : mode)}
-                style={{
-                  width: '28px', height: '28px',
-                  borderRadius: '50%',
-                  border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
-                  background: isExpanded ? colors.accentMuted : 'transparent',
-                  color: isExpanded ? colors.accent : colors.text2,
-                  cursor: 'pointer', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 300ms ease, border-color 200ms ease, background 200ms ease',
-                }}
-              >
-                <IconChevronDown />
-              </button>
-            </div>
-
-            {/* Settings panel (Stage 2 — deploys below title, same height as volume) */}
-            {isExpanded && (
-              <EditPanel
-                settings={modeSettings[mode]}
-                cameraPreset={modeCamera[mode]}
-                autoThreshold={autoThreshold}
-                activeMode={mode}
-                showGhostSlider={mode === 'spatial'}
-                showBeamToggle={mode === 'instrument'}
-                showSpeedSlider={mode === 'classic' && hasFrames}
-                playSpeed={playSpeed}
-                chromaticModes={chromaticModes}
-                lang={lang}
-                t={t}
-                onUpdateSetting={updateSetting}
-                onCameraPreset={handleCameraPreset}
-                onAutoThreshold={handleAutoThreshold}
-                onPlaySpeed={setPlaySpeed}
-                onClose={() => setEditingMode(null)}
-              />
             )}
 
-            {/* Calibration panel (dev tool) */}
-            {isExpanded && calibrationOpen && mode === 'instrument' && (
-              <CalibrationPanel
-                config={calibration}
-                onChange={handleCalibrationChange}
-                onClose={() => setCalibrationOpen(false)}
-                saved={calibrationSaved}
-              />
+            {/* ── Stage 2: SINGLE panel = title + chevron + all settings ── */}
+            {isExpanded && (
+              <GlassPanel style={{
+                padding: '14px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px',
+                height: volumeHeight,
+                overflowY: 'auto',
+                borderRadius: '16px',
+                backdropFilter: 'blur(24px)',
+                animation: 'echos-fade-in 200ms ease',
+              }}>
+                {/* Title + chevron row */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <h2 style={{
+                      margin: 0,
+                      fontFamily: fonts.display,
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      color: colors.text1,
+                      letterSpacing: '-0.02em',
+                    }}>
+                      {title}
+                    </h2>
+                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: colors.text3 }}>
+                      {subtitle}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setEditingMode(null)}
+                    style={{
+                      width: '28px', height: '28px',
+                      borderRadius: '50%',
+                      border: `1px solid ${colors.accent}`,
+                      background: colors.accentMuted,
+                      color: colors.accent,
+                      cursor: 'pointer', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transform: 'rotate(180deg)',
+                      transition: 'all 200ms ease',
+                    }}
+                  >
+                    <IconChevronDown />
+                  </button>
+                </div>
+
+                {/* All settings controls */}
+                <SettingsControls
+                  settings={modeSettings[mode]}
+                  cameraPreset={modeCamera[mode]}
+                  autoThreshold={autoThreshold}
+                  showGhostSlider={mode === 'spatial'}
+                  showBeamToggle={mode === 'instrument'}
+                  showSpeedSlider={mode === 'classic' && hasFrames}
+                  playSpeed={playSpeed}
+                  chromaticModes={chromaticModes}
+                  lang={lang}
+                  t={t}
+                  onUpdateSetting={updateSetting}
+                  onCameraPreset={handleCameraPreset}
+                  onAutoThreshold={handleAutoThreshold}
+                  onPlaySpeed={setPlaySpeed}
+                />
+
+                {/* Calibration panel (dev tool) */}
+                {calibrationOpen && mode === 'instrument' && (
+                  <CalibrationPanel
+                    config={calibration}
+                    onChange={handleCalibrationChange}
+                    onClose={() => setCalibrationOpen(false)}
+                    saved={calibrationSaved}
+                  />
+                )}
+              </GlassPanel>
             )}
           </div>
         </div>
 
-        {/* ── Timeline slider + Play (centered under volume column) ── */}
-        {isTemporal && hasFrames && totalFrames > 0 && (
+        {/* ── Slider + Play (centered under volume, ALL modes) ───── */}
+        <div style={{
+          width: '75%',
+          marginLeft: volumeOnLeft ? '0' : 'auto',
+          marginRight: volumeOnLeft ? 'auto' : '0',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}>
+          {/* Slider — SlicePanel-style, no capsule in Stage 1, capsule in Stage 2 */}
           <div style={{
-            width: '75%',
-            marginLeft: volumeOnLeft ? '0' : 'auto',
-            marginRight: volumeOnLeft ? 'auto' : '0',
+            marginTop: isExpanded ? '-22px' : '-16px',
+            position: 'relative',
+            zIndex: 5,
+            width: '40%',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-          }}>
-            {/* Slider capsule — overlaps bottom border of volume */}
-            <div style={{
-              marginTop: '-20px',
-              position: 'relative',
-              zIndex: 5,
-              width: '60%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              padding: '8px 16px',
+            gap: '8px',
+            ...(isExpanded ? {
+              padding: '8px 14px',
               background: colors.surface,
               borderRadius: '24px',
               border: `1px solid ${colors.border}`,
               backdropFilter: 'blur(12px)',
-            }}>
-              <input
-                type="range" min={0} max={totalFrames - 1} value={currentFrame}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
-                style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
-              />
-              <div style={{ fontSize: '10px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                {currentTimeS.toFixed(1)}s
-              </div>
-            </div>
+            } : {
+              padding: '4px 0',
+            }),
+            transition: 'all 300ms ease',
+          }}>
+            <input
+              type="range"
+              min={0}
+              max={isTemporal && hasFrames ? totalFrames - 1 : 100}
+              value={isTemporal && hasFrames ? currentFrame : 50}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                if (isTemporal && hasFrames) {
+                  setPlaying(false);
+                  setCurrentFrame(Number(e.target.value));
+                }
+              }}
+              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
+            />
+          </div>
 
-            {/* Play button — centered below slider */}
-            <button
-              onClick={() => {
+          {/* Play button — big, centered, inviting */}
+          <button
+            onClick={() => {
+              if (isTemporal && hasFrames) {
                 if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
                 setPlaying((p) => !p);
-              }}
-              style={{
-                marginTop: '10px',
-                width: '36px', height: '36px', borderRadius: '50%',
-                border: `1px solid ${colors.accent}`,
-                background: playing ? colors.accentMuted : 'transparent',
-                color: colors.accent, cursor: 'pointer', fontSize: '14px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 200ms ease',
-              }}
-            >
-              {playing ? '||' : '\u25B6'}
-            </button>
-          </div>
-        )}
+              }
+            }}
+            style={{
+              marginTop: '14px',
+              width: '48px', height: '48px', borderRadius: '50%',
+              border: `2px solid ${colors.accent}`,
+              background: playing && isTemporal ? colors.accentMuted : 'transparent',
+              color: colors.accent,
+              cursor: 'pointer',
+              fontSize: '18px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              paddingLeft: playing && isTemporal ? '0' : '3px',
+              transition: 'background 200ms ease, transform 200ms ease',
+            }}
+          >
+            {playing && isTemporal ? '||' : '\u25B6'}
+          </button>
+        </div>
       </section>
     );
   };
@@ -1065,10 +1103,12 @@ export function VolumeViewer({
         <h1 style={{
           gridColumn: '1 / 4',
           margin: 0,
-          fontSize: 'clamp(28px, 3.5vw, 42px)',
+          fontFamily: fonts.display,
+          fontSize: 'clamp(32px, 4vw, 56px)',
           fontWeight: 700,
           color: colors.text1,
           letterSpacing: '-0.03em',
+          lineHeight: 1.1,
           textAlign: 'left',
         }}>
           Visualiseur volumétrique
