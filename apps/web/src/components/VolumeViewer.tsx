@@ -185,13 +185,18 @@ const MODE_DEFS = [
 ] as const;
 
 // ─── Leaflet Map component ─────────────────────────────────────────────────
-function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>; theme: string }) {
+function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }>; theme: string }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
 
+  const hasPoints = points && points.length >= 2;
+
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
-    if (points.length < 2) return;
+
+    const tileUrl = theme === 'light'
+      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
@@ -200,37 +205,35 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
     });
 
     L.control.zoom({ position: 'topright' }).addTo(map);
-
-    const tileUrl = theme === 'light'
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
     L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
 
-    const latLngs = points.map((p) => L.latLng(p.lat, p.lon));
-    const polyline = L.polyline(latLngs, {
-      color: colors.accent,
-      weight: 3,
-      opacity: 0.8,
-      smoothFactor: 1.5,
-    }).addTo(map);
+    if (hasPoints) {
+      const latLngs = points.map((p) => L.latLng(p.lat, p.lon));
+      const polyline = L.polyline(latLngs, {
+        color: colors.accent,
+        weight: 3,
+        opacity: 0.8,
+        smoothFactor: 1.5,
+      }).addTo(map);
 
-    // Start marker
-    L.circleMarker(latLngs[0], {
-      radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
-    }).addTo(map);
+      L.circleMarker(latLngs[0], {
+        radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
+      }).addTo(map);
 
-    // End marker — orange (same as "Complet" accent)
-    L.circleMarker(latLngs[latLngs.length - 1], {
-      radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
-    }).addTo(map);
+      L.circleMarker(latLngs[latLngs.length - 1], {
+        radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
+      }).addTo(map);
 
-    map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 12 });
+      map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 12 });
+    } else {
+      // Neutral view — world overview, no markers
+      map.setView([20, 0], 2);
+    }
 
     map.on('click', () => map.scrollWheelZoom.enable());
     map.on('mouseout', () => map.scrollWheelZoom.disable());
 
     mapInstanceRef.current = map;
-    // Leaflet needs a layout pass to compute correct size in CSS grid
     const sizeTimer = setTimeout(() => map.invalidateSize(), 200);
 
     return () => {
@@ -238,7 +241,7 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, [points, theme]);
+  }, [points, theme, hasPoints]);
 
   // Swap tiles on theme change
   useEffect(() => {
@@ -665,6 +668,9 @@ export function VolumeViewer({
       rendererARef.current?.dispose(); rendererARef.current = null;
       rendererBRef.current?.dispose(); rendererBRef.current = null;
       rendererCRef.current?.dispose(); rendererCRef.current = null;
+      // Clear volume caches to free Float32Array memory
+      frameCacheBRef.current.clear();
+      frameCacheCRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasFrames]);
@@ -715,7 +721,7 @@ export function VolumeViewer({
     if (!hasFrames || !frames || frames.length === 0) return;
 
     const cache = frameCacheBRef.current;
-    const lookAhead = 16;
+    const lookAhead = 8;
     let cancelled = false;
     (async () => {
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
@@ -727,7 +733,7 @@ export function VolumeViewer({
       }
 
       if (!cancelled) {
-        const minKeep = Math.max(0, currentFrame - 4);
+        const minKeep = Math.max(0, currentFrame - 2);
         for (const key of cache.keys()) {
           if (key < minKeep) cache.delete(key);
         }
@@ -768,7 +774,7 @@ export function VolumeViewer({
     const cache = frameCacheCRef.current;
     let cancelled = false;
     (async () => {
-      for (let offset = 0; offset <= 16 && !cancelled; offset++) {
+      for (let offset = 0; offset <= 8 && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames!.length || cache.has(idx)) continue;
         const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
@@ -776,7 +782,7 @@ export function VolumeViewer({
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
       if (!cancelled) {
-        const minKeep = Math.max(0, currentFrame - 4);
+        const minKeep = Math.max(0, currentFrame - 2);
         for (const key of cache.keys()) { if (key < minKeep) cache.delete(key); }
       }
     })();
@@ -890,9 +896,9 @@ export function VolumeViewer({
     const isTemporal = mode === 'classic' || mode === 'spatial';
     const settings = modeSettings[mode];
 
-    // Slider spacing: sliderGap from volume bottom = 1.5 * gap between slider and play
-    const sliderGap = 18; // px from volume bottom to slider
-    const sliderPlayGap = Math.round(sliderGap * 1.5); // px between slider and play
+    // Slider spacing: equal gap from volume→slider and slider→play
+    const sliderGap = 27; // px from volume bottom to slider
+    const sliderPlayGap = 27; // px between slider and play (same)
 
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
@@ -1161,7 +1167,6 @@ export function VolumeViewer({
   }
 
   const hasMap = gpxTrack && gpxTrack.points.length > 1;
-  const mapHeight = '160px';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1257,29 +1262,34 @@ export function VolumeViewer({
           </div>
         </div>
 
-        {/* Map — 1 column, square */}
+        {/* Map — 1 column */}
         <div style={{
           gridColumn: '4',
-          aspectRatio: '1',
-          borderRadius: '16px',
-          overflow: 'hidden',
-          border: `1px solid ${colors.border}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0',
         }}>
-          {hasMap ? (
-            <GpsMap points={gpxTrack.points} theme={theme} />
-          ) : yzThumbnailRef.current ? (
-            <img
-              src={yzThumbnailRef.current}
-              alt="Volume preview"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
-            />
-          ) : (
-            <div style={{ width: '100%', height: '100%', background: colors.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-              </svg>
-            </div>
+          {!hasMap && (
+            <p style={{
+              margin: '0 0 6px',
+              fontSize: '11px',
+              color: colors.text3,
+              lineHeight: 1.3,
+            }}>
+              {lang === 'fr'
+                ? 'Importez un fichier GPX pour accéder à la carte.'
+                : 'Import a GPX file to access the map.'}
+            </p>
           )}
+          <div style={{
+            flex: 1,
+            minHeight: '120px',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            border: `1px solid ${colors.border}`,
+          }}>
+            <GpsMap points={hasMap ? gpxTrack.points : undefined} theme={theme} />
+          </div>
         </div>
       </div>
 

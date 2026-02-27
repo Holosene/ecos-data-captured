@@ -123,6 +123,7 @@ export class VolumeRenderer {
   private calibration: CalibrationConfig;
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
+  private resizeObserver: ResizeObserver | null = null;
 
   constructor(
     container: HTMLElement,
@@ -183,14 +184,14 @@ export class VolumeRenderer {
     this.axesHelper = new THREE.AxesHelper(axesBaseSize);
     this.axesHelper.scale.setScalar(this.calibration.axes.size / axesBaseSize);
     this.axesHelper.position.set(
-      -this.calibration.axes.size,
+      -this.calibration.axes.size * 1.8,
       -this.calibration.axes.size,
       -this.calibration.axes.size,
     );
     this.scene.add(this.axesHelper);
 
     // Grid helper
-    this.gridHelper = new THREE.GridHelper(2, 10, 0x222244, 0x111133);
+    this.gridHelper = new THREE.GridHelper(6, 30, 0xf59e0b, 0xc47d09);
     this.gridHelper.position.y = this.calibration.grid.y;
     this.scene.add(this.gridHelper);
 
@@ -209,8 +210,8 @@ export class VolumeRenderer {
     this.animate();
 
     // Handle resize
-    const ro = new ResizeObserver(() => this.onResize(container));
-    ro.observe(container);
+    this.resizeObserver = new ResizeObserver(() => this.onResize(container));
+    this.resizeObserver.observe(container);
   }
 
   // ─── Calibration ──────────────────────────────────────────────────────
@@ -253,7 +254,7 @@ export class VolumeRenderer {
     // Scene helpers
     const axesBaseSize = 0.3;
     this.axesHelper.scale.setScalar(config.axes.size / axesBaseSize);
-    this.axesHelper.position.set(-config.axes.size, -config.axes.size, -config.axes.size);
+    this.axesHelper.position.set(-config.axes.size * 1.8, -config.axes.size, -config.axes.size);
     this.gridHelper.position.y = config.grid.y;
 
     // Background color
@@ -422,6 +423,7 @@ export class VolumeRenderer {
     if (this.volumeMesh) {
       this.scene.remove(this.volumeMesh);
       this.volumeMesh.geometry.dispose();
+      this.material?.dispose();
     }
 
     const maxExtent = Math.max(...this.extent);
@@ -734,13 +736,18 @@ void main() {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.animationId);
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
     this.controls.dispose();
     this.volumeTexture?.dispose();
     this.tfTexture.dispose();
     this.material?.dispose();
     this.volumeMesh?.geometry.dispose();
+    this.gridHelper.dispose();
+    this.axesHelper.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
+    this.renderer.forceContextLoss();
   }
 
   setScrollZoom(enabled: boolean): void {
@@ -748,7 +755,7 @@ void main() {
   }
 
   setSceneBg(color: string): void {
-    this.scene.background = new THREE.Color(color);
+    (this.scene.background as THREE.Color).set(color);
   }
 
   // ─── Accessors ────────────────────────────────────────────────────────

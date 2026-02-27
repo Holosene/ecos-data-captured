@@ -262,6 +262,7 @@ export function ScanPage() {
       if (offCtx) {
         offCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
         try {
+          frameBitmapRef.current?.close();
           frameBitmapRef.current = await createImageBitmap(offscreen);
         } catch {
           frameBitmapRef.current = null;
