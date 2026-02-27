@@ -297,17 +297,16 @@ function EditPanel({
 }) {
   return (
     <div style={{
-      width: '320px',
-      flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
       animation: 'echos-fade-in 200ms ease',
+      minWidth: 0,
     }}>
       <GlassPanel style={{
-        padding: '14px',
+        padding: '12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '8px',
         flex: 1,
         overflowY: 'auto',
         borderRadius: '16px',
@@ -377,7 +376,7 @@ function EditPanel({
         </div>
 
         {/* Sliders */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 12px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -827,92 +826,37 @@ export function VolumeViewer({
   // Background that matches the page for borderless feel
   const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
 
-  // ─── Render a single volume section (Two-Stage UI) ──────────────────
+  // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
   const encapsulatedBg = theme === 'light' ? '#e8e8ec' : '#141418';
+  const volumeHeight = 'clamp(500px, 65vh, 800px)';
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
     containerRef: React.RefObject<HTMLDivElement | null>,
     title: string,
     subtitle: string,
-    height: string,
     sectionIndex: number,
   ) => {
     const isExpanded = editingMode === mode;
     const isTemporal = mode === 'classic' || mode === 'spatial';
-    const settingsOnRight = sectionIndex % 2 === 0;
+    const volumeOnLeft = sectionIndex % 2 === 0;
 
     return (
       <section
         key={mode}
-        style={{
-          marginBottom: '48px',
-          borderRadius: isExpanded ? '20px' : '0',
-          background: isExpanded ? encapsulatedBg : 'transparent',
-          border: isExpanded ? `1px solid ${colors.border}` : '1px solid transparent',
-          padding: isExpanded ? '24px' : '0',
-          transition: 'background 400ms ease, border-color 400ms ease, padding 400ms ease, border-radius 400ms ease',
-        }}
+        style={{ marginBottom: '64px' }}
       >
-        {/* ── Title + Chevron Toggle ──────────────────────────────── */}
+        {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
         <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '16px',
-          padding: isExpanded ? '10px 20px' : '0 4px',
-          background: isExpanded ? colors.surface : 'transparent',
-          borderRadius: isExpanded ? '24px' : '0',
-          border: isExpanded ? `1px solid ${colors.border}` : 'none',
-          transition: 'all 300ms ease',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '16px',
         }}>
-          <div>
-            <h2 style={{
-              margin: 0,
-              fontSize: isExpanded ? '18px' : '24px',
-              fontWeight: 700,
-              color: colors.text1,
-              letterSpacing: '-0.02em',
-              transition: 'font-size 300ms ease',
-            }}>
-              {title}
-            </h2>
-            <p style={{
-              margin: '2px 0 0',
-              fontSize: isExpanded ? '12px' : '14px',
-              color: colors.text3,
-              transition: 'font-size 300ms ease',
-            }}>
-              {subtitle}
-            </p>
-          </div>
-          <button
-            onClick={() => setEditingMode(isExpanded ? null : mode)}
-            style={{
-              width: '32px', height: '32px',
-              borderRadius: '50%',
-              border: `1px solid ${colors.border}`,
-              background: 'transparent',
-              color: colors.text2,
-              cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 300ms ease, border-color 200ms ease',
-            }}
-          >
-            <IconChevronDown />
-          </button>
-        </div>
-
-        {/* ── Content: Volume viewport + optional EditPanel ───────── */}
-        <div style={{
-          display: 'flex',
-          flexDirection: isExpanded ? (settingsOnRight ? 'row' : 'row-reverse') : 'column',
-          gap: isExpanded ? '16px' : '0',
-          transition: 'gap 300ms ease',
-        }}>
-          {/* Volume column */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          {/* ── Volume viewport: 3 columns ──────────────────────── */}
+          <div style={{
+            gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+            gridRow: '1',
+          }}>
             {/* Micro-interaction wrapper (CSS perspective tilt in Stage 1) */}
             <div
               ref={(el) => { if (el) microRefs.current[mode].wrapperEl = el; }}
@@ -926,23 +870,23 @@ export function VolumeViewer({
                 ref={containerRef}
                 style={{
                   width: '100%',
-                  height,
+                  height: volumeHeight,
                   borderRadius: '16px',
                   overflow: 'hidden',
-                  background: viewportBg,
+                  background: isExpanded ? encapsulatedBg : viewportBg,
                   cursor: isExpanded ? 'grab' : 'default',
                   pointerEvents: isExpanded ? 'auto' : 'none',
-                  transition: 'box-shadow 300ms ease',
+                  transition: 'background 400ms ease, box-shadow 300ms ease, border-color 300ms ease',
                   boxShadow: isExpanded
                     ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
                     : theme === 'light'
                       ? '0 2px 20px rgba(0,0,0,0.06)'
                       : '0 2px 20px rgba(0,0,0,0.3)',
-                  border: isExpanded ? `1px solid ${colors.border}` : 'none',
+                  border: isExpanded ? `1px solid ${colors.accent}50` : '1px solid transparent',
                 }}
               />
 
-              {/* Micro-interaction overlay (Stage 1 only — captures pointer for tilt) */}
+              {/* Micro-interaction overlay (Stage 1 — captures pointer for tilt) */}
               {!isExpanded && (
                 <div
                   style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
@@ -955,77 +899,153 @@ export function VolumeViewer({
             </div>
           </div>
 
-          {/* Settings panel (Stage 2 only — flows beside the volume) */}
-          {isExpanded && (
-            <EditPanel
-              settings={modeSettings[mode]}
-              cameraPreset={modeCamera[mode]}
-              autoThreshold={autoThreshold}
-              activeMode={mode}
-              showGhostSlider={mode === 'spatial'}
-              showBeamToggle={mode === 'instrument'}
-              showSpeedSlider={mode === 'classic' && hasFrames}
-              playSpeed={playSpeed}
-              chromaticModes={chromaticModes}
-              lang={lang}
-              t={t}
-              onUpdateSetting={updateSetting}
-              onCameraPreset={handleCameraPreset}
-              onAutoThreshold={handleAutoThreshold}
-              onPlaySpeed={setPlaySpeed}
-              onClose={() => setEditingMode(null)}
-            />
-          )}
+          {/* ── Settings column: 1 column ───────────────────────── */}
+          <div style={{
+            gridColumn: volumeOnLeft ? '4' : '1',
+            gridRow: '1',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+          }}>
+            {/* Title capsule + chevron */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '10px 14px',
+              background: colors.surface,
+              borderRadius: '16px',
+              border: `1px solid ${colors.border}`,
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  color: colors.text1,
+                  letterSpacing: '-0.02em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {title}
+                </h2>
+                <p style={{
+                  margin: '2px 0 0',
+                  fontSize: '11px',
+                  color: colors.text3,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {subtitle}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingMode(isExpanded ? null : mode)}
+                style={{
+                  width: '28px', height: '28px',
+                  borderRadius: '50%',
+                  border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
+                  background: isExpanded ? colors.accentMuted : 'transparent',
+                  color: isExpanded ? colors.accent : colors.text2,
+                  cursor: 'pointer', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 300ms ease, border-color 200ms ease, background 200ms ease',
+                }}
+              >
+                <IconChevronDown />
+              </button>
+            </div>
+
+            {/* Settings panel (Stage 2 — deploys below title, same height as volume) */}
+            {isExpanded && (
+              <EditPanel
+                settings={modeSettings[mode]}
+                cameraPreset={modeCamera[mode]}
+                autoThreshold={autoThreshold}
+                activeMode={mode}
+                showGhostSlider={mode === 'spatial'}
+                showBeamToggle={mode === 'instrument'}
+                showSpeedSlider={mode === 'classic' && hasFrames}
+                playSpeed={playSpeed}
+                chromaticModes={chromaticModes}
+                lang={lang}
+                t={t}
+                onUpdateSetting={updateSetting}
+                onCameraPreset={handleCameraPreset}
+                onAutoThreshold={handleAutoThreshold}
+                onPlaySpeed={setPlaySpeed}
+                onClose={() => setEditingMode(null)}
+              />
+            )}
+
+            {/* Calibration panel (dev tool) */}
+            {isExpanded && calibrationOpen && mode === 'instrument' && (
+              <CalibrationPanel
+                config={calibration}
+                onChange={handleCalibrationChange}
+                onClose={() => setCalibrationOpen(false)}
+                saved={calibrationSaved}
+              />
+            )}
+          </div>
         </div>
 
-        {/* ── Timeline slider (temporal modes only) ───────────────── */}
+        {/* ── Timeline slider + Play (centered under volume column) ── */}
         {isTemporal && hasFrames && totalFrames > 0 && (
           <div style={{
+            width: '75%',
+            marginLeft: volumeOnLeft ? '0' : 'auto',
+            marginRight: volumeOnLeft ? 'auto' : '0',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            gap: '12px',
-            marginTop: '12px',
-            padding: '10px 16px',
-            background: isExpanded ? colors.surface : 'transparent',
-            borderRadius: isExpanded ? '24px' : '8px',
-            border: isExpanded ? `1px solid ${colors.border}` : 'none',
-            transition: 'all 300ms ease',
           }}>
+            {/* Slider capsule — overlaps bottom border of volume */}
+            <div style={{
+              marginTop: '-20px',
+              position: 'relative',
+              zIndex: 5,
+              width: '60%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '8px 16px',
+              background: colors.surface,
+              borderRadius: '24px',
+              border: `1px solid ${colors.border}`,
+              backdropFilter: 'blur(12px)',
+            }}>
+              <input
+                type="range" min={0} max={totalFrames - 1} value={currentFrame}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
+                style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
+              />
+              <div style={{ fontSize: '10px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                {currentTimeS.toFixed(1)}s
+              </div>
+            </div>
+
+            {/* Play button — centered below slider */}
             <button
               onClick={() => {
                 if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
                 setPlaying((p) => !p);
               }}
               style={{
-                width: '28px', height: '28px', borderRadius: '50%',
+                marginTop: '10px',
+                width: '36px', height: '36px', borderRadius: '50%',
                 border: `1px solid ${colors.accent}`,
                 background: playing ? colors.accentMuted : 'transparent',
-                color: colors.accent, cursor: 'pointer', fontSize: '12px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                color: colors.accent, cursor: 'pointer', fontSize: '14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'background 200ms ease',
               }}
             >
               {playing ? '||' : '\u25B6'}
             </button>
-            <input
-              type="range" min={0} max={totalFrames - 1} value={currentFrame}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
-              style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
-            />
-            <div style={{ fontSize: '11px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-              {currentTimeS.toFixed(1)}s — {currentFrame + 1}/{totalFrames}
-            </div>
-          </div>
-        )}
-
-        {/* Calibration panel (dev tool — only for instrument in Stage 2) */}
-        {isExpanded && calibrationOpen && mode === 'instrument' && (
-          <div style={{ marginTop: '16px' }}>
-            <CalibrationPanel
-              config={calibration}
-              onChange={handleCalibrationChange}
-              onClose={() => setCalibrationOpen(false)}
-              saved={calibrationSaved}
-            />
           </div>
         )}
       </section>
@@ -1034,48 +1054,29 @@ export function VolumeViewer({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* Page title */}
-      <div style={{ marginBottom: '40px', textAlign: 'center' }}>
+      {/* ── Header: title (left 3/4) + map (right 1/4) ───────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '16px',
+        marginBottom: gpxTrack && gpxTrack.points.length > 1 ? '48px' : '24px',
+        alignItems: 'end',
+      }}>
         <h1 style={{
+          gridColumn: '1 / 4',
           margin: 0,
           fontSize: 'clamp(28px, 3.5vw, 42px)',
           fontWeight: 700,
           color: colors.text1,
           letterSpacing: '-0.03em',
+          textAlign: 'left',
         }}>
-          {t('v2.viewer.title')}
+          Visualiseur volumétrique
         </h1>
-      </div>
-
-      {/* Volume sections — two-stage UI, stacked vertically */}
-      {(() => {
-        const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string; height: string }> = [];
-        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante', height: 'clamp(400px, 50vh, 600px)' });
-        sections.push({ mode: 'instrument', ref: containerARef, title: 'Trace', subtitle: 'Empilement statique', height: 'clamp(350px, 45vh, 550px)' });
-        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Cube', subtitle: 'Projection cubique du parcours', height: 'clamp(350px, 45vh, 550px)' });
-        return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, s.height, i));
-      })()}
-
-      {/* GPS Map section */}
-      {gpxTrack && gpxTrack.points.length > 1 && (
-        <section style={{ marginBottom: '48px' }}>
-          <div style={{ marginBottom: '16px', padding: '0 4px' }}>
-            <h2 style={{
-              margin: 0,
-              fontSize: '24px',
-              fontWeight: 700,
-              color: colors.text1,
-              letterSpacing: '-0.02em',
-            }}>
-              Carte
-            </h2>
-            <p style={{ margin: '4px 0 0', fontSize: '14px', color: colors.text3 }}>
-              Tracé GPS — {gpxTrack.totalDistanceM.toFixed(0)}m parcourus
-            </p>
-          </div>
+        {gpxTrack && gpxTrack.points.length > 1 && (
           <div style={{
-            width: '100%',
-            height: '340px',
+            gridColumn: '4',
+            aspectRatio: '1',
             borderRadius: '16px',
             overflow: 'hidden',
             boxShadow: theme === 'light'
@@ -1084,8 +1085,17 @@ export function VolumeViewer({
           }}>
             <GpsMap points={gpxTrack.points} theme={theme} />
           </div>
-        </section>
-      )}
+        )}
+      </div>
+
+      {/* ── Volume sections — 4-column grid, alternating layout ──── */}
+      {(() => {
+        const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string }> = [];
+        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante' });
+        sections.push({ mode: 'instrument', ref: containerARef, title: 'Trace', subtitle: 'Empilement statique' });
+        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Cube', subtitle: 'Projection cubique du parcours' });
+        return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, i));
+      })()}
 
       {/* Orthogonal slice panels */}
       {sliceVolumeData && sliceVolumeData.length > 0 && (
