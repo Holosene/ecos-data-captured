@@ -594,11 +594,13 @@ export function ScanPage() {
 
     // Smooth transition to viewer
     setPhase('viewer');
-    // Slide step bar away after a short delay
+    // Slide step bar away after renderers have initialized (longer delay avoids jank)
     setTimeout(() => {
-      setStepBarAnimating(true);
-      setTimeout(() => setStepBarVisible(false), 500);
-    }, 600);
+      requestAnimationFrame(() => {
+        setStepBarAnimating(true);
+        setTimeout(() => setStepBarVisible(false), 700);
+      });
+    }, 1200);
   }, [state, crop, preprocessing, beam, grid, fpsExtraction, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
@@ -613,7 +615,8 @@ export function ScanPage() {
           style={{
             padding: '12px var(--content-gutter) 0',
             flexShrink: 0,
-            transition: 'transform 500ms cubic-bezier(0.4, 0, 0.2, 1), opacity 500ms ease',
+            willChange: stepBarAnimating ? 'transform, opacity' : 'auto',
+            transition: 'transform 600ms cubic-bezier(0.4, 0, 0.2, 1), opacity 600ms ease',
             transform: stepBarAnimating ? 'translateY(-100%)' : 'translateY(0)',
             opacity: stepBarAnimating ? 0 : 1,
           }}
@@ -1087,6 +1090,7 @@ export function ScanPage() {
               frames={instrumentFrames ?? undefined}
               beam={beam}
               grid={grid}
+              gpxTrack={state.gpxTrack ?? undefined}
               onReconfigure={() => {
                 setStepBarVisible(true);
                 setStepBarAnimating(false);

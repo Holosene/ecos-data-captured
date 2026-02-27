@@ -135,14 +135,14 @@ export const translations = {
     'manifesto.s3.title': 'L\u2019archive perceptive',
     'manifesto.s3.p1': 'En combinant une capture d\u2019\u00e9cran (MP4) avec une trace GPS simultan\u00e9e (GPX), ecos construit un volume spatial -une reconstruction tridimensionnelle de ce que le sonar a montr\u00e9, plac\u00e9e dans un contexte g\u00e9ographique. Ce n\u2019est pas un relev\u00e9 bathym\u00e9trique. Cela revendique une coh\u00e9rence perceptive.',
     'manifesto.s3.p2': 'Le r\u00e9sultat est un volume que l\u2019on peut trancher, tourner, explorer. Une archive lisible d\u2019une session d\u2019observation sous-marine. Un \u00ab\u00a0\u00e9cho d\u2019ecos\u00a0\u00bb -captur\u00e9, structur\u00e9, ouvert.',
-    'manifesto.s4.title': 'Ce qu\u2019ecos n\u2019est pas',
+    'manifesto.s4.title': 'Ce que n\u2019est pas \u00c9cos',
     'manifesto.s4.items': [
       'Pas un outil bathym\u00e9trique -il ne produit pas de cartes de profondeur calibr\u00e9es m\u00e9triquement.',
       'Pas un instrument scientifique -la source est une image d\u2019\u00e9cran, pas des \u00e9chantillons acoustiques bruts.',
       'Pas un remplacement de logiciels de relev\u00e9 professionnel.',
       'Pas d\u00e9pendant d\u2019une marque ou d\u2019un protocole sonar.',
     ],
-    'manifesto.s5.title': 'Ce qu\u2019ecos est',
+    'manifesto.s5.title': 'Ce qu\u2019est \u00c9cos',
     'manifesto.s5.items': [
       'Un outil pour construire des volumes lisibles, partageables et explorables \u00e0 partir d\u2019\u00e9crans sonar grand public.',
       'Une affirmation que la capture d\u2019\u00e9cran est une source primaire valide.',

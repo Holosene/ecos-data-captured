@@ -109,8 +109,10 @@ function Topbar() {
   return (
     <header className="echos-topbar">
       <div className="topbar-inner">
-      <button
-        onClick={() => {
+      <a
+        href="/"
+        onClick={(e) => {
+          e.preventDefault();
           if (location.pathname === '/') {
             (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
           } else {
@@ -127,10 +129,11 @@ function Topbar() {
           margin: 0,
           height: '100%',
           flexShrink: 0,
+          textDecoration: 'none',
         }}
       >
-        <img src={logoSrc} alt="echos" style={{ height: '28px', width: 'auto' }} />
-      </button>
+        <img src={logoSrc} alt="echos" style={{ height: '28px', width: 'auto', pointerEvents: 'none' }} />
+      </a>
 
       <nav style={{ display: 'flex', alignItems: 'center', gap: '0', marginLeft: '40px' }} className="topbar-nav">
         {navItems.map((item) => {

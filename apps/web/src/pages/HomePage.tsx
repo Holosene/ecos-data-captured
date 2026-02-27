@@ -100,8 +100,10 @@ export function HomePage() {
           {t('home.description')}
         </p>
 
-        <div ref={heroCtaRef} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+        <div ref={heroCtaRef} className="hero-cta-row" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Button variant="primary" size="lg" onClick={() => navigate('/scan')} style={{
+            background: theme === 'light' ? '#2A0FA0' : undefined,
+          }}>
             {t('home.cta')}
           </Button>
           <Button variant="secondary" size="lg" onClick={() => {
@@ -356,7 +358,7 @@ export function HomePage() {
       <section
         id="docs-section"
         style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+          padding: `clamp(32px, 3vw, 48px) var(--content-gutter) clamp(32px, 3vw, 48px)`,
         }}
       >
         <DocsSection />

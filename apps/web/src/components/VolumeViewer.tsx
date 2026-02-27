@@ -873,7 +873,7 @@ export function VolumeViewer({
     const settings = modeSettings[mode];
 
     return (
-      <section key={mode} style={{ marginBottom: '140px' }}>
+      <section key={mode} style={{ marginBottom: '80px' }}>
         {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
         <div style={{
           display: 'grid',
@@ -898,7 +898,7 @@ export function VolumeViewer({
                 background: isExpanded ? viewportBgEditing : viewportBg,
                 cursor: 'grab',
                 transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
-                border: `1.5px solid ${colors.accent}${isExpanded ? '60' : '30'}`,
+                border: `1.5px solid ${colors.accent}`,
                 boxShadow: isExpanded
                   ? `0 8px 32px rgba(0,0,0,0.2)`
                   : theme === 'light'
@@ -907,22 +907,27 @@ export function VolumeViewer({
               }}
             />
 
-            {/* ── Slider — fixed ON the bottom border ── */}
+          </div>
+
+          {/* ── Slider + Play — below volume, centered ── */}
+          <div style={{
+            gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+            paddingTop: '16px',
+          }}>
             <div style={{
-              position: 'absolute',
-              bottom: '-1px',
-              left: '50%',
-              transform: 'translate(-50%, 50%)',
-              zIndex: 5,
-              width: 'max(200px, 30%)',
-              padding: '6px 14px',
+              width: 'max(260px, 40%)',
+              padding: '10px 18px',
               background: colors.surface,
               borderRadius: '24px',
               border: `1px solid ${colors.border}`,
               backdropFilter: 'blur(12px)',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '10px',
             }}>
               <input
                 type="range"
@@ -935,49 +940,39 @@ export function VolumeViewer({
                     setCurrentFrame(Number(e.target.value));
                   }
                 }}
-                style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
+                style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
               />
             </div>
 
-            {/* ── Play button — just below slider ── */}
-            <div style={{
-              position: 'absolute',
-              bottom: '-58px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 5,
-            }}>
-              <button
-                onClick={() => {
-                  if (isTemporal && hasFrames) {
-                    if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
-                    setPlaying((p) => !p);
-                  }
-                }}
-                style={{
-                  width: '40px', height: '40px', borderRadius: '50%',
-                  border: `1.5px solid ${colors.accent}`,
-                  background: playing && isTemporal ? colors.accentMuted : colors.surface,
-                  color: colors.accent,
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  paddingLeft: playing && isTemporal ? '0' : '2px',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                {playing && isTemporal ? '||' : '\u25B6'}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                if (isTemporal && hasFrames) {
+                  if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
+                  setPlaying((p) => !p);
+                }
+              }}
+              style={{
+                width: '48px', height: '48px', borderRadius: '50%',
+                border: `1.5px solid ${colors.accent}`,
+                background: playing && isTemporal ? colors.accentMuted : colors.surface,
+                color: colors.accent,
+                cursor: 'pointer',
+                fontSize: '16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                paddingLeft: playing && isTemporal ? '0' : '2px',
+                transition: 'all 150ms ease',
+              }}
+            >
+              {playing && isTemporal ? '||' : '\u25B6'}
+            </button>
+            <div style={{ height: '24px' }} />
           </div>
 
-          {/* ── Settings column: 1 column, sticky ──────────────── */}
+          {/* ── Settings column: 1 column ──────────────── */}
           <div style={{
             gridColumn: volumeOnLeft ? '4' : '1',
             gridRow: '1',
-            position: 'sticky',
-            top: '16px',
-            alignSelf: 'start',
+            alignSelf: 'stretch',
             display: 'flex',
             flexDirection: 'column',
             gap: '12px',
@@ -1022,7 +1017,7 @@ export function VolumeViewer({
                   flexShrink: 0,
                 }}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
@@ -1056,12 +1051,13 @@ export function VolumeViewer({
 
             {/* Settings panel — opens BELOW pills, no duplicate title/subtitle */}
             {isExpanded && (
-              <GlassPanel style={{
+              <GlassPanel className="echos-controls-panel" style={{
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '10px',
-                maxHeight: `calc(${volumeHeight} - 200px)`,
+                flex: 1,
+                minHeight: 0,
                 overflowY: 'auto',
                 borderRadius: '16px',
                 backdropFilter: 'blur(24px)',
@@ -1195,7 +1191,7 @@ export function VolumeViewer({
               URL.revokeObjectURL(url);
             }}
             style={{
-              padding: '12px 32px', borderRadius: '12px',
+              padding: '12px 32px', borderRadius: '9999px',
               border: `1.5px solid ${colors.accent}`,
               background: 'transparent', color: colors.accent,
               fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
@@ -1208,7 +1204,7 @@ export function VolumeViewer({
             <button
               onClick={onReconfigure}
               style={{
-                padding: '12px 32px', borderRadius: '12px',
+                padding: '12px 32px', borderRadius: '9999px',
                 border: `1.5px solid ${colors.accent}`,
                 background: 'transparent', color: colors.accent,
                 fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',

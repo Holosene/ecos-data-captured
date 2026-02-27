@@ -347,6 +347,11 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     flex: 1 1 45% !important;
     padding: 12px 0 !important;
   }
+  /* Hero CTA buttons — smaller on mobile */
+  .hero-cta-row button {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+  }
   .stats-row > div:last-child {
     border-bottom: none;
   }
@@ -388,6 +393,13 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 @media (max-width: 480px) {
   .grid-4-cols {
     grid-template-columns: 1fr !important;
+  }
+  /* Floating CTA — smaller on very small screens */
+  .floating-scan-cta {
+    padding: 14px 28px 16px !important;
+    font-size: 16px !important;
+    bottom: 20px !important;
+    right: 20px !important;
   }
 }
 
