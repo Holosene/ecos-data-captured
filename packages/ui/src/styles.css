@@ -337,6 +337,10 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .grid-4-cols {
     grid-template-columns: 1fr 1fr !important;
   }
+  .echos-quad-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
   .hero-visual-grid {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto !important;

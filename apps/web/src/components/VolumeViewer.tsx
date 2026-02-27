@@ -126,31 +126,39 @@ function buildWindowVolume(
   };
 }
 
-// ─── SVG Icons ──────────────────────────────────────────────────────────
+// ─── SVG Icons — isometric camera views ─────────────────────────────────
 const IconFrontal = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="12" height="12" rx="1" />
-    <line x1="8" y1="2" x2="8" y2="14" opacity="0.4" />
-    <line x1="2" y1="8" x2="14" y2="8" opacity="0.4" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="10" height="10" rx="1.5" />
+    <circle cx="8" cy="8" r="2.5" opacity="0.5" />
+    <line x1="8" y1="3" x2="8" y2="5" opacity="0.35" />
+    <line x1="8" y1="11" x2="8" y2="13" opacity="0.35" />
+    <line x1="3" y1="8" x2="5" y2="8" opacity="0.35" />
+    <line x1="11" y1="8" x2="13" y2="8" opacity="0.35" />
   </svg>
 );
 const IconHorizontal = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 12L6 4H14L10 12H2Z" />
-    <line x1="8" y1="4" x2="6" y2="12" opacity="0.4" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 11L5 5H13L10 11H2Z" />
+    <path d="M5 5L2 11" opacity="0.4" />
+    <path d="M13 5L10 11" opacity="0.4" />
+    <circle cx="7.5" cy="8" r="1.5" opacity="0.5" />
   </svg>
 );
 const IconVertical = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="5" y="1" width="6" height="14" rx="1" />
-    <line x1="8" y1="1" x2="8" y2="15" opacity="0.4" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 13V5L8 2L12 5V13H4Z" />
+    <line x1="4" y1="5" x2="12" y2="5" opacity="0.3" />
+    <circle cx="8" cy="9" r="1.5" opacity="0.5" />
   </svg>
 );
 const IconFree = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 12L2 7L8 4L14 7L12 12H4Z" />
-    <path d="M8 4V1" /><path d="M8 4L14 7" /><path d="M8 4L2 7" />
-    <path d="M8 9L8 12" opacity="0.4" />
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M8 2L14 5.5V10.5L8 14L2 10.5V5.5L8 2Z" />
+    <path d="M8 2V14" opacity="0.3" />
+    <path d="M2 5.5L14 10.5" opacity="0.2" />
+    <path d="M14 5.5L2 10.5" opacity="0.2" />
+    <circle cx="8" cy="8" r="1.2" fill="currentColor" opacity="0.4" />
   </svg>
 );
 const IconEdit = () => (
@@ -179,9 +187,9 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
 
 // Mode definitions — clean labels, no color coding
 const MODE_DEFS = [
-  { key: 'classic' as const, label: 'Cône', desc: 'Projection conique glissante' },
-  { key: 'instrument' as const, label: 'Trace', desc: 'Empilement statique' },
-  { key: 'spatial' as const, label: 'Cube', desc: 'Projection cubique du parcours' },
+  { key: 'classic' as const, label: 'Le Cône', desc: 'Projection conique glissante' },
+  { key: 'instrument' as const, label: 'Le Tracé', desc: 'Empilement statique' },
+  { key: 'spatial' as const, label: 'Le Bloc', desc: 'Projection cubique du parcours' },
 ] as const;
 
 // ─── Leaflet Map component ─────────────────────────────────────────────────
@@ -312,8 +320,8 @@ function SettingsControls({
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontSize: '11px', color: colors.text2 }}>{t('v2.controls.threshold')}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: colors.text2 }}>{t('v2.controls.threshold')}</span>
             <label style={{ fontSize: '10px', color: colors.text3, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <input type="checkbox" checked={autoThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onAutoThreshold(e.target.checked)} style={{ width: '12px', height: '12px' }} />
               {t('v2.controls.auto')}
@@ -337,7 +345,7 @@ function SettingsControls({
       )}
 
       {showSpeedSlider && (
-        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={5} step={1} onChange={(v: number) => onPlaySpeed(v)} />
       )}
     </>
   );
@@ -379,30 +387,36 @@ export function VolumeViewer({
   const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>({
     instrument: {
       ...DEFAULT_RENDERER,
+      opacityScale: 1,
+      threshold: 0.02,
+      densityScale: 1,
+      smoothing: 0.15,
       showBeam: true,
       ghostEnhancement: 0,
+      stepCount: 192,
+      chromaticMode: 'sonar-original' as ChromaticMode,
     },
     spatial: {
       ...DEFAULT_RENDERER,
-      chromaticMode: 'high-contrast' as ChromaticMode,
-      opacityScale: 1.0,
+      opacityScale: 1,
       threshold: 0,
       densityScale: 1.2,
-      smoothing: 1.0,
-      ghostEnhancement: 3.0,
-      stepCount: 192,
+      smoothing: 1,
       showBeam: false,
+      ghostEnhancement: 3,
+      stepCount: 192,
+      chromaticMode: 'high-contrast' as ChromaticMode,
     },
     classic: {
       ...DEFAULT_RENDERER,
-      chromaticMode: 'sonar-original' as ChromaticMode,
-      opacityScale: 1.0,
-      threshold: 0.02,
+      opacityScale: 1.7,
+      threshold: 0,
       densityScale: 1.3,
-      smoothing: 1.0,
+      smoothing: 1,
+      showBeam: false,
       ghostEnhancement: 0,
       stepCount: 512,
-      showBeam: false,
+      chromaticMode: 'sonar-original' as ChromaticMode,
     },
   });
   const [modeCamera, setModeCamera] = useState<Record<string, CameraPreset>>({
@@ -565,17 +579,17 @@ export function VolumeViewer({
           if (rendererARef.current) {
             cals.instrument = rendererARef.current.getCalibration();
             localStorage.setItem('echos-cal-instrument', JSON.stringify(cals.instrument));
-            names.push('Trace');
+            names.push('Le Tracé');
           }
           if (rendererBRef.current) {
             cals.spatial = rendererBRef.current.getCalibration();
             localStorage.setItem('echos-cal-spatial', JSON.stringify(cals.spatial));
-            names.push('Cube');
+            names.push('Le Bloc');
           }
           if (rendererCRef.current) {
             cals.classic = rendererCRef.current.getCalibration();
             localStorage.setItem('echos-cal-classic', JSON.stringify(cals.classic));
-            names.push('Cône');
+            names.push('Le Cône');
           }
           // Sync React state with renderer state
           setCalibrations(prev => ({ ...prev, ...cals }));
@@ -842,17 +856,16 @@ export function VolumeViewer({
     rendererCRef.current.uploadVolume(vol.normalized, vol.dimensions, vol.extent);
   }, [currentFrame, frames, beam, grid, hasFrames]);
 
-  // Playback loop
+  // Playback loop — ref-driven to avoid re-mount on every frame
   useEffect(() => {
-    if (!hasFrames) return;
-    playingRef.current = playing;
-    currentFrameRef.current = currentFrame;
-    if (!playing) return;
-    let lastTime = 0;
+    if (!hasFrames || !playing) return;
+    playingRef.current = true;
     const intervalMs = 1000 / playSpeed;
+    let lastTime = 0;
     let rafId: number;
     const tick = (timestamp: number) => {
       if (!playingRef.current) return;
+      if (lastTime === 0) lastTime = timestamp;
       if (timestamp - lastTime >= intervalMs) {
         lastTime = timestamp;
         const next = currentFrameRef.current + 1;
@@ -863,8 +876,11 @@ export function VolumeViewer({
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [playing, playSpeed, hasFrames, frames, currentFrame]);
+    return () => {
+      playingRef.current = false;
+      cancelAnimationFrame(rafId);
+    };
+  }, [playing, playSpeed, hasFrames, frames]);
 
   // Settings update — per-mode
   const updateSetting = useCallback(
@@ -947,7 +963,7 @@ export function VolumeViewer({
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
         {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
-        <div style={{
+        <div className="echos-quad-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: '24px',
@@ -1278,8 +1294,8 @@ export function VolumeViewer({
         </p>
       </div>
 
-      {/* ── File info (3 cols) + Map (1 col) — aligned to 4-column grid ─── */}
-      <div style={{
+      {/* ── File info (3 cols) + Map (1 col) — same 4-col grid as volume sections ─── */}
+      <div className="echos-quad-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '24px',
@@ -1387,9 +1403,9 @@ export function VolumeViewer({
       {/* ── Volume sections — 4-column grid, alternating layout ──── */}
       {(() => {
         const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string }> = [];
-        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante' });
-        sections.push({ mode: 'instrument', ref: containerARef, title: 'Trace', subtitle: 'Empilement statique' });
-        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Cube', subtitle: 'Projection cubique du parcours' });
+        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Le Cône', subtitle: 'Projection conique glissante' });
+        sections.push({ mode: 'instrument', ref: containerARef, title: 'Le Tracé', subtitle: 'Empilement statique' });
+        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Le Bloc', subtitle: 'Projection cubique du parcours' });
         return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, i));
       })()}
 
