@@ -526,14 +526,23 @@ export function VolumeViewer({
 
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        // Save presentation pose in settings mode
         if (editingMode) {
+          // Stage 2: save presentation pose for the active volume
           const renderer = getRenderer(editingMode);
           if (renderer) {
             const state = renderer.getCameraState();
             presentationPoses.current[editingMode] = state;
             console.log(`[ECOS] Presentation pose saved for "${editingMode}":`, JSON.stringify(state));
           }
+        } else {
+          // Stage 1: snap ALL volumes back to their presentation poses at once
+          (['instrument', 'spatial', 'classic'] as const).forEach((m) => {
+            const renderer = getRenderer(m);
+            if (renderer && presentationPoses.current[m]) {
+              cancelSnapBack(m);
+              startSnapBack(m);
+            }
+          });
         }
         // Calibration save
         if (calibrationOpen) {
@@ -563,7 +572,7 @@ export function VolumeViewer({
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration, editingMode]);
+  }, [calibrationOpen, calibration, editingMode, startSnapBack, cancelSnapBack, getRenderer]);
 
   // Theme sync
   useEffect(() => {
