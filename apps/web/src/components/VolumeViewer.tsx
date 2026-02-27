@@ -989,6 +989,7 @@ export function VolumeViewer({
               gridRow: '1',
               width: '100%',
               height: '100%',
+              minWidth: 0,
               borderRadius: '16px',
               overflow: 'hidden',
               background: isExpanded ? viewportBgEditing : viewportBg,
@@ -1106,7 +1107,8 @@ export function VolumeViewer({
             display: 'flex',
             flexDirection: 'column',
             gap: '10px',
-            /* NO paddingTop — title top aligns exactly with volume top */
+            minWidth: 0,
+            overflow: 'hidden',
           }}>
             {/* Title row: title (left) + number + chevron/close (right) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1120,7 +1122,7 @@ export function VolumeViewer({
                   letterSpacing: '-0.02em',
                   lineHeight: 1.1,
                 }}>
-                  <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '4px', position: 'relative', top: '-0.35em' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '4px', position: 'relative', top: '-0.35em' }}>"</span>
+                  <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '6px', position: 'relative', top: '-0.35em' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '6px', position: 'relative', top: '-0.35em' }}>"</span>
                 </h2>
                 <p style={{
                   margin: '2px 0 0',
