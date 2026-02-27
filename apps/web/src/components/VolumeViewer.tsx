@@ -224,7 +224,7 @@ function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }
         radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
       }).addTo(map);
 
-      map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 12 });
+      map.fitBounds(polyline.getBounds(), { padding: [20, 20], maxZoom: 19 });
     } else {
       // Neutral view — world overview, no markers
       map.setView([20, 0], 2);
@@ -376,34 +376,48 @@ export function VolumeViewer({
   const [editingMode, setEditingMode] = useState<'instrument' | 'spatial' | 'classic' | null>(null);
 
   // Per-mode settings — each mode has its EXACT configuration from 7024cc8
-  const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>({
-    instrument: {
-      ...DEFAULT_RENDERER,
-      showBeam: true,
-      ghostEnhancement: 0,
-    },
-    spatial: {
-      ...DEFAULT_RENDERER,
-      chromaticMode: 'high-contrast' as ChromaticMode,
-      opacityScale: 1.0,
-      threshold: 0,
-      densityScale: 1.2,
-      smoothing: 1.0,
-      ghostEnhancement: 3.0,
-      stepCount: 192,
-      showBeam: false,
-    },
-    classic: {
-      ...DEFAULT_RENDERER,
-      chromaticMode: 'sonar-original' as ChromaticMode,
-      opacityScale: 1.0,
-      threshold: 0.02,
-      densityScale: 1.3,
-      smoothing: 1.0,
-      ghostEnhancement: 0,
-      stepCount: 512,
-      showBeam: false,
-    },
+  const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>(() => {
+    const defaults: Record<string, RendererSettings> = {
+      instrument: {
+        ...DEFAULT_RENDERER,
+        showBeam: true,
+        ghostEnhancement: 0,
+      },
+      spatial: {
+        ...DEFAULT_RENDERER,
+        chromaticMode: 'high-contrast' as ChromaticMode,
+        opacityScale: 1.0,
+        threshold: 0,
+        densityScale: 1.2,
+        smoothing: 1.0,
+        ghostEnhancement: 3.0,
+        stepCount: 192,
+        showBeam: false,
+      },
+      classic: {
+        ...DEFAULT_RENDERER,
+        chromaticMode: 'sonar-original' as ChromaticMode,
+        opacityScale: 1.0,
+        threshold: 0.02,
+        densityScale: 1.3,
+        smoothing: 1.0,
+        ghostEnhancement: 0,
+        stepCount: 512,
+        showBeam: false,
+      },
+    };
+    try {
+      const raw = localStorage.getItem('echos-mode-settings');
+      if (raw) {
+        const saved = JSON.parse(raw) as Record<string, RendererSettings>;
+        return {
+          instrument: { ...defaults.instrument, ...saved.instrument },
+          spatial: { ...defaults.spatial, ...saved.spatial },
+          classic: { ...defaults.classic, ...saved.classic },
+        };
+      }
+    } catch { /* use defaults */ }
+    return defaults;
   });
   const [modeCamera, setModeCamera] = useState<Record<string, CameraPreset>>({
     instrument: 'frontal',
@@ -513,6 +527,7 @@ export function VolumeViewer({
     return saved ?? { ...DEFAULT_CALIBRATION };
   });
   const [calibrationSaved, setCalibrationSaved] = useState(false);
+  const [calibrationSaveLabel, setCalibrationSaveLabel] = useState('');
   const bPressCountRef = useRef(0);
   const bPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -556,13 +571,46 @@ export function VolumeViewer({
             }
           });
         }
-        // Calibration save
+        // Calibration save — all 3 volumes + base settings
         if (calibrationOpen) {
-          const cal = rendererARef.current?.getCalibration() ?? calibration;
-          saveCalibration(cal);
-          downloadCalibration(cal);
+          const names: string[] = [];
+          const cals: Record<string, CalibrationConfig> = {};
+          if (rendererARef.current) {
+            cals.instrument = rendererARef.current.getCalibration();
+            localStorage.setItem('echos-cal-instrument', JSON.stringify(cals.instrument));
+            names.push('Trace');
+          }
+          if (rendererBRef.current) {
+            cals.spatial = rendererBRef.current.getCalibration();
+            localStorage.setItem('echos-cal-spatial', JSON.stringify(cals.spatial));
+            names.push('Cube');
+          }
+          if (rendererCRef.current) {
+            cals.classic = rendererCRef.current.getCalibration();
+            localStorage.setItem('echos-cal-classic', JSON.stringify(cals.classic));
+            names.push('Cône');
+          }
+          // Save shared calibration panel state
+          saveCalibration(calibration);
+          // Save base renderer settings
+          localStorage.setItem('echos-mode-settings', JSON.stringify(modeSettings));
+          // Download combined JSON
+          const combined = {
+            _version: 'echos-calibration-v2',
+            _timestamp: new Date().toISOString(),
+            calibrations: cals,
+            modeSettings,
+          };
+          const blob = new Blob([JSON.stringify(combined, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `echos-calibration-${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+          setCalibrationSaveLabel(names.join(', '));
           setCalibrationSaved(true);
-          setTimeout(() => setCalibrationSaved(false), 2000);
+          setTimeout(() => { setCalibrationSaved(false); setCalibrationSaveLabel(''); }, 3000);
         }
         return;
       }
@@ -587,22 +635,22 @@ export function VolumeViewer({
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration, editingMode, startSnapBack, cancelSnapBack, getRenderer]);
+  }, [calibrationOpen, calibration, editingMode, modeSettings, startSnapBack, cancelSnapBack, getRenderer]);
 
   // Theme sync + editingMode → update scene bg + scroll zoom
+  // IMPORTANT: only update bg color and zoom, do NOT overwrite calibration with defaults
   useEffect(() => {
     const stage1Bg = theme === 'light' ? '#f5f5f7' : '#111111';
     const stage2Bg = theme === 'light' ? '#FFFFFF' : '#1A1A20';
     const modes = [
-      { ref: rendererARef, mode: 'instrument' as const, cal: DEFAULT_CALIBRATION },
-      { ref: rendererBRef, mode: 'spatial' as const, cal: DEFAULT_CALIBRATION_B },
-      { ref: rendererCRef, mode: 'classic' as const, cal: DEFAULT_CALIBRATION_C },
+      { ref: rendererARef, mode: 'instrument' as const },
+      { ref: rendererBRef, mode: 'spatial' as const },
+      { ref: rendererCRef, mode: 'classic' as const },
     ];
-    modes.forEach(({ ref, mode, cal }) => {
+    modes.forEach(({ ref, mode }) => {
       if (!ref.current) return;
       const isExpanded = editingMode === mode;
       const bgColor = isExpanded ? stage2Bg : stage1Bg;
-      ref.current.setCalibration({ ...cal, bgColor });
       ref.current.setSceneBg(bgColor);
       ref.current.setScrollZoom(isExpanded);
     });
@@ -611,7 +659,10 @@ export function VolumeViewer({
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
     setCalibration(cal);
     setCalibrationSaved(false);
+    // Apply calibration to all renderers
     rendererARef.current?.setCalibration(cal);
+    rendererBRef.current?.setCalibration(cal);
+    rendererCRef.current?.setCalibration(cal);
   }, []);
 
   // Temporal playback state
@@ -635,9 +686,30 @@ export function VolumeViewer({
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
+    // Load saved per-volume calibrations (from Ctrl+S save)
+    const loadSavedCal = (key: string, defaultCal: CalibrationConfig): CalibrationConfig => {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) return { ...defaultCal, ...JSON.parse(raw), bgColor };
+      } catch { /* use default */ }
+      return { ...defaultCal, bgColor };
+    };
+
+    // Load saved base renderer settings
+    const loadSavedSettings = (): Record<string, RendererSettings> | null => {
+      try {
+        const raw = localStorage.getItem('echos-mode-settings');
+        if (raw) return JSON.parse(raw);
+      } catch { /* use default */ }
+      return null;
+    };
+    const savedSettings = loadSavedSettings();
+
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
     if (containerARef.current && !rendererARef.current) {
-      rendererARef.current = new VolumeRenderer(containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor });
+      const calA = loadSavedCal('echos-cal-instrument', DEFAULT_CALIBRATION);
+      const settingsA = savedSettings?.instrument ?? modeSettings.instrument;
+      rendererARef.current = new VolumeRenderer(containerARef.current, settingsA, calA);
       rendererARef.current.setCameraPreset('frontal');
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
@@ -646,7 +718,9 @@ export function VolumeViewer({
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B, camera 'horizontal'
     // Uses frames for buildWindowVolume temporal playback (NOT static spatial data)
     if (containerBRef.current && !rendererBRef.current && hasFrames) {
-      rendererBRef.current = new VolumeRenderer(containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor });
+      const calB = loadSavedCal('echos-cal-spatial', DEFAULT_CALIBRATION_B);
+      const settingsB = savedSettings?.spatial ?? modeSettings.spatial;
+      rendererBRef.current = new VolumeRenderer(containerBRef.current, settingsB, calB);
       rendererBRef.current.setCameraPreset('horizontal');
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
@@ -655,7 +729,9 @@ export function VolumeViewer({
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C, camera 'frontal'
     // Uses frames for projectFrameWindow temporal playback
     if (containerCRef.current && !rendererCRef.current && hasFrames) {
-      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor });
+      const calC = loadSavedCal('echos-cal-classic', DEFAULT_CALIBRATION_C);
+      const settingsC = savedSettings?.classic ?? modeSettings.classic;
+      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, settingsC, calC);
       rendererCRef.current.setCameraPreset('frontal');
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
@@ -900,8 +976,8 @@ export function VolumeViewer({
     const settings = modeSettings[mode];
 
     // Slider spacing: equal gap from volume→slider and slider→play
-    const sliderGap = 12; // px from volume bottom to slider
-    const sliderPlayGap = 12; // px between slider and play (same)
+    const sliderGap = 6; // px from volume bottom to slider
+    const sliderPlayGap = 6; // px between slider and play (same)
 
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
@@ -1018,7 +1094,7 @@ export function VolumeViewer({
                   letterSpacing: '-0.02em',
                   lineHeight: 1.1,
                 }}>
-                  <span style={{ color: colors.accent }}>"</span>{title}<span style={{ color: colors.accent }}>"</span>
+                  <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '4px' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '4px' }}>"</span>
                 </h2>
                 <p style={{
                   margin: '2px 0 0',
@@ -1132,6 +1208,7 @@ export function VolumeViewer({
                     onChange={handleCalibrationChange}
                     onClose={() => setCalibrationOpen(false)}
                     saved={calibrationSaved}
+                    saveLabel={calibrationSaveLabel}
                   />
                 ) : (
                   <SettingsControls
@@ -1250,14 +1327,14 @@ export function VolumeViewer({
           padding: '16px 20px',
           overflow: 'hidden',
         }}>
-          {/* Thumbnail from YZ slice — rotated 90deg clockwise */}
+          {/* Thumbnail from YZ slice — rotated 90deg counter-clockwise */}
           <div style={{
             width: '120px',
             height: '120px',
             borderRadius: '12px',
             overflow: 'hidden',
             flexShrink: 0,
-            background: colors.surfaceRaised,
+            background: viewportBg,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1266,7 +1343,7 @@ export function VolumeViewer({
               <img
                 src={yzThumbnailRef.current}
                 alt="YZ slice"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(-90deg)' }}
               />
             ) : (
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1297,38 +1374,43 @@ export function VolumeViewer({
               {frames && frames.length > 0 && (
                 <span>{frames.length} frames</span>
               )}
+              {gpxTrack && gpxTrack.points.length > 0 && (
+                <span>
+                  {gpxTrack.points[0].lat.toFixed(4)}°N, {gpxTrack.points[0].lon.toFixed(4)}°E
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Map — 1 column */}
+        {/* Map — 1 column, aligned to file info height */}
         <div style={{
           gridColumn: '4',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: `1px solid ${colors.border}`,
+          position: 'relative',
         }}>
+          <GpsMap points={hasMap ? gpxTrack.points : undefined} theme={theme} />
           {!hasMap && (
-            <p style={{
-              margin: '0 0 6px',
-              fontSize: '11px',
+            <div style={{
+              position: 'absolute',
+              bottom: '8px',
+              left: '8px',
+              right: '8px',
+              background: theme === 'light' ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.7)',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              fontSize: '10px',
               color: colors.text3,
               lineHeight: 1.3,
+              textAlign: 'center',
             }}>
               {lang === 'fr'
                 ? 'Importez un fichier GPX pour accéder à la carte.'
                 : 'Import a GPX file to access the map.'}
-            </p>
+            </div>
           )}
-          <div style={{
-            flex: 1,
-            minHeight: '120px',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            border: `1px solid ${colors.border}`,
-          }}>
-            <GpsMap points={hasMap ? gpxTrack.points : undefined} theme={theme} />
-          </div>
         </div>
       </div>
 

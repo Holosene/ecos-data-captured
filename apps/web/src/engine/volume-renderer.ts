@@ -78,7 +78,7 @@ export const DEFAULT_CALIBRATION_B: CalibrationConfig = {
 export const DEFAULT_CALIBRATION_C: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 90, y: 0, z: 0 },
-  scale: { x: 3, y: 1, z: 1.01 },
+  scale: { x: 1, y: 1, z: 1.01 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
   camera: {
     dist: 1.5,
@@ -193,6 +193,8 @@ export class VolumeRenderer {
     // Grid helper
     this.gridHelper = new THREE.GridHelper(6, 30, 0xf59e0b, 0xc47d09);
     this.gridHelper.position.y = this.calibration.grid.y;
+    (this.gridHelper.material as THREE.Material).opacity = 0.8;
+    (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
     // Default camera

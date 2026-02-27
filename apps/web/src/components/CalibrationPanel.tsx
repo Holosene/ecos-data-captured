@@ -20,6 +20,7 @@ interface CalibrationPanelProps {
   onChange: (config: CalibrationConfig) => void;
   onClose: () => void;
   saved: boolean;
+  saveLabel?: string;
 }
 
 // ─── Compact slider row ─────────────────────────────────────────────────────
@@ -143,7 +144,7 @@ function Section({ title }: { title: string }) {
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
-export function CalibrationPanel({ config, onChange, onClose, saved }: CalibrationPanelProps) {
+export function CalibrationPanel({ config, onChange, onClose, saved, saveLabel }: CalibrationPanelProps) {
   const update = useCallback(
     (path: string, value: number | string) => {
       const next = JSON.parse(JSON.stringify(config)) as CalibrationConfig;
@@ -201,7 +202,7 @@ export function CalibrationPanel({ config, onChange, onClose, saved }: Calibrati
                 fontWeight: 600,
               }}
             >
-              Saved
+              {saveLabel ? `${saveLabel} saved` : 'Saved'}
             </span>
           )}
         </div>
