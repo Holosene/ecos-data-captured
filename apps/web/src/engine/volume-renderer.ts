@@ -755,7 +755,7 @@ void main() {
   }
 
   setSceneBg(color: string): void {
-    (this.scene.background as THREE.Color).set(color);
+    this.renderer.setClearColor(new THREE.Color(color), 1);
   }
 
   // ─── Accessors ────────────────────────────────────────────────────────

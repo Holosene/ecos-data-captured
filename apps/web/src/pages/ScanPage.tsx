@@ -609,7 +609,7 @@ export function ScanPage() {
   // ─── Render ───────────────────────────────────────────────────────────
 
   return (
-    <div style={{ background: colors.black, minHeight: 'calc(100vh - 72px)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: colors.black, flex: 1, display: 'flex', flexDirection: 'column' }}>
       {/* Pipeline Step Indicator — slides up when viewer is reached */}
       {stepBarVisible && (
         <div

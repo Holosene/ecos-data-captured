@@ -22,7 +22,7 @@ import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B, DEFAULT_CAL
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
-import { getChromaticModes, CHROMATIC_LABELS, generateLUT } from '../engine/transfer-function.js';
+import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
@@ -900,8 +900,8 @@ export function VolumeViewer({
     const settings = modeSettings[mode];
 
     // Slider spacing: equal gap from volume→slider and slider→play
-    const sliderGap = 27; // px from volume bottom to slider
-    const sliderPlayGap = 27; // px between slider and play (same)
+    const sliderGap = 12; // px from volume bottom to slider
+    const sliderPlayGap = 12; // px between slider and play (same)
 
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
@@ -1014,11 +1014,11 @@ export function VolumeViewer({
                   fontFamily: fonts.display,
                   fontVariationSettings: "'wght' 600",
                   fontSize: 'clamp(26px, 2.5vw, 40px)',
-                  color: colors.accent,
+                  color: colors.text1,
                   letterSpacing: '-0.02em',
                   lineHeight: 1.1,
                 }}>
-                  « {title} »
+                  <span style={{ color: colors.accent }}>"</span>{title}<span style={{ color: colors.accent }}>"</span>
                 </h2>
                 <p style={{
                   margin: '2px 0 0',
@@ -1159,29 +1159,44 @@ export function VolumeViewer({
     );
   };
 
-  // Generate a small YZ slice thumbnail from volume data (Water Off chromatic)
+  // Generate YZ slice thumbnail — same colorMap as SlicePanel "Water Off"
+  const WATER_OFF_MAP = [
+    [0.0, 0, 0, 0, 0], [0.15, 0, 0, 0, 0], [0.3, 10, 20, 60, 20],
+    [0.5, 66, 33, 206, 120], [0.7, 140, 100, 255, 200], [1.0, 225, 224, 235, 255],
+  ];
   const yzThumbnailRef = useRef<string | null>(null);
   if (volumeData && dimensions[0] > 0 && !yzThumbnailRef.current) {
     try {
-      const [w, h, d] = dimensions;
-      const midX = Math.floor(w / 2);
-      const lut = generateLUT('water-off');
+      const [dimX, dimY, dimZ] = dimensions;
+      const sliceX = Math.floor(dimX / 2);
+      // axis=x: w=dimY, h=dimZ, idx = row*dimY*dimX + col*dimX + sliceX
+      const cW = dimY, cH = dimZ;
       const canvas = document.createElement('canvas');
-      canvas.width = d;
-      canvas.height = h;
+      canvas.width = cW;
+      canvas.height = cH;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        const imgData = ctx.createImageData(d, h);
-        for (let y = 0; y < h; y++) {
-          for (let z = 0; z < d; z++) {
-            const val = volumeData[midX + y * w + z * w * h];
-            const byte = Math.min(255, Math.max(0, Math.round((val ?? 0) * 255)));
-            const lutIdx = byte * 4;
-            const pxIdx = (y * d + z) * 4;
-            imgData.data[pxIdx] = lut[lutIdx];
-            imgData.data[pxIdx + 1] = lut[lutIdx + 1];
-            imgData.data[pxIdx + 2] = lut[lutIdx + 2];
-            imgData.data[pxIdx + 3] = lut[lutIdx + 3] > 0 ? 255 : 0;
+        const imgData = ctx.createImageData(cW, cH);
+        for (let row = 0; row < cH; row++) {
+          for (let col = 0; col < cW; col++) {
+            const idx = row * dimY * dimX + col * dimX + sliceX;
+            const val = Math.max(0, Math.min(1, idx < volumeData.length ? volumeData[idx] : 0));
+            let r = 0, g = 0, b = 0, a = 0;
+            for (let i = 1; i < WATER_OFF_MAP.length; i++) {
+              if (val <= WATER_OFF_MAP[i][0]) {
+                const t = (val - WATER_OFF_MAP[i - 1][0]) / (WATER_OFF_MAP[i][0] - WATER_OFF_MAP[i - 1][0]);
+                r = WATER_OFF_MAP[i - 1][1] + t * (WATER_OFF_MAP[i][1] - WATER_OFF_MAP[i - 1][1]);
+                g = WATER_OFF_MAP[i - 1][2] + t * (WATER_OFF_MAP[i][2] - WATER_OFF_MAP[i - 1][2]);
+                b = WATER_OFF_MAP[i - 1][3] + t * (WATER_OFF_MAP[i][3] - WATER_OFF_MAP[i - 1][3]);
+                a = WATER_OFF_MAP[i - 1][4] + t * (WATER_OFF_MAP[i][4] - WATER_OFF_MAP[i - 1][4]);
+                break;
+              }
+            }
+            const pxIdx = (row * cW + col) * 4;
+            imgData.data[pxIdx] = r;
+            imgData.data[pxIdx + 1] = g;
+            imgData.data[pxIdx + 2] = b;
+            imgData.data[pxIdx + 3] = a;
           }
         }
         ctx.putImageData(imgData, 0, 0);
@@ -1195,13 +1210,13 @@ export function VolumeViewer({
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* ── Title — always at top, full width ───────────── */}
-      <div style={{ paddingTop: 'clamp(32px, 5vh, 64px)', marginBottom: '16px' }}>
+      <div style={{ paddingTop: 'clamp(32px, 5vh, 64px)', marginBottom: '40px' }}>
         <h1 style={{
           margin: 0,
           color: colors.text1,
           fontSize: 'clamp(24px, 3vw, 36px)',
           fontWeight: 600,
-          marginBottom: '6px',
+          marginBottom: '2px',
         }}>
           {t('v2.viewer.title')}
         </h1>
