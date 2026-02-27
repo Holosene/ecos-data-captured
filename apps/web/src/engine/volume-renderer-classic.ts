@@ -402,6 +402,13 @@ export class VolumeRendererClassic {
     // Set camera on first mesh creation only (preserve user rotation during playback)
     if (!this.meshCreated) {
       this.setCameraPreset(this.currentPreset);
+      // Re-apply saved orbit camera position (setCameraPreset overrides it)
+      if (this.calibration.camera.orbit) {
+        const o = this.calibration.camera.orbit;
+        this.camera.position.set(o.posX, o.posY, o.posZ);
+        this.controls.target.set(o.targetX, o.targetY, o.targetZ);
+        this.controls.update();
+      }
       this.meshCreated = true;
     }
   }

@@ -418,6 +418,11 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   border: none !important;
 }
 
+/* Hide Leaflet attribution completely */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
 /* Leaflet zoom controls — redesigned to match site style, 1.5× size, centered vertically */
 .leaflet-top.leaflet-right {
   top: 50% !important;
@@ -441,11 +446,11 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   background: var(--c-surface) !important;
   color: var(--c-accent) !important;
   border: none !important;
-  width: 32px !important;
-  height: 32px !important;
-  line-height: 32px !important;
-  font-size: 16px !important;
-  font-weight: 500 !important;
+  width: 48px !important;
+  height: 48px !important;
+  line-height: 48px !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
   transition: background 150ms ease, color 150ms ease;
 }
 

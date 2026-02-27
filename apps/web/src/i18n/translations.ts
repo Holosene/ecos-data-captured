@@ -27,7 +27,7 @@ export const translations = {
     'home.feat3.desc': 'Construisez un volume 3D \u00e0 partir des images et de la trace GPS.',
     'home.feat4.title': 'Explorer & Exporter',
     'home.feat4.desc': 'Vues en coupe, presets couleur, export NRRD pour 3D Slicer / ParaView.',
-    'home.gallery.title': 'Visuels',
+    'home.gallery.title': 'Visuels générés',
     'home.gallery.subtitle': 'Rendus et captures g\u00e9n\u00e9r\u00e9s avec ecos',
 
     // Wizard Steps
@@ -379,7 +379,7 @@ export const translations = {
     'home.feat3.desc': 'Build a 3D volume from frames and GPS trace.',
     'home.feat4.title': 'Explore & Export',
     'home.feat4.desc': 'Slice views, color presets, NRRD export for 3D Slicer / ParaView.',
-    'home.gallery.title': 'Visuals',
+    'home.gallery.title': 'Generated Visuals',
     'home.gallery.subtitle': 'Renders and captures generated with ecos',
 
     // Wizard Steps

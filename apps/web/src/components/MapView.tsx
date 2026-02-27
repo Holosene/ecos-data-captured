@@ -19,6 +19,8 @@ interface MapViewProps {
   onSessionSelect: (id: string) => void;
   gpxTracks?: Map<string, Array<{ lat: number; lon: number }>>;
   theme?: string;
+  /** When true, zoom very deep on the selected session */
+  deepFocus?: boolean;
 }
 
 export function MapView({
@@ -27,6 +29,7 @@ export function MapView({
   onSessionSelect,
   gpxTracks,
   theme,
+  deepFocus,
 }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<L.Map | null>(null);
@@ -54,12 +57,6 @@ export function MapView({
       : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
     const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
     tileLayerRef.current = tileLayer;
-
-    // Attribution
-    L.control
-      .attribution({ position: 'bottomright' })
-      .addAttribution('&copy; <a href="https://carto.com">CARTO</a>')
-      .addTo(map);
 
     // Enable scroll-wheel zoom only after user clicks on the map
     map.on('click', () => {
@@ -123,7 +120,7 @@ export function MapView({
       }
 
       const latLngs = track.map((p) => L.latLng(p.lat, p.lon));
-      bounds.extend(latLngs);
+      latLngs.forEach((ll) => bounds.extend(ll));
 
       const isSelected = session.id === selectedSessionId;
       const polyline = L.polyline(latLngs, {
@@ -144,8 +141,31 @@ export function MapView({
     }
   }, [sessions, selectedSessionId, gpxTracks, onSessionSelect]);
 
+  // Deep focus zoom when a session is selected and deepFocus is true
+  useEffect(() => {
+    const map = leafletMap.current;
+    if (!map || !deepFocus || !selectedSessionId) return;
+
+    const session = sessions.find((s) => s.id === selectedSessionId);
+    if (!session) return;
+
+    const track = gpxTracks?.get(session.id);
+    if (track && track.length >= 2) {
+      const latLngs = track.map((p) => L.latLng(p.lat, p.lon));
+      const traceBounds = L.latLngBounds(latLngs);
+      map.fitBounds(traceBounds, { padding: [20, 20], maxZoom: 18, animate: true });
+    } else if (session.bounds) {
+      const [minLat, minLon, maxLat, maxLon] = session.bounds;
+      const center = L.latLng((minLat + maxLat) / 2, (minLon + maxLon) / 2);
+      map.setView(center, 16, { animate: true });
+    }
+
+    // Invalidate size after container transitions
+    setTimeout(() => map.invalidateSize(), 350);
+  }, [deepFocus, selectedSessionId, sessions, gpxTracks]);
+
   return (
-    <div style={{ position: 'relative', height: '100%', minHeight: '400px' }}>
+    <div style={{ position: 'relative', height: '100%', minHeight: '300px' }}>
       <div
         ref={mapRef}
         style={{

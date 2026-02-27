@@ -187,9 +187,9 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
 
 // Mode definitions — clean labels, no color coding
 const MODE_DEFS = [
-  { key: 'classic' as const, label: 'Le Cône', desc: 'Projection conique glissante' },
-  { key: 'instrument' as const, label: 'Le Tracé', desc: 'Empilement statique' },
-  { key: 'spatial' as const, label: 'Le Bloc', desc: 'Projection cubique du parcours' },
+  { key: 'classic' as const, label: 'Cône', desc: 'Projection conique glissante' },
+  { key: 'instrument' as const, label: 'Tracé', desc: 'Empilement statique' },
+  { key: 'spatial' as const, label: 'Bloc', desc: 'Projection cubique du parcours' },
 ] as const;
 
 // ─── Leaflet Map component ─────────────────────────────────────────────────
@@ -579,17 +579,17 @@ export function VolumeViewer({
           if (rendererARef.current) {
             cals.instrument = rendererARef.current.getCalibration();
             localStorage.setItem('echos-cal-instrument', JSON.stringify(cals.instrument));
-            names.push('Le Tracé');
+            names.push('Tracé');
           }
           if (rendererBRef.current) {
             cals.spatial = rendererBRef.current.getCalibration();
             localStorage.setItem('echos-cal-spatial', JSON.stringify(cals.spatial));
-            names.push('Le Bloc');
+            names.push('Bloc');
           }
           if (rendererCRef.current) {
             cals.classic = rendererCRef.current.getCalibration();
             localStorage.setItem('echos-cal-classic', JSON.stringify(cals.classic));
-            names.push('Le Cône');
+            names.push('Cône');
           }
           // Sync React state with renderer state
           setCalibrations(prev => ({ ...prev, ...cals }));
@@ -673,6 +673,18 @@ export function VolumeViewer({
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
+  // Tracé (instrument) position.z slider — controls volume Z position directly
+  const [tracePositionZ, setTracePositionZ] = useState(0);
+  const handleTracePositionZ = useCallback((value: number) => {
+    setTracePositionZ(value);
+    if (rendererARef.current) {
+      const cal = calibrations.instrument;
+      const newCal = { ...cal, position: { ...cal.position, z: value } };
+      setCalibrations(prev => ({ ...prev, instrument: newCal }));
+      rendererARef.current.setCalibration(newCal);
+    }
+  }, [calibrations.instrument]);
+
   // Slice data
   const [sliceVolumeData, setSliceVolumeData] = useState<Float32Array | null>(null);
   const [sliceDimensions, setSliceDimensions] = useState<[number, number, number]>([1, 1, 1]);
@@ -686,32 +698,30 @@ export function VolumeViewer({
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
-    // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
+    // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
+    // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
     if (containerARef.current && !rendererARef.current) {
       rendererARef.current = new VolumeRenderer(
         containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor },
       );
-      rendererARef.current.setCameraPreset('frontal');
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
     }
 
-    // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B, camera 'horizontal'
+    // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
     if (containerBRef.current && !rendererBRef.current && hasFrames) {
       rendererBRef.current = new VolumeRenderer(
         containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor },
       );
-      rendererBRef.current.setCameraPreset('horizontal');
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
     }
 
-    // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C, camera 'frontal'
+    // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
     if (containerCRef.current && !rendererCRef.current && hasFrames) {
       rendererCRef.current = new VolumeRendererClassic(
         containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor },
       );
-      rendererCRef.current.setCameraPreset('frontal');
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
     }
@@ -1002,60 +1012,90 @@ export function VolumeViewer({
             alignItems: 'center',
             paddingTop: `${sliderGap}px`,
           }}>
-            <div style={{
-              width: 'max(260px, 40%)',
-              padding: '10px 18px',
-              background: colors.surface,
-              borderRadius: '24px',
-              border: `1px solid ${colors.border}`,
-              backdropFilter: 'blur(12px)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-            }}>
-              <input
-                type="range"
-                min={0}
-                max={isTemporal && hasFrames ? totalFrames - 1 : 100}
-                value={isTemporal && hasFrames ? currentFrame : 50}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                  if (isTemporal && hasFrames) {
-                    setPlaying(false);
-                    setCurrentFrame(Number(e.target.value));
-                  }
-                }}
-                style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
-              />
-            </div>
+            {mode === 'instrument' ? (
+              /* Tracé: position.z slider — left=0.75, right=-0.75, center=0 */
+              <div style={{
+                width: 'max(260px, 40%)',
+                padding: '10px 18px',
+                background: colors.surface,
+                borderRadius: '24px',
+                border: `1px solid ${colors.border}`,
+                backdropFilter: 'blur(12px)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}>
+                <input
+                  type="range"
+                  min={-0.75}
+                  max={0.75}
+                  step={0.01}
+                  value={-tracePositionZ}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    handleTracePositionZ(-parseFloat(e.target.value));
+                  }}
+                  style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
+                />
+              </div>
+            ) : (
+              /* Temporal modes: frame slider + play button */
+              <>
+                <div style={{
+                  width: 'max(260px, 40%)',
+                  padding: '10px 18px',
+                  background: colors.surface,
+                  borderRadius: '24px',
+                  border: `1px solid ${colors.border}`,
+                  backdropFilter: 'blur(12px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={isTemporal && hasFrames ? totalFrames - 1 : 100}
+                    value={isTemporal && hasFrames ? currentFrame : 50}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      if (isTemporal && hasFrames) {
+                        setPlaying(false);
+                        setCurrentFrame(Number(e.target.value));
+                      }
+                    }}
+                    style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
+                  />
+                </div>
 
-            <div style={{ height: `${sliderPlayGap}px` }} />
+                <div style={{ height: `${sliderPlayGap}px` }} />
 
-            <button
-              onClick={() => {
-                if (isTemporal && hasFrames) {
-                  if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
-                  setPlaying((p) => !p);
-                }
-              }}
-              style={{
-                width: '48px', height: '48px', borderRadius: '50%',
-                border: `1.5px solid ${colors.accent}`,
-                background: playing && isTemporal ? colors.accentMuted : colors.surface,
-                color: colors.accent,
-                cursor: 'pointer',
-                fontSize: '16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                paddingLeft: playing && isTemporal ? '0' : '2px',
-                transition: 'all 150ms ease',
-              }}
-            >
-              {playing && isTemporal ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="4" y="3" width="6" height="18" rx="1.5" />
-                  <rect x="14" y="3" width="6" height="18" rx="1.5" />
-                </svg>
-              ) : '\u25B6'}
-            </button>
+                <button
+                  onClick={() => {
+                    if (isTemporal && hasFrames) {
+                      if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
+                      setPlaying((p) => !p);
+                    }
+                  }}
+                  style={{
+                    width: '48px', height: '48px', borderRadius: '50%',
+                    border: `1.5px solid ${colors.accent}`,
+                    background: playing && isTemporal ? colors.accentMuted : colors.surface,
+                    color: colors.accent,
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    paddingLeft: playing && isTemporal ? '0' : '2px',
+                    transition: 'all 150ms ease',
+                  }}
+                >
+                  {playing && isTemporal ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <rect x="4" y="3" width="6" height="18" rx="1.5" />
+                      <rect x="14" y="3" width="6" height="18" rx="1.5" />
+                    </svg>
+                  ) : '\u25B6'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* ── Settings column: 1 column, row 1 — TOP and BOTTOM aligned to volume ── */}
@@ -1329,7 +1369,7 @@ export function VolumeViewer({
               <img
                 src={yzThumbnailRef.current}
                 alt="YZ slice"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             ) : (
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1403,9 +1443,9 @@ export function VolumeViewer({
       {/* ── Volume sections — 4-column grid, alternating layout ──── */}
       {(() => {
         const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string }> = [];
-        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Le Cône', subtitle: 'Projection conique glissante' });
-        sections.push({ mode: 'instrument', ref: containerARef, title: 'Le Tracé', subtitle: 'Empilement statique' });
-        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Le Bloc', subtitle: 'Projection cubique du parcours' });
+        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante' });
+        sections.push({ mode: 'instrument', ref: containerARef, title: 'Tracé', subtitle: 'Empilement statique' });
+        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Bloc', subtitle: 'Projection cubique du parcours' });
         return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, i));
       })()}
 

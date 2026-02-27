@@ -20,6 +20,7 @@ export function HomePage() {
   const [lightboxImages, setLightboxImages] = useState<string[]>([]);
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
   const [showFloatingCta, setShowFloatingCta] = useState(false);
+  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
   const heroCtaRef = useRef<HTMLDivElement>(null);
 
   // Show floating CTA when hero button scrolls out of view
@@ -343,19 +344,150 @@ export function HomePage() {
           >
             {t('v2.map.title')}
           </h2>
-          <span style={{ color: colors.text3, fontSize: '13px' }}>
-            {state.sessions.length} {t('v2.map.sessions')}
+          <span style={{ fontSize: '14px', fontWeight: 500 }}>
+            <span style={{ color: colors.accent, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{state.sessions.length}</span>
+            {' '}
+            <span style={{ color: colors.text2 }}>{t('v2.map.sessions')}</span>
           </span>
         </div>
 
-        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${colors.border}` }}>
-          <MapView
-            sessions={state.sessions}
-            selectedSessionId={state.activeSessionId}
-            onSessionSelect={useCallback((id: string) => dispatch({ type: 'SET_ACTIVE_SESSION', id }), [dispatch])}
-            gpxTracks={state.gpxTracks}
-            theme={theme}
-          />
+        <div style={{
+          height: 'clamp(600px, 75vh, 900px)',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          border: `1px solid ${colors.border}`,
+          display: 'flex',
+          transition: 'all 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+        }}>
+          {/* Map — shrinks to 1/4 when a trace is focused */}
+          <div style={{
+            flex: focusedSessionId ? '0 0 25%' : '1 1 100%',
+            height: '100%',
+            transition: 'flex 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            overflow: 'hidden',
+          }}>
+            <MapView
+              sessions={state.sessions}
+              selectedSessionId={focusedSessionId ?? state.activeSessionId}
+              onSessionSelect={useCallback((id: string) => {
+                dispatch({ type: 'SET_ACTIVE_SESSION', id });
+                setFocusedSessionId(id);
+              }, [dispatch])}
+              gpxTracks={state.gpxTracks}
+              theme={theme}
+              deepFocus={!!focusedSessionId}
+            />
+          </div>
+
+          {/* Info panel — 3/4 right side, visible when a trace is focused */}
+          {focusedSessionId && (() => {
+            const session = state.sessions.find((s) => s.id === focusedSessionId);
+            if (!session) return null;
+            return (
+              <div style={{
+                flex: '0 0 75%',
+                height: '100%',
+                padding: '40px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: '24px',
+                background: colors.surface,
+                borderLeft: `1px solid ${colors.border}`,
+                animation: 'echos-fade-in 300ms ease',
+              }}>
+                {/* Close button */}
+                <button
+                  onClick={() => setFocusedSessionId(null)}
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    border: `1px solid ${colors.border}`,
+                    background: colors.surface,
+                    color: colors.text2,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    zIndex: 5,
+                  }}
+                >
+                  ×
+                </button>
+
+                <div>
+                  <h3 style={{
+                    fontFamily: fonts.display,
+                    fontVariationSettings: "'wght' 600",
+                    fontSize: 'clamp(24px, 2.5vw, 36px)',
+                    color: colors.text1,
+                    lineHeight: 1.1,
+                    letterSpacing: '-0.02em',
+                    marginBottom: '8px',
+                  }}>
+                    {session.name}
+                  </h3>
+                  <p style={{ fontSize: '14px', color: colors.text3 }}>
+                    {new Date(session.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '16px',
+                }}>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: colors.black, border: `1px solid ${colors.border}` }}>
+                    <div style={{ fontSize: '22px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                      {session.totalDistanceM.toFixed(0)}m
+                    </div>
+                    <div style={{ fontSize: '12px', color: colors.text3, marginTop: '4px' }}>Distance</div>
+                  </div>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: colors.black, border: `1px solid ${colors.border}` }}>
+                    <div style={{ fontSize: '22px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                      {(session.durationS / 60).toFixed(1)}min
+                    </div>
+                    <div style={{ fontSize: '12px', color: colors.text3, marginTop: '4px' }}>Durée</div>
+                  </div>
+                  <div style={{ padding: '16px', borderRadius: '12px', background: colors.black, border: `1px solid ${colors.border}` }}>
+                    <div style={{ fontSize: '22px', fontWeight: 600, color: colors.accent, fontVariantNumeric: 'tabular-nums' }}>
+                      {session.frameCount}
+                    </div>
+                    <div style={{ fontSize: '12px', color: colors.text3, marginTop: '4px' }}>Frames</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: colors.text2 }}>
+                  <span style={{ padding: '4px 12px', borderRadius: '9999px', background: colors.accentMuted, color: colors.accent, fontSize: '12px', fontWeight: 500 }}>
+                    {session.videoFileName}
+                  </span>
+                  {session.gpxFileName && (
+                    <span style={{ padding: '4px 12px', borderRadius: '9999px', background: colors.accentMuted, color: colors.accent, fontSize: '12px', fontWeight: 500 }}>
+                      {session.gpxFileName}
+                    </span>
+                  )}
+                  <span style={{ padding: '4px 12px', borderRadius: '9999px', background: colors.accentMuted, color: colors.accent, fontSize: '12px', fontWeight: 500 }}>
+                    {session.gridDimensions[0]}×{session.gridDimensions[1]}×{session.gridDimensions[2]}
+                  </span>
+                </div>
+
+                {session.bounds && (
+                  <p style={{ fontSize: '13px', color: colors.text3, fontVariantNumeric: 'tabular-nums' }}>
+                    {((session.bounds[0] + session.bounds[2]) / 2).toFixed(5)}°N, {((session.bounds[1] + session.bounds[3]) / 2).toFixed(5)}°E
+                  </p>
+                )}
+
+                <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+                  Explorer
+                </Button>
+              </div>
+            );
+          })()}
         </div>
 
       </section>
