@@ -694,7 +694,7 @@ export function ScanPage() {
             {canConfigure && (
               <div style={{ textAlign: 'center' }}>
                 <Button variant="primary" size="lg" onClick={() => setPhase('crop')}>
-                  {t('v2.scan.next')}
+                  {t('common.next')}
                 </Button>
               </div>
             )}
@@ -780,7 +780,7 @@ export function ScanPage() {
                 disabled={crop.width < 20 || crop.height < 20}
                 onClick={() => setPhase('settings')}
               >
-                {t('v2.scan.nextSettings')}
+                {t('common.next')}
               </Button>
             </div>
           </div>

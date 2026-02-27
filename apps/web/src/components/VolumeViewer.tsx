@@ -224,7 +224,7 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
       radius: 5, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 0,
     }).addTo(map);
 
-    map.fitBounds(polyline.getBounds(), { padding: [40, 40], maxZoom: 14 });
+    map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 12 });
 
     map.on('click', () => map.scrollWheelZoom.enable());
     map.on('mouseout', () => map.scrollWheelZoom.disable());
@@ -583,7 +583,7 @@ export function VolumeViewer({
 
   // Theme sync + editingMode → update scene bg + scroll zoom
   useEffect(() => {
-    const stage1Bg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    const stage1Bg = theme === 'light' ? '#f5f5f7' : '#111111';
     const stage2Bg = theme === 'light' ? '#FFFFFF' : '#1A1A20';
     const modes = [
       { ref: rendererARef, mode: 'instrument' as const, cal: DEFAULT_CALIBRATION },
@@ -625,13 +625,14 @@ export function VolumeViewer({
 
   // ─── Initialize 3 renderers (each with its OWN engine + calibration from 7024cc8) ──
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
     if (containerARef.current && !rendererARef.current) {
       rendererARef.current = new VolumeRenderer(containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor });
       rendererARef.current.setCameraPreset('frontal');
       rendererARef.current.setGridAxesVisible(false);
+      rendererARef.current.setScrollZoom(false);
     }
 
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B, camera 'horizontal'
@@ -640,6 +641,7 @@ export function VolumeViewer({
       rendererBRef.current = new VolumeRenderer(containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor });
       rendererBRef.current.setCameraPreset('horizontal');
       rendererBRef.current.setGridAxesVisible(false);
+      rendererBRef.current.setScrollZoom(false);
     }
 
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C, camera 'frontal'
@@ -648,6 +650,7 @@ export function VolumeViewer({
       rendererCRef.current = new VolumeRendererClassic(containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor });
       rendererCRef.current.setCameraPreset('frontal');
       rendererCRef.current.setGridAxesVisible(false);
+      rendererCRef.current.setScrollZoom(false);
     }
 
     return () => {
@@ -866,7 +869,7 @@ export function VolumeViewer({
   const showC = hasFrames && !!beam && !!grid;
 
   // Background matches the renderer scene background for seamless 3D
-  const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+  const viewportBg = theme === 'light' ? '#f5f5f7' : '#111111';
   // Stage 2 bg matches the settings panel (GlassPanel / colors.surface)
   const viewportBgEditing = theme === 'light' ? '#FFFFFF' : '#1A1A20';
 
@@ -885,53 +888,51 @@ export function VolumeViewer({
     const isTemporal = mode === 'classic' || mode === 'spatial';
     const settings = modeSettings[mode];
 
+    // Slider spacing: sliderGap from volume bottom = 1.5 * gap between slider and play
+    const sliderGap = 18; // px from volume bottom to slider
+    const sliderPlayGap = Math.round(sliderGap * 1.5); // px between slider and play
+
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
         {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '16px',
+          gap: '24px',
+          gridTemplateRows: `${volumeHeight} auto`,
         }}>
-          {/* ── Volume viewport: 3 columns ──────────────────────── */}
-          <div style={{
-            gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
-            gridRow: '1',
-            position: 'relative',
-          }}>
-            <div
-              ref={containerRef}
-              onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
-              onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
-              style={{
-                width: '100%',
-                height: volumeHeight,
-                borderRadius: '16px',
-                overflow: 'hidden',
-                background: isExpanded ? viewportBgEditing : viewportBg,
-                cursor: 'grab',
-                transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
-                border: `1.5px solid ${colors.accent}`,
-                boxShadow: isExpanded
-                  ? `0 8px 32px rgba(0,0,0,0.2)`
-                  : theme === 'light'
-                    ? '0 2px 20px rgba(0,0,0,0.06)'
-                    : '0 2px 20px rgba(0,0,0,0.3)',
-              }}
-            />
+          {/* ── Volume viewport: 3 columns, row 1 ──────────────── */}
+          <div
+            ref={containerRef}
+            onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+            onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+            style={{
+              gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+              gridRow: '1',
+              width: '100%',
+              height: '100%',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              background: isExpanded ? viewportBgEditing : viewportBg,
+              cursor: 'grab',
+              transition: 'box-shadow 400ms ease, background 400ms ease',
+              border: `1.5px solid ${colors.accent}`,
+              boxShadow: isExpanded
+                ? `0 8px 32px rgba(0,0,0,0.2)`
+                : theme === 'light'
+                  ? '0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 2px 20px rgba(0,0,0,0.3)',
+            }}
+          />
 
-          </div>
-
-          {/* ── Slider + Play — below volume, centered, not affected by settings ── */}
+          {/* ── Slider + Play — row 2, under volume columns ── */}
           <div style={{
             gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
             gridRow: '2',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '8px',
-            paddingTop: '10px',
-            paddingBottom: '16px',
+            paddingTop: `${sliderGap}px`,
           }}>
             <div style={{
               width: 'max(260px, 40%)',
@@ -959,6 +960,8 @@ export function VolumeViewer({
               />
             </div>
 
+            <div style={{ height: `${sliderPlayGap}px` }} />
+
             <button
               onClick={() => {
                 if (isTemporal && hasFrames) {
@@ -982,18 +985,18 @@ export function VolumeViewer({
             </button>
           </div>
 
-          {/* ── Settings column: 1 column ──────────────── */}
+          {/* ── Settings column: 1 column, row 1 — TOP and BOTTOM aligned to volume ── */}
           <div style={{
             gridColumn: volumeOnLeft ? '4' : '1',
             gridRow: '1',
             alignSelf: 'stretch',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
-            paddingTop: '8px',
+            gap: '10px',
+            /* NO paddingTop — title top aligns exactly with volume top */
           }}>
-            {/* Title row: title (left) + number + chevron (right, vertically centered) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+            {/* Title row: title (left) + number + chevron (right) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 style={{
                   margin: 0,
@@ -1015,7 +1018,7 @@ export function VolumeViewer({
                   {subtitle}
                 </p>
               </div>
-              {/* Section number — same style as homepage step circles */}
+              {/* Section number */}
               <div style={{
                 width: '44px', height: '44px', minWidth: '44px',
                 borderRadius: '50%',
@@ -1024,12 +1027,11 @@ export function VolumeViewer({
                 color: colors.accent,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '15px', fontWeight: 600,
-                margin: '0 4px',
                 flexShrink: 0,
               }}>
                 {String(sectionIndex + 1).padStart(2, '0')}
               </div>
-              {/* Chevron — right side, vertically centered, bigger icon */}
+              {/* Chevron */}
               <button
                 onClick={() => setEditingMode(isExpanded ? null : mode)}
                 style={{
@@ -1051,7 +1053,7 @@ export function VolumeViewer({
               </button>
             </div>
 
-            {/* Chromatic pills — single row, styled like page buttons */}
+            {/* Chromatic pills */}
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', overflow: 'hidden' }}>
               {chromaticModes.map((m: ChromaticMode) => (
                 <button
@@ -1077,7 +1079,7 @@ export function VolumeViewer({
               ))}
             </div>
 
-            {/* Settings panel — opens BELOW pills, no duplicate title/subtitle */}
+            {/* Settings panel — flex:1 fills remaining height to align bottom with volume */}
             {isExpanded && (
               <GlassPanel className="echos-controls-panel" style={{
                 padding: '14px',
@@ -1180,15 +1182,16 @@ export function VolumeViewer({
         </p>
       </div>
 
-      {/* ── File info zone (3/4) + Map (1/4) ─── */}
+      {/* ── File info (3 cols) + Map (1 col) — aligned to 4-column grid ─── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '3fr 1fr',
-        gap: '16px',
-        marginBottom: '48px',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '24px',
+        marginBottom: '64px',
       }}>
-        {/* File identification */}
+        {/* File identification — 3 columns */}
         <div style={{
+          gridColumn: '1 / 4',
           display: 'flex',
           alignItems: 'center',
           gap: '16px',
@@ -1196,10 +1199,9 @@ export function VolumeViewer({
           border: `1px solid ${colors.border}`,
           borderRadius: '16px',
           padding: '16px 20px',
-          height: mapHeight,
           overflow: 'hidden',
         }}>
-          {/* Thumbnail from YZ slice */}
+          {/* Thumbnail from YZ slice — rotated 90deg clockwise */}
           <div style={{
             width: '120px',
             height: '120px',
@@ -1215,7 +1217,7 @@ export function VolumeViewer({
               <img
                 src={yzThumbnailRef.current}
                 alt="YZ slice"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
               />
             ) : (
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1250,9 +1252,10 @@ export function VolumeViewer({
           </div>
         </div>
 
-        {/* Map or fallback thumbnail */}
+        {/* Map — 1 column, square */}
         <div style={{
-          height: mapHeight,
+          gridColumn: '4',
+          aspectRatio: '1',
           borderRadius: '16px',
           overflow: 'hidden',
           border: `1px solid ${colors.border}`,
@@ -1263,7 +1266,7 @@ export function VolumeViewer({
             <img
               src={yzThumbnailRef.current}
               alt="Volume preview"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
             />
           ) : (
             <div style={{ width: '100%', height: '100%', background: colors.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
