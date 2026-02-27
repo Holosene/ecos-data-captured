@@ -552,7 +552,7 @@ export function VolumeViewer({
 
   // Theme sync
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#F5F5F7' : '#111111';
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
     [rendererARef, rendererBRef, rendererCRef].forEach((ref) => {
       if (ref.current) {
         const cal = ref.current === rendererARef.current ? { ...DEFAULT_CALIBRATION, bgColor }
@@ -588,7 +588,7 @@ export function VolumeViewer({
 
   // ─── Initialize 3 renderers (each with its OWN engine + calibration from 7024cc8) ──
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#F5F5F7' : '#111111';
+    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
 
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
     if (containerARef.current && !rendererARef.current) {
@@ -828,10 +828,10 @@ export function VolumeViewer({
   const showB = hasFrames;
   const showC = hasFrames && !!beam && !!grid;
 
-  // Background that matches the page for borderless feel
-  const viewportBg = theme === 'light' ? '#F5F5F7' : '#111111';
+  // Background matches the renderer scene background for seamless 3D
+  const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
   // Darker/lighter bg for settings mode (detaches volume from page)
-  const viewportBgEditing = theme === 'light' ? '#E8E8EE' : '#0a0a10';
+  const viewportBgEditing = theme === 'light' ? '#E8E8EE' : '#080810';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
   const volumeHeight = 'clamp(650px, 85vh, 1000px)';
@@ -875,8 +875,10 @@ export function VolumeViewer({
                 cursor: 'grab',
                 transition: 'box-shadow 400ms ease, background 400ms ease',
                 boxShadow: isExpanded
-                  ? `inset 0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
-                  : `inset 0 0 0 1px ${colors.accent}25`,
+                  ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                  : theme === 'light'
+                    ? '0 2px 20px rgba(0,0,0,0.06)'
+                    : '0 2px 20px rgba(0,0,0,0.3)',
               }}
             />
 
@@ -1075,22 +1077,29 @@ export function VolumeViewer({
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '16px',
         paddingTop: 'clamp(32px, 5vh, 64px)',
-        marginBottom: gpxTrack && gpxTrack.points.length > 1 ? '48px' : '24px',
+        marginBottom: gpxTrack && gpxTrack.points.length > 1 ? '64px' : '48px',
         alignItems: 'end',
       }}>
-        <h1 style={{
-          gridColumn: '1 / 4',
-          margin: 0,
-          fontFamily: fonts.display,
-          fontVariationSettings: "'wght' 600",
-          fontSize: 'clamp(28px, 3vw, 36px)',
-          color: colors.text1,
-          letterSpacing: '-0.02em',
-          lineHeight: 1.1,
-          textAlign: 'left',
-        }}>
-          Visualiseur volumétrique
-        </h1>
+        <div style={{ gridColumn: '1 / 4' }}>
+          <h1 style={{
+            margin: 0,
+            color: colors.text1,
+            fontSize: 'clamp(24px, 3vw, 36px)',
+            fontWeight: 600,
+            marginBottom: '8px',
+          }}>
+            {t('v2.viewer.title')}
+          </h1>
+          <p style={{
+            margin: 0,
+            color: colors.text2,
+            fontSize: '15px',
+            lineHeight: 1.6,
+            maxWidth: '700px',
+          }}>
+            {t('v2.viewer.desc')}
+          </p>
+        </div>
         {gpxTrack && gpxTrack.points.length > 1 && (
           <div style={{
             gridColumn: '4',

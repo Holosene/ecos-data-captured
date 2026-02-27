@@ -280,6 +280,7 @@ export const translations = {
 
     // V2 Viewer
     'v2.viewer.title': 'Visualiseur volumétrique',
+    'v2.viewer.desc': 'Explorez vos données acoustiques sous trois modes de rendu complémentaires. Interagissez avec chaque volume en 3D et ajustez les paramètres de visualisation.',
     'v2.viewer.noData': 'Aucune donnée volumétrique chargée.',
     'v2.viewer.reconfigure': 'Reconfigurer',
     'v2.viewer.newScan': 'Nouveau scan',
@@ -298,6 +299,7 @@ export const translations = {
 
     // V2 Slices
     'v2.slices.title': 'Coupes orthogonales',
+    'v2.slices.desc': 'Visualisez des coupes 2D à travers le volume acoustique selon les trois axes orthogonaux. Utilisez les curseurs pour naviguer dans les données.',
     'v2.slices.crossSection': 'Transversale (XZ)',
     'v2.slices.planView': 'Vue en plan (XY)',
     'v2.slices.longitudinal': 'Longitudinale (YZ)',
@@ -630,6 +632,7 @@ export const translations = {
 
     // V2 Viewer
     'v2.viewer.title': 'Volumetric Viewer',
+    'v2.viewer.desc': 'Explore your acoustic data through three complementary rendering modes. Interact with each volume in 3D and adjust visualization parameters.',
     'v2.viewer.noData': 'No volume data loaded.',
     'v2.viewer.reconfigure': 'Reconfigure',
     'v2.viewer.newScan': 'New Scan',
@@ -648,6 +651,7 @@ export const translations = {
 
     // V2 Slices
     'v2.slices.title': 'Orthogonal Slices',
+    'v2.slices.desc': 'View 2D slices through the acoustic volume along three orthogonal axes. Use the sliders to navigate through the data.',
     'v2.slices.crossSection': 'Cross-Section (XZ)',
     'v2.slices.planView': 'Plan View (XY)',
     'v2.slices.longitudinal': 'Longitudinal (YZ)',

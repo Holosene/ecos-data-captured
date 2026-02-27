@@ -237,11 +237,17 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
 
   return (
     <div style={{ display: 'grid', gap: '20px' }}>
-      {/* Header: title + preset selector */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, color: colors.text1, margin: 0 }}>
-          {t('v2.slices.title')}
-        </h3>
+      {/* Header: title + description + preset selector */}
+      <div>
+        <div style={{ marginBottom: '16px' }}>
+          <h2 style={{ color: colors.text1, fontSize: 'clamp(24px, 3vw, 36px)', fontWeight: 600, margin: 0, marginBottom: '8px' }}>
+            {t('v2.slices.title')}
+          </h2>
+          <p style={{ margin: 0, color: colors.text2, fontSize: '15px', lineHeight: 1.6, maxWidth: '700px' }}>
+            {t('v2.slices.desc')}
+          </p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {(Object.keys(PRESETS) as PresetName[]).map((name) => (
             <button
@@ -263,6 +269,7 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
               {t(PRESETS[name].labelKey as TranslationKey)}
             </button>
           ))}
+        </div>
         </div>
       </div>
 

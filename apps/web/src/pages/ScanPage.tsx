@@ -44,7 +44,7 @@ const PIPELINE_STEP_KEYS = [
 ] as const;
 
 function phaseToStepIndex(phase: ScanPhase): number {
-  if (phase === 'processing') return 2; // stays on "Configurer"
+  if (phase === 'processing') return 3; // Configurer is done, show checkmark; progress bar fills toward Visualiser
   return PIPELINE_STEP_KEYS.findIndex((s) => s.key === phase);
 }
 
