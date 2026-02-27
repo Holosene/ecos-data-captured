@@ -11,7 +11,7 @@ export const translations = {
 
     // Home
     'home.subtitle': 'Archive perceptive des fonds aquatiques',
-    'home.description': 'Transformez vos captures d\u2019\u00e9cran sonar et traces GPS en volumes 3D explorables. Tout se passe dans votre navigateur, aucune donn\u00e9e n\u2019est envoy\u00e9e.',
+    'home.description': 'Transformez vos captures d\u2019\u00e9cran sonar et traces GPS en volumes 3D explorables.',
     'home.cta': 'Lancer un scan',
     'home.cta2': 'Manifeste',
     'home.howItWorks': 'Comment \u00e7a marche',
@@ -21,10 +21,10 @@ export const translations = {
     'home.stat.dataSent': 'Donn\u00e9es envoy\u00e9es',
     'home.feat1.title': 'Importer',
     'home.feat1.desc': 'D\u00e9posez votre vid\u00e9o sonar MP4 et votre trace GPS. ecos lit les m\u00e9tadonn\u00e9es instantan\u00e9ment.',
-    'home.feat2.title': 'Recadrer & Calibrer',
-    'home.feat2.desc': 'Isolez la zone d\u2019\u00e9cho, d\u00e9finissez la profondeur et les param\u00e8tres de r\u00e9solution.',
+    'home.feat2.title': 'Recadrer & Configurer',
+    'home.feat2.desc': 'Isolez la zone d\u2019\u00e9cho, choisissez la qualit\u00e9 de rendu et la profondeur.',
     'home.feat3.title': 'G\u00e9n\u00e9rer',
-    'home.feat3.desc': 'Construisez un volume 3D \u00e0 partir des images mapp\u00e9es sur les coordonn\u00e9es GPS.',
+    'home.feat3.desc': 'Construisez un volume 3D \u00e0 partir des images et de la trace GPS.',
     'home.feat4.title': 'Explorer & Exporter',
     'home.feat4.desc': 'Vues en coupe, presets couleur, export NRRD pour 3D Slicer / ParaView.',
     'home.gallery.title': 'Visuels',
@@ -40,12 +40,12 @@ export const translations = {
 
     // Import
     'import.title': 'Importer les fichiers',
-    'import.desc': 'Glissez-d\u00e9posez votre enregistrement d\u2019\u00e9cran sonar (MP4) et votre trace GPS (GPX). Les deux fichiers doivent couvrir la m\u00eame session.',
+    'import.desc': 'Glissez-d\u00e9posez votre enregistrement d\u2019\u00e9cran sonar (MP4) et votre trace GPS (GPX).',
     'import.dropVideo': 'D\u00e9posez la vid\u00e9o MP4',
     'import.dropGpx': 'D\u00e9posez la trace GPX',
     'import.videoHint': 'Enregistrement d\u2019\u00e9cran de votre sonar',
     'import.gpxHint': 'Trace GPS de votre smartphone',
-    'import.loadSession': 'Charger une session pr\u00e9c\u00e9dente (.echos.json)',
+    'import.loadSession': 'Charger une session pr\u00e9c\u00e9dente (.ecos.json)',
     'import.loadSessionHint': 'Optionnel -restaure recadrage, calibration et synchronisation',
     'import.next': 'Suivant : Recadrage',
     'import.errorMp4': 'Veuillez s\u00e9lectionner un fichier vid\u00e9o MP4.',
@@ -53,7 +53,7 @@ export const translations = {
 
     // Crop
     'crop.title': 'Recadrer la zone sonar',
-    'crop.desc': 'Tracez un rectangle sur la zone d\u2019affichage sonar. Excluez les menus, barres d\u2019outils et d\u00e9corations. Seule l\u2019image d\u2019\u00e9cho doit \u00eatre dans le recadrage.',
+    'crop.desc': 'La zone sonar est d\u00e9tect\u00e9e automatiquement. Ajustez le rectangle si n\u00e9cessaire en tra\u00e7ant une nouvelle zone.',
     'crop.confirm': 'Confirmer le recadrage',
     'crop.loading': 'Chargement de la vid\u00e9o\u2026',
     'crop.back': 'Retour',
@@ -166,7 +166,7 @@ export const translations = {
     'docs.step5.title': '5. Synchroniser',
     'docs.step5.body': 'Par d\u00e9faut, le d\u00e9but vid\u00e9o s\u2019aligne sur le d\u00e9but GPX. S\u2019il y a un d\u00e9calage temporel, utilisez le curseur d\u2019offset pour ajuster. Le graphique distance-temps aide \u00e0 v\u00e9rifier l\u2019alignement.',
     'docs.step6.title': '6. G\u00e9n\u00e9rer',
-    'docs.step6.body': 'Choisissez \u00ab\u00a0Aper\u00e7u rapide\u00a0\u00bb pour v\u00e9rifier les r\u00e9glages, ou \u00ab\u00a0G\u00e9n\u00e9ration compl\u00e8te\u00a0\u00bb pour le volume entier. Tout le traitement se fait dans votre navigateur -aucune donn\u00e9e n\u2019est envoy\u00e9e.',
+    'docs.step6.body': 'Choisissez \u00ab\u00a0Aper\u00e7u rapide\u00a0\u00bb pour v\u00e9rifier les r\u00e9glages, ou \u00ab\u00a0G\u00e9n\u00e9ration compl\u00e8te\u00a0\u00bb pour le volume entier. Tout le traitement se fait dans votre navigateur.',
     'docs.step7.title': '7. Visualiser & Exporter',
     'docs.step7.body': 'Explorez le volume \u00e0 travers trois vues en coupe orthogonales avec des presets couleur. Exportez en NRRD (compatible 3D Slicer, ParaView), JSON de mapping, rapport QC et param\u00e8tres de session.',
     'docs.techConcepts': 'Concepts techniques',
@@ -204,14 +204,14 @@ export const translations = {
 
     // V2 Scan
     'v2.scan.title': 'Nouveau scan volumétrique',
-    'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX). Le prétraitement et la projection conique seront automatiques.',
+    'v2.scan.desc': 'Importez votre enregistrement d\u2019écran sonar (MP4) et votre trace GPS (GPX, optionnel). Le recadrage, la profondeur et la projection sont automatiques.',
     'v2.scan.configure': 'Analyser & Configurer',
     'v2.scan.next': 'Suivant : Recadrage',
     'v2.scan.nextSettings': 'Suivant : Configuration',
 
     // V2 Settings
     'v2.settings.title': 'Configurer',
-    'v2.settings.desc': 'Choisissez le mode de visualisation et la profondeur max. Les autres paramètres sont pré-configurés automatiquement.',
+    'v2.settings.desc': 'Choisissez la qualité de rendu. La profondeur et le recadrage sont détectés automatiquement.',
     'v2.settings.depth': 'Profondeur maximale',
     'v2.settings.autoDepth': 'Profondeur auto',
     'v2.settings.detectedDepth': 'Profondeur détectée',
@@ -222,7 +222,7 @@ export const translations = {
 
     // V2 Preview
     'v2.preview.title': 'Aperçu & Configuration',
-    'v2.preview.desc': 'La zone sonar a été détectée automatiquement. Choisissez votre mode de visualisation et la profondeur max, puis générez.',
+    'v2.preview.desc': 'La zone sonar a été détectée automatiquement. Choisissez la qualité de rendu, puis générez.',
     'v2.preview.analyzing': 'Analyse automatique de la vidéo\u2026',
     'v2.preview.autoCrop': 'Zone sonar détectée',
     'v2.preview.autoCropHint': 'La zone de l\u2019écho sonar a été détectée automatiquement. Ajustez dans les réglages avancés si besoin.',
@@ -362,7 +362,7 @@ export const translations = {
 
     // Home
     'home.subtitle': 'Perceptive archive of underwater environments',
-    'home.description': 'Transform your sonar screen captures and GPS traces into explorable 3D volumes. Everything happens in your browser, no data is ever sent.',
+    'home.description': 'Transform your sonar screen captures and GPS traces into explorable 3D volumes.',
     'home.cta': 'Start a scan',
     'home.cta2': 'Manifesto',
     'home.howItWorks': 'How it works',
@@ -372,10 +372,10 @@ export const translations = {
     'home.stat.dataSent': 'Data sent',
     'home.feat1.title': 'Import',
     'home.feat1.desc': 'Drop your sonar MP4 and GPS track. ecos reads metadata instantly.',
-    'home.feat2.title': 'Crop & Calibrate',
-    'home.feat2.desc': 'Isolate the echo region, set depth and resolution parameters.',
+    'home.feat2.title': 'Crop & Configure',
+    'home.feat2.desc': 'Isolate the echo region, choose render quality and depth.',
     'home.feat3.title': 'Generate',
-    'home.feat3.desc': 'Build a 3D volume from frames mapped to GPS coordinates.',
+    'home.feat3.desc': 'Build a 3D volume from frames and GPS trace.',
     'home.feat4.title': 'Explore & Export',
     'home.feat4.desc': 'Slice views, color presets, NRRD export for 3D Slicer / ParaView.',
     'home.gallery.title': 'Visuals',
@@ -391,12 +391,12 @@ export const translations = {
 
     // Import
     'import.title': 'Import Files',
-    'import.desc': 'Drag and drop your sonar screen recording (MP4) and GPS track (GPX). Both files must cover the same session.',
+    'import.desc': 'Drag and drop your sonar screen recording (MP4) and GPS track (GPX).',
     'import.dropVideo': 'Drop MP4 video',
     'import.dropGpx': 'Drop GPX track',
     'import.videoHint': 'Screen recording of your sonar display',
     'import.gpxHint': 'GPS trace from your smartphone',
-    'import.loadSession': 'Load previous session (.echos.json)',
+    'import.loadSession': 'Load previous session (.ecos.json)',
     'import.loadSessionHint': 'Optional -restores crop, calibration and sync settings',
     'import.next': 'Next: Crop Region',
     'import.errorMp4': 'Please select an MP4 video file.',
@@ -404,7 +404,7 @@ export const translations = {
 
     // Crop
     'crop.title': 'Crop Sonar Region',
-    'crop.desc': 'Draw a rectangle over the sonar display area. Exclude menus, sidebars, and decorations. Only the echo/depth data should be inside the crop.',
+    'crop.desc': 'The sonar region is auto-detected. Adjust the rectangle if needed by drawing a new area.',
     'crop.confirm': 'Confirm Crop',
     'crop.loading': 'Loading video frame\u2026',
     'crop.back': 'Back',
@@ -517,7 +517,7 @@ export const translations = {
     'docs.step5.title': '5. Sync',
     'docs.step5.body': 'By default, the video start aligns with the GPX start. If there\'s a time difference, use the offset slider to adjust. The distance-time chart helps you verify alignment.',
     'docs.step6.title': '6. Generate',
-    'docs.step6.body': 'Choose "Quick Preview" to verify settings, or "Full Generation" for the complete volume. All processing happens in your browser -no data is sent to any server.',
+    'docs.step6.body': 'Choose "Quick Preview" to verify settings, or "Full Generation" for the complete volume. All processing happens in your browser.',
     'docs.step7.title': '7. View & Export',
     'docs.step7.body': 'Explore the volume using three orthogonal slice views with color presets. Export as NRRD (compatible with 3D Slicer, ParaView), mapping JSON, QC report, and session settings.',
     'docs.techConcepts': 'Technical concepts',
@@ -555,14 +555,14 @@ export const translations = {
 
     // V2 Scan
     'v2.scan.title': 'New Volumetric Scan',
-    'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX). Preprocessing and conic projection will run automatically.',
+    'v2.scan.desc': 'Import your sonar screen recording (MP4) and GPS track (GPX, optional). Crop, depth and projection are automatic.',
     'v2.scan.configure': 'Analyze & Configure',
     'v2.scan.next': 'Next: Crop',
     'v2.scan.nextSettings': 'Next: Settings',
 
     // V2 Settings
     'v2.settings.title': 'Settings',
-    'v2.settings.desc': 'Choose the visualization mode and max depth. Other parameters are auto-configured.',
+    'v2.settings.desc': 'Choose render quality. Depth and crop are auto-detected.',
     'v2.settings.depth': 'Maximum Depth',
     'v2.settings.autoDepth': 'Auto depth',
     'v2.settings.detectedDepth': 'Detected depth',
@@ -573,7 +573,7 @@ export const translations = {
 
     // V2 Preview
     'v2.preview.title': 'Preview & Configuration',
-    'v2.preview.desc': 'The sonar region was auto-detected. Choose your visualization mode and max depth, then generate.',
+    'v2.preview.desc': 'The sonar region was auto-detected. Choose render quality, then generate.',
     'v2.preview.analyzing': 'Auto-analyzing video\u2026',
     'v2.preview.autoCrop': 'Detected sonar region',
     'v2.preview.autoCropHint': 'The sonar echo region was auto-detected from the video. Adjust in advanced settings if needed.',

@@ -43,7 +43,7 @@ export function HomePage() {
 
   const STATS = [
     { value: '100%', label: t('home.stat.clientSide') },
-    { value: '6', label: t('home.stat.steps') },
+    { value: '4', label: t('home.stat.steps') },
     { value: 'NRRD', label: t('home.stat.export') },
     { value: '0', label: t('home.stat.dataSent') },
   ];
@@ -83,7 +83,7 @@ export function HomePage() {
         <div style={{ marginBottom: '12px' }}>
           <img
             src={getBrandingForTheme(theme).texteTitle}
-            alt="echos - donnees capturees"
+            alt="ecos"
             style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
           />
         </div>
