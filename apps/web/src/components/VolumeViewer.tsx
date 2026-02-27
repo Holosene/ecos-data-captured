@@ -22,7 +22,7 @@ import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B, DEFAULT_CAL
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
 import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
-import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
+import { getChromaticModes, CHROMATIC_LABELS, generateLUT } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
@@ -219,9 +219,9 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
       radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
     }).addTo(map);
 
-    // End marker
+    // End marker — orange (same as "Complet" accent)
     L.circleMarker(latLngs[latLngs.length - 1], {
-      radius: 5, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 0,
+      radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
     }).addTo(map);
 
     map.fitBounds(polyline.getBounds(), { padding: [50, 50], maxZoom: 12 });
@@ -453,31 +453,33 @@ export function VolumeViewer({
     const pose = presentationPoses.current[mode];
     if (!renderer || !pose) return;
     const startState = renderer.getCameraState();
-    // Preserve current camera distance (zoom level) — only snap back rotation/direction
-    const dist = (p: [number, number, number], t: [number, number, number]) =>
+    // Preserve current camera distance (zoom level) at EVERY frame
+    const vecDist = (p: [number, number, number], t: [number, number, number]) =>
       Math.sqrt((p[0] - t[0]) ** 2 + (p[1] - t[1]) ** 2 + (p[2] - t[2]) ** 2);
-    const currentDist = dist(startState.position, startState.target);
-    const poseDist = dist(pose.position, pose.target) || 1;
-    const dir: [number, number, number] = [
-      (pose.position[0] - pose.target[0]) / poseDist,
-      (pose.position[1] - pose.target[1]) / poseDist,
-      (pose.position[2] - pose.target[2]) / poseDist,
-    ];
-    const adjustedPos: [number, number, number] = [
-      pose.target[0] + dir[0] * currentDist,
-      pose.target[1] + dir[1] * currentDist,
-      pose.target[2] + dir[2] * currentDist,
-    ];
+    const fixedDist = vecDist(startState.position, startState.target);
     const totalSteps = 40;
     let step = 0;
     const animate = () => {
       step++;
       const t = step / totalSteps;
-      const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      const ease = 1 - Math.pow(1 - t, 3);
+      // Lerp target
+      const tgt = lerp3(startState.target, pose.target, ease);
+      // Lerp position
+      const rawPos = lerp3(startState.position, pose.position, ease);
+      // Normalize distance: keep camera at fixedDist from interpolated target
+      const dx = rawPos[0] - tgt[0], dy = rawPos[1] - tgt[1], dz = rawPos[2] - tgt[2];
+      const rawDist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      const scale = fixedDist / rawDist;
+      const pos: [number, number, number] = [
+        tgt[0] + dx * scale,
+        tgt[1] + dy * scale,
+        tgt[2] + dz * scale,
+      ];
       renderer.setCameraState({
-        position: lerp3(startState.position, adjustedPos, ease),
+        position: pos,
         up: lerp3(startState.up, pose.up, ease),
-        target: lerp3(startState.target, pose.target, ease),
+        target: tgt,
       });
       if (step < totalSteps) {
         snapBackRefs.current[mode].rafId = requestAnimationFrame(animate);
@@ -874,7 +876,7 @@ export function VolumeViewer({
   const viewportBgEditing = theme === 'light' ? '#FFFFFF' : '#1A1A20';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
-  const volumeHeight = 'clamp(650px, 85vh, 1000px)';
+  const volumeHeight = 'clamp(500px, 70vh, 750px)';
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
@@ -1028,6 +1030,7 @@ export function VolumeViewer({
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '15px', fontWeight: 600,
                 flexShrink: 0,
+                paddingTop: '2px',
               }}>
                 {String(sectionIndex + 1).padStart(2, '0')}
               </div>
@@ -1126,12 +1129,13 @@ export function VolumeViewer({
     );
   };
 
-  // Generate a small YZ slice thumbnail from volume data
+  // Generate a small YZ slice thumbnail from volume data (Water Off chromatic)
   const yzThumbnailRef = useRef<string | null>(null);
   if (volumeData && dimensions[0] > 0 && !yzThumbnailRef.current) {
     try {
       const [w, h, d] = dimensions;
       const midX = Math.floor(w / 2);
+      const lut = generateLUT('water-off');
       const canvas = document.createElement('canvas');
       canvas.width = d;
       canvas.height = h;
@@ -1142,11 +1146,12 @@ export function VolumeViewer({
           for (let z = 0; z < d; z++) {
             const val = volumeData[midX + y * w + z * w * h];
             const byte = Math.min(255, Math.max(0, Math.round((val ?? 0) * 255)));
-            const idx = (y * d + z) * 4;
-            imgData.data[idx] = byte;
-            imgData.data[idx + 1] = byte;
-            imgData.data[idx + 2] = byte;
-            imgData.data[idx + 3] = 255;
+            const lutIdx = byte * 4;
+            const pxIdx = (y * d + z) * 4;
+            imgData.data[pxIdx] = lut[lutIdx];
+            imgData.data[pxIdx + 1] = lut[lutIdx + 1];
+            imgData.data[pxIdx + 2] = lut[lutIdx + 2];
+            imgData.data[pxIdx + 3] = lut[lutIdx + 3] > 0 ? 255 : 0;
           }
         }
         ctx.putImageData(imgData, 0, 0);
