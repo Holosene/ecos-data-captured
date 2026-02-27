@@ -478,6 +478,20 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   transition-duration: 80ms !important;
 }
 
+/* Bottom action buttons — accent hover */
+.echos-action-btn {
+  transition: all 150ms ease, transform 150ms ease;
+}
+.echos-action-btn:hover {
+  background: var(--c-accent-muted) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(var(--cta-glow), 0.25);
+}
+.echos-action-btn:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 80ms;
+}
+
 /* Firefox scrollbar — only on main content */
 #main-content {
   scrollbar-width: thin;

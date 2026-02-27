@@ -21,7 +21,7 @@ import { DEFAULT_RENDERER, projectFrameWindow, computeAutoThreshold } from '@ech
 import { VolumeRenderer, DEFAULT_CALIBRATION, DEFAULT_CALIBRATION_B, DEFAULT_CALIBRATION_C } from '../engine/volume-renderer.js';
 import type { CameraPreset, CalibrationConfig } from '../engine/volume-renderer.js';
 import { VolumeRendererClassic } from '../engine/volume-renderer-classic.js';
-import { CalibrationPanel, loadCalibration, saveCalibration, downloadCalibration } from './CalibrationPanel.js';
+import { CalibrationPanel } from './CalibrationPanel.js';
 import { getChromaticModes, CHROMATIC_LABELS } from '../engine/transfer-function.js';
 import { SlicePanel } from './SlicePanel.js';
 import { ExportPanel } from './ExportPanel.js';
@@ -375,49 +375,35 @@ export function VolumeViewer({
   // Edit mode: which volume is currently being edited (null = none)
   const [editingMode, setEditingMode] = useState<'instrument' | 'spatial' | 'classic' | null>(null);
 
-  // Per-mode settings — each mode has its EXACT configuration from 7024cc8
-  const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>(() => {
-    const defaults: Record<string, RendererSettings> = {
-      instrument: {
-        ...DEFAULT_RENDERER,
-        showBeam: true,
-        ghostEnhancement: 0,
-      },
-      spatial: {
-        ...DEFAULT_RENDERER,
-        chromaticMode: 'high-contrast' as ChromaticMode,
-        opacityScale: 1.0,
-        threshold: 0,
-        densityScale: 1.2,
-        smoothing: 1.0,
-        ghostEnhancement: 3.0,
-        stepCount: 192,
-        showBeam: false,
-      },
-      classic: {
-        ...DEFAULT_RENDERER,
-        chromaticMode: 'sonar-original' as ChromaticMode,
-        opacityScale: 1.0,
-        threshold: 0.02,
-        densityScale: 1.3,
-        smoothing: 1.0,
-        ghostEnhancement: 0,
-        stepCount: 512,
-        showBeam: false,
-      },
-    };
-    try {
-      const raw = localStorage.getItem('echos-mode-settings');
-      if (raw) {
-        const saved = JSON.parse(raw) as Record<string, RendererSettings>;
-        return {
-          instrument: { ...defaults.instrument, ...saved.instrument },
-          spatial: { ...defaults.spatial, ...saved.spatial },
-          classic: { ...defaults.classic, ...saved.classic },
-        };
-      }
-    } catch { /* use defaults */ }
-    return defaults;
+  // Per-mode settings — strict hardcoded defaults (Ctrl+S freezes to localStorage)
+  const [modeSettings, setModeSettings] = useState<Record<string, RendererSettings>>({
+    instrument: {
+      ...DEFAULT_RENDERER,
+      showBeam: true,
+      ghostEnhancement: 0,
+    },
+    spatial: {
+      ...DEFAULT_RENDERER,
+      chromaticMode: 'high-contrast' as ChromaticMode,
+      opacityScale: 1.0,
+      threshold: 0,
+      densityScale: 1.2,
+      smoothing: 1.0,
+      ghostEnhancement: 3.0,
+      stepCount: 192,
+      showBeam: false,
+    },
+    classic: {
+      ...DEFAULT_RENDERER,
+      chromaticMode: 'sonar-original' as ChromaticMode,
+      opacityScale: 1.0,
+      threshold: 0.02,
+      densityScale: 1.3,
+      smoothing: 1.0,
+      ghostEnhancement: 0,
+      stepCount: 512,
+      showBeam: false,
+    },
   });
   const [modeCamera, setModeCamera] = useState<Record<string, CameraPreset>>({
     instrument: 'frontal',
@@ -520,12 +506,13 @@ export function VolumeViewer({
     }, 400);
   }, [startSnapBack]);
 
-  // Calibration (hidden dev tool: press "b" x5)
-  const [calibrationOpen, setCalibrationOpen] = useState(false);
-  const [calibration, setCalibration] = useState<CalibrationConfig>(() => {
-    const saved = loadCalibration();
-    return saved ?? { ...DEFAULT_CALIBRATION };
+  // Per-mode calibration configs — strict defaults, each renderer has its OWN calibration
+  const [calibrations, setCalibrations] = useState<Record<string, CalibrationConfig>>({
+    instrument: { ...DEFAULT_CALIBRATION },
+    spatial: { ...DEFAULT_CALIBRATION_B },
+    classic: { ...DEFAULT_CALIBRATION_C },
   });
+  const [calibrationOpen, setCalibrationOpen] = useState(false);
   const [calibrationSaved, setCalibrationSaved] = useState(false);
   const [calibrationSaveLabel, setCalibrationSaveLabel] = useState('');
   const bPressCountRef = useRef(0);
@@ -590,8 +577,8 @@ export function VolumeViewer({
             localStorage.setItem('echos-cal-classic', JSON.stringify(cals.classic));
             names.push('Cône');
           }
-          // Save shared calibration panel state
-          saveCalibration(calibration);
+          // Sync React state with renderer state
+          setCalibrations(prev => ({ ...prev, ...cals }));
           // Save base renderer settings
           localStorage.setItem('echos-mode-settings', JSON.stringify(modeSettings));
           // Download combined JSON
@@ -635,7 +622,7 @@ export function VolumeViewer({
     };
     document.addEventListener('keydown', handleKey);
     return () => document.removeEventListener('keydown', handleKey);
-  }, [calibrationOpen, calibration, editingMode, modeSettings, startSnapBack, cancelSnapBack, getRenderer]);
+  }, [calibrationOpen, editingMode, modeSettings, startSnapBack, cancelSnapBack, getRenderer]);
 
   // Theme sync + editingMode → update scene bg + scroll zoom
   // IMPORTANT: only update bg color and zoom, do NOT overwrite calibration with defaults
@@ -657,13 +644,12 @@ export function VolumeViewer({
   }, [theme, editingMode]);
 
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
-    setCalibration(cal);
+    if (!editingMode) return;
+    setCalibrations(prev => ({ ...prev, [editingMode]: cal }));
     setCalibrationSaved(false);
-    // Apply calibration to all renderers
-    rendererARef.current?.setCalibration(cal);
-    rendererBRef.current?.setCalibration(cal);
-    rendererCRef.current?.setCalibration(cal);
-  }, []);
+    // Apply calibration to ACTIVE renderer only
+    getRenderer(editingMode)?.setCalibration(cal);
+  }, [editingMode, getRenderer]);
 
   // Temporal playback state
   const hasFrames = !!(frames && frames.length > 0);
@@ -682,56 +668,35 @@ export function VolumeViewer({
     return buildSliceVolumeFromFrames(frames);
   }, [frames]);
 
-  // ─── Initialize 3 renderers (each with its OWN engine + calibration from 7024cc8) ──
+  // ─── Initialize 3 renderers — strict defaults, no localStorage ──────────
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
-    // Load saved per-volume calibrations (from Ctrl+S save)
-    const loadSavedCal = (key: string, defaultCal: CalibrationConfig): CalibrationConfig => {
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) return { ...defaultCal, ...JSON.parse(raw), bgColor };
-      } catch { /* use default */ }
-      return { ...defaultCal, bgColor };
-    };
-
-    // Load saved base renderer settings
-    const loadSavedSettings = (): Record<string, RendererSettings> | null => {
-      try {
-        const raw = localStorage.getItem('echos-mode-settings');
-        if (raw) return JSON.parse(raw);
-      } catch { /* use default */ }
-      return null;
-    };
-    const savedSettings = loadSavedSettings();
-
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
     if (containerARef.current && !rendererARef.current) {
-      const calA = loadSavedCal('echos-cal-instrument', DEFAULT_CALIBRATION);
-      const settingsA = savedSettings?.instrument ?? modeSettings.instrument;
-      rendererARef.current = new VolumeRenderer(containerARef.current, settingsA, calA);
+      rendererARef.current = new VolumeRenderer(
+        containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor },
+      );
       rendererARef.current.setCameraPreset('frontal');
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
     }
 
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B, camera 'horizontal'
-    // Uses frames for buildWindowVolume temporal playback (NOT static spatial data)
     if (containerBRef.current && !rendererBRef.current && hasFrames) {
-      const calB = loadSavedCal('echos-cal-spatial', DEFAULT_CALIBRATION_B);
-      const settingsB = savedSettings?.spatial ?? modeSettings.spatial;
-      rendererBRef.current = new VolumeRenderer(containerBRef.current, settingsB, calB);
+      rendererBRef.current = new VolumeRenderer(
+        containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor },
+      );
       rendererBRef.current.setCameraPreset('horizontal');
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
     }
 
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C, camera 'frontal'
-    // Uses frames for projectFrameWindow temporal playback
     if (containerCRef.current && !rendererCRef.current && hasFrames) {
-      const calC = loadSavedCal('echos-cal-classic', DEFAULT_CALIBRATION_C);
-      const settingsC = savedSettings?.classic ?? modeSettings.classic;
-      rendererCRef.current = new VolumeRendererClassic(containerCRef.current, settingsC, calC);
+      rendererCRef.current = new VolumeRendererClassic(
+        containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor },
+      );
       rendererCRef.current.setCameraPreset('frontal');
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
@@ -961,7 +926,7 @@ export function VolumeViewer({
   const viewportBgEditing = theme === 'light' ? '#FFFFFF' : '#1A1A20';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
-  const volumeHeight = 'clamp(500px, 70vh, 750px)';
+  const volumeHeight = 'clamp(440px, 62vh, 680px)';
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
@@ -976,8 +941,8 @@ export function VolumeViewer({
     const settings = modeSettings[mode];
 
     // Slider spacing: equal gap from volume→slider and slider→play
-    const sliderGap = 6; // px from volume bottom to slider
-    const sliderPlayGap = 6; // px between slider and play (same)
+    const sliderGap = 0; // px from volume bottom to slider (tight)
+    const sliderPlayGap = 12; // px between slider and play
 
     return (
       <section key={mode} style={{ marginBottom: '80px' }}>
@@ -1068,7 +1033,12 @@ export function VolumeViewer({
                 transition: 'all 150ms ease',
               }}
             >
-              {playing && isTemporal ? '||' : '\u25B6'}
+              {playing && isTemporal ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="4" y="3" width="6" height="18" rx="1.5" />
+                  <rect x="14" y="3" width="6" height="18" rx="1.5" />
+                </svg>
+              ) : '\u25B6'}
             </button>
           </div>
 
@@ -1094,7 +1064,7 @@ export function VolumeViewer({
                   letterSpacing: '-0.02em',
                   lineHeight: 1.1,
                 }}>
-                  <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '4px' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '4px' }}>"</span>
+                  <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '4px', position: 'relative', top: '-0.35em' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '4px', position: 'relative', top: '-0.35em' }}>"</span>
                 </h2>
                 <p style={{
                   margin: '2px 0 0',
@@ -1204,7 +1174,7 @@ export function VolumeViewer({
               }}>
                 {calibrationOpen ? (
                   <CalibrationPanel
-                    config={calibration}
+                    config={calibrations[mode]}
                     onChange={handleCalibrationChange}
                     onClose={() => setCalibrationOpen(false)}
                     saved={calibrationSaved}
@@ -1343,7 +1313,7 @@ export function VolumeViewer({
               <img
                 src={yzThumbnailRef.current}
                 alt="YZ slice"
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(-90deg)' }}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'rotate(90deg)' }}
               />
             ) : (
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1444,6 +1414,7 @@ export function VolumeViewer({
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
           {/* Poster button — accent outline */}
           <button
+            className="echos-action-btn"
             onClick={() => {
               const sessionData = {
                 timestamp: new Date().toISOString(),
@@ -1474,6 +1445,7 @@ export function VolumeViewer({
           </button>
           {onReconfigure && (
             <button
+              className="echos-action-btn"
               onClick={onReconfigure}
               style={{
                 padding: '12px 32px', borderRadius: '9999px',
