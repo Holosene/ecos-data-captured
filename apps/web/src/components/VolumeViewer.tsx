@@ -46,6 +46,10 @@ interface VolumeViewerProps {
   grid?: VolumeGridSettings;
   /** GPX track for map */
   gpxTrack?: { points: Array<{ lat: number; lon: number }>; totalDistanceM: number; durationS: number };
+  /** File info for the header zone */
+  videoFileName?: string;
+  gpxFileName?: string;
+  videoDurationS?: number;
   onSettingsChange?: (settings: RendererSettings) => void;
   onReconfigure?: () => void;
   onNewScan?: () => void;
@@ -220,7 +224,7 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
       radius: 5, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1, weight: 0,
     }).addTo(map);
 
-    map.fitBounds(polyline.getBounds(), { padding: [30, 30], maxZoom: 16 });
+    map.fitBounds(polyline.getBounds(), { padding: [40, 40], maxZoom: 14 });
 
     map.on('click', () => map.scrollWheelZoom.enable());
     map.on('mouseout', () => map.scrollWheelZoom.disable());
@@ -348,6 +352,9 @@ export function VolumeViewer({
   beam,
   grid,
   gpxTrack,
+  videoFileName,
+  gpxFileName,
+  videoDurationS,
   onSettingsChange,
   onReconfigure,
   onNewScan,
@@ -574,18 +581,24 @@ export function VolumeViewer({
     return () => document.removeEventListener('keydown', handleKey);
   }, [calibrationOpen, calibration, editingMode, startSnapBack, cancelSnapBack, getRenderer]);
 
-  // Theme sync
+  // Theme sync + editingMode → update scene bg + scroll zoom
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
-    [rendererARef, rendererBRef, rendererCRef].forEach((ref) => {
-      if (ref.current) {
-        const cal = ref.current === rendererARef.current ? { ...DEFAULT_CALIBRATION, bgColor }
-          : ref.current === rendererBRef.current ? { ...DEFAULT_CALIBRATION_B, bgColor }
-          : { ...DEFAULT_CALIBRATION_C, bgColor };
-        ref.current.setCalibration(cal);
-      }
+    const stage1Bg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    const stage2Bg = theme === 'light' ? '#FFFFFF' : '#1A1A20';
+    const modes = [
+      { ref: rendererARef, mode: 'instrument' as const, cal: DEFAULT_CALIBRATION },
+      { ref: rendererBRef, mode: 'spatial' as const, cal: DEFAULT_CALIBRATION_B },
+      { ref: rendererCRef, mode: 'classic' as const, cal: DEFAULT_CALIBRATION_C },
+    ];
+    modes.forEach(({ ref, mode, cal }) => {
+      if (!ref.current) return;
+      const isExpanded = editingMode === mode;
+      const bgColor = isExpanded ? stage2Bg : stage1Bg;
+      ref.current.setCalibration({ ...cal, bgColor });
+      ref.current.setSceneBg(bgColor);
+      ref.current.setScrollZoom(isExpanded);
     });
-  }, [theme]);
+  }, [theme, editingMode]);
 
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
     setCalibration(cal);
@@ -909,14 +922,16 @@ export function VolumeViewer({
 
           </div>
 
-          {/* ── Slider + Play — below volume, centered ── */}
+          {/* ── Slider + Play — below volume, centered, not affected by settings ── */}
           <div style={{
             gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+            gridRow: '2',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '12px',
-            paddingTop: '16px',
+            gap: '8px',
+            paddingTop: '10px',
+            paddingBottom: '16px',
           }}>
             <div style={{
               width: 'max(260px, 40%)',
@@ -965,7 +980,6 @@ export function VolumeViewer({
             >
               {playing && isTemporal ? '||' : '\u25B6'}
             </button>
-            <div style={{ height: '24px' }} />
           </div>
 
           {/* ── Settings column: 1 column ──────────────── */}
@@ -978,7 +992,7 @@ export function VolumeViewer({
             gap: '12px',
             paddingTop: '8px',
           }}>
-            {/* Title row: title (left) + chevron (right, vertically centered) */}
+            {/* Title row: title (left) + number + chevron (right, vertically centered) */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 style={{
@@ -993,13 +1007,27 @@ export function VolumeViewer({
                   {title}
                 </h2>
                 <p style={{
-                  margin: '6px 0 0',
-                  fontSize: '14px',
+                  margin: '2px 0 0',
+                  fontSize: '13px',
                   color: colors.text3,
-                  lineHeight: 1.4,
+                  lineHeight: 1.3,
                 }}>
                   {subtitle}
                 </p>
+              </div>
+              {/* Section number — same style as homepage step circles */}
+              <div style={{
+                width: '44px', height: '44px', minWidth: '44px',
+                borderRadius: '50%',
+                border: `2px solid ${colors.accent}`,
+                background: 'transparent',
+                color: colors.accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '15px', fontWeight: 600,
+                margin: '0 4px',
+                flexShrink: 0,
+              }}>
+                {String(sectionIndex + 1).padStart(2, '0')}
               </div>
               {/* Chevron — right side, vertically centered, bigger icon */}
               <button
@@ -1096,50 +1124,155 @@ export function VolumeViewer({
     );
   };
 
+  // Generate a small YZ slice thumbnail from volume data
+  const yzThumbnailRef = useRef<string | null>(null);
+  if (volumeData && dimensions[0] > 0 && !yzThumbnailRef.current) {
+    try {
+      const [w, h, d] = dimensions;
+      const midX = Math.floor(w / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = d;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const imgData = ctx.createImageData(d, h);
+        for (let y = 0; y < h; y++) {
+          for (let z = 0; z < d; z++) {
+            const val = volumeData[midX + y * w + z * w * h];
+            const byte = Math.min(255, Math.max(0, Math.round((val ?? 0) * 255)));
+            const idx = (y * d + z) * 4;
+            imgData.data[idx] = byte;
+            imgData.data[idx + 1] = byte;
+            imgData.data[idx + 2] = byte;
+            imgData.data[idx + 3] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        yzThumbnailRef.current = canvas.toDataURL('image/png');
+      }
+    } catch { /* ignore */ }
+  }
+
+  const hasMap = gpxTrack && gpxTrack.points.length > 1;
+  const mapHeight = '160px';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
-      {/* ── Header: title (left 3/4) + map (right 1/4) ───────────── */}
+      {/* ── Title — always at top, full width ───────────── */}
+      <div style={{ paddingTop: 'clamp(32px, 5vh, 64px)', marginBottom: '16px' }}>
+        <h1 style={{
+          margin: 0,
+          color: colors.text1,
+          fontSize: 'clamp(24px, 3vw, 36px)',
+          fontWeight: 600,
+          marginBottom: '6px',
+        }}>
+          {t('v2.viewer.title')}
+        </h1>
+        <p style={{
+          margin: 0,
+          color: colors.text2,
+          fontSize: '15px',
+          lineHeight: 1.6,
+          maxWidth: '700px',
+        }}>
+          {t('v2.viewer.desc')}
+        </p>
+      </div>
+
+      {/* ── File info zone (3/4) + Map (1/4) ─── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
+        gridTemplateColumns: '3fr 1fr',
         gap: '16px',
-        paddingTop: 'clamp(32px, 5vh, 64px)',
-        marginBottom: gpxTrack && gpxTrack.points.length > 1 ? '64px' : '48px',
-        alignItems: 'end',
+        marginBottom: '48px',
       }}>
-        <div style={{ gridColumn: '1 / 4' }}>
-          <h1 style={{
-            margin: 0,
-            color: colors.text1,
-            fontSize: 'clamp(24px, 3vw, 36px)',
-            fontWeight: 600,
-            marginBottom: '8px',
-          }}>
-            {t('v2.viewer.title')}
-          </h1>
-          <p style={{
-            margin: 0,
-            color: colors.text2,
-            fontSize: '15px',
-            lineHeight: 1.6,
-            maxWidth: '700px',
-          }}>
-            {t('v2.viewer.desc')}
-          </p>
-        </div>
-        {gpxTrack && gpxTrack.points.length > 1 && (
+        {/* File identification */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          background: colors.surface,
+          border: `1px solid ${colors.border}`,
+          borderRadius: '16px',
+          padding: '16px 20px',
+          height: mapHeight,
+          overflow: 'hidden',
+        }}>
+          {/* Thumbnail from YZ slice */}
           <div style={{
-            gridColumn: '4',
-            aspectRatio: '1',
-            borderRadius: '16px',
+            width: '120px',
+            height: '120px',
+            borderRadius: '12px',
             overflow: 'hidden',
-            boxShadow: theme === 'light'
-              ? '0 2px 20px rgba(0,0,0,0.06)'
-              : '0 2px 20px rgba(0,0,0,0.3)',
+            flexShrink: 0,
+            background: colors.surfaceRaised,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
-            <GpsMap points={gpxTrack.points} theme={theme} />
+            {yzThumbnailRef.current ? (
+              <img
+                src={yzThumbnailRef.current}
+                alt="YZ slice"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            )}
           </div>
-        )}
+          {/* File details */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: colors.text1, marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {videoFileName || 'Session'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 24px', fontSize: '13px', color: colors.text2 }}>
+              {videoDurationS != null && videoDurationS > 0 && (
+                <span>{videoDurationS.toFixed(1)}s</span>
+              )}
+              {dimensions && (
+                <span>{dimensions[0]}×{dimensions[1]}×{dimensions[2]}</span>
+              )}
+              {gpxTrack && (
+                <span>{gpxTrack.totalDistanceM.toFixed(0)}m</span>
+              )}
+              {gpxFileName && (
+                <span style={{ color: colors.text3 }}>{gpxFileName}</span>
+              )}
+              {frames && frames.length > 0 && (
+                <span>{frames.length} frames</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Map or fallback thumbnail */}
+        <div style={{
+          height: mapHeight,
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: `1px solid ${colors.border}`,
+        }}>
+          {hasMap ? (
+            <GpsMap points={gpxTrack.points} theme={theme} />
+          ) : yzThumbnailRef.current ? (
+            <img
+              src={yzThumbnailRef.current}
+              alt="Volume preview"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{ width: '100%', height: '100%', background: colors.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+              </svg>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Volume sections — 4-column grid, alternating layout ──── */}

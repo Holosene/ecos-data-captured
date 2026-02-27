@@ -617,6 +617,14 @@ void main() {
     this.renderer.domElement.remove();
   }
 
+  setScrollZoom(enabled: boolean): void {
+    this.controls.enableZoom = enabled;
+  }
+
+  setSceneBg(color: string): void {
+    this.scene.background = new THREE.Color(color);
+  }
+
   // ─── Accessors ────────────────────────────────────────────────────────
 
   getSettings(): RendererSettings {

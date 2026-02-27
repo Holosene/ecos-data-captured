@@ -94,11 +94,14 @@
 
   --cta-glow: 66, 33, 206;
   --cta-bg: rgba(66, 33, 206, 0.75);
-  --cta-bg-soft: rgba(66, 33, 206, 0.55);
+  --cta-bg-soft: rgba(42, 15, 100, 0.85);
 }
 [data-theme="light"] body {
   background: #F5F5F7;
   color: #0A0A0A;
+}
+body {
+  transition: background 350ms ease, color 350ms ease;
 }
 
 /* Topbar with liquid glass — sits above the scrolling main content */

@@ -101,9 +101,7 @@ export function HomePage() {
         </p>
 
         <div ref={heroCtaRef} className="hero-cta-row" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="primary" size="lg" onClick={() => navigate('/scan')} style={{
-            background: theme === 'light' ? '#2A0FA0' : undefined,
-          }}>
+          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
           <Button variant="secondary" size="lg" onClick={() => {

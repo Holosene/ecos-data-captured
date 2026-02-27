@@ -1091,6 +1091,9 @@ export function ScanPage() {
               beam={beam}
               grid={grid}
               gpxTrack={state.gpxTrack ?? undefined}
+              videoFileName={state.videoFile?.name}
+              gpxFileName={state.gpxFile?.name}
+              videoDurationS={state.videoDurationS}
               onReconfigure={() => {
                 setStepBarVisible(true);
                 setStepBarAnimating(false);
