@@ -160,6 +160,11 @@ const IconClose = () => (
     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
+const IconChevronDown = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9" />
+  </svg>
+);
 
 const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] = [
   { key: 'frontal', labelKey: 'v2.camera.frontal', Icon: IconFrontal },
@@ -292,12 +297,8 @@ function EditPanel({
 }) {
   return (
     <div style={{
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      bottom: 0,
       width: '320px',
-      zIndex: 20,
+      flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
       animation: 'echos-fade-in 200ms ease',
@@ -309,7 +310,7 @@ function EditPanel({
         gap: '10px',
         flex: 1,
         overflowY: 'auto',
-        borderRadius: '0 16px 16px 0',
+        borderRadius: '16px',
         backdropFilter: 'blur(24px)',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -478,6 +479,46 @@ export function VolumeViewer({
   const [autoThreshold, setAutoThreshold] = useState(false);
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
+
+  // ─── Micro-interaction (Stage 1 only): CSS perspective tilt ─────────
+  const microRefs = useRef<Record<string, {
+    wrapperEl: HTMLDivElement | null;
+    startX: number; startY: number;
+    dragging: boolean;
+  }>>({
+    instrument: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
+    spatial: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
+    classic: { wrapperEl: null, startX: 0, startY: 0, dragging: false },
+  });
+
+  const handleMicroPointerDown = useCallback((mode: string, e: React.PointerEvent) => {
+    const micro = microRefs.current[mode];
+    micro.dragging = true;
+    micro.startX = e.clientX;
+    micro.startY = e.clientY;
+    if (micro.wrapperEl) micro.wrapperEl.style.transition = 'none';
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handleMicroPointerMove = useCallback((mode: string, e: React.PointerEvent) => {
+    const micro = microRefs.current[mode];
+    if (!micro.dragging || !micro.wrapperEl) return;
+    const dx = (e.clientX - micro.startX) * 0.04;
+    const dy = (e.clientY - micro.startY) * 0.04;
+    const max = 8;
+    const rotY = Math.max(-max, Math.min(max, dx));
+    const rotX = Math.max(-max, Math.min(max, -dy));
+    micro.wrapperEl.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+  }, []);
+
+  const handleMicroPointerUp = useCallback((mode: string) => {
+    const micro = microRefs.current[mode];
+    micro.dragging = false;
+    if (micro.wrapperEl) {
+      micro.wrapperEl.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      micro.wrapperEl.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
+    }
+  }, []);
 
   // Calibration (hidden dev tool: press "b" x5)
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -786,93 +827,136 @@ export function VolumeViewer({
   // Background that matches the page for borderless feel
   const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
 
-  // ─── Render a single volume section ─────────────────────────────────
+  // ─── Render a single volume section (Two-Stage UI) ──────────────────
+  const encapsulatedBg = theme === 'light' ? '#e8e8ec' : '#141418';
+
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
     containerRef: React.RefObject<HTMLDivElement | null>,
     title: string,
     subtitle: string,
     height: string,
+    sectionIndex: number,
   ) => {
-    const isEditing = editingMode === mode;
+    const isExpanded = editingMode === mode;
+    const isTemporal = mode === 'classic' || mode === 'spatial';
+    const settingsOnRight = sectionIndex % 2 === 0;
+
     return (
       <section
         key={mode}
         style={{
-          position: 'relative',
           marginBottom: '48px',
+          borderRadius: isExpanded ? '20px' : '0',
+          background: isExpanded ? encapsulatedBg : 'transparent',
+          border: isExpanded ? `1px solid ${colors.border}` : '1px solid transparent',
+          padding: isExpanded ? '24px' : '0',
+          transition: 'background 400ms ease, border-color 400ms ease, padding 400ms ease, border-radius 400ms ease',
         }}
       >
-        {/* Title area */}
+        {/* ── Title + Chevron Toggle ──────────────────────────────── */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'baseline',
+          alignItems: 'center',
           marginBottom: '16px',
-          padding: '0 4px',
+          padding: isExpanded ? '10px 20px' : '0 4px',
+          background: isExpanded ? colors.surface : 'transparent',
+          borderRadius: isExpanded ? '24px' : '0',
+          border: isExpanded ? `1px solid ${colors.border}` : 'none',
+          transition: 'all 300ms ease',
         }}>
           <div>
             <h2 style={{
               margin: 0,
-              fontSize: '24px',
+              fontSize: isExpanded ? '18px' : '24px',
               fontWeight: 700,
               color: colors.text1,
               letterSpacing: '-0.02em',
+              transition: 'font-size 300ms ease',
             }}>
               {title}
             </h2>
             <p style={{
-              margin: '4px 0 0',
-              fontSize: '14px',
+              margin: '2px 0 0',
+              fontSize: isExpanded ? '12px' : '14px',
               color: colors.text3,
+              transition: 'font-size 300ms ease',
             }}>
               {subtitle}
             </p>
           </div>
           <button
-            onClick={() => setEditingMode(isEditing ? null : mode)}
+            onClick={() => setEditingMode(isExpanded ? null : mode)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              border: `1px solid ${isEditing ? colors.accent : colors.border}`,
-              background: isEditing ? colors.accentMuted : 'transparent',
-              color: isEditing ? colors.accent : colors.text2,
-              fontSize: '13px',
-              fontWeight: 500,
+              width: '32px', height: '32px',
+              borderRadius: '50%',
+              border: `1px solid ${colors.border}`,
+              background: 'transparent',
+              color: colors.text2,
               cursor: 'pointer',
-              transition: 'all 200ms ease',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 300ms ease, border-color 200ms ease',
             }}
           >
-            {isEditing ? <IconClose /> : <IconEdit />}
-            {isEditing ? 'Fermer' : 'Éditer'}
+            <IconChevronDown />
           </button>
         </div>
 
-        {/* Viewport — clean, borderless, blends with page */}
-        <div style={{ position: 'relative', overflow: 'hidden' }}>
-          <div
-            ref={containerRef}
-            style={{
-              width: '100%',
-              height,
-              borderRadius: '16px',
-              overflow: 'hidden',
-              background: viewportBg,
-              cursor: 'grab',
-              transition: 'box-shadow 300ms ease',
-              boxShadow: isEditing
-                ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
-                : theme === 'light'
-                  ? '0 2px 20px rgba(0,0,0,0.06)'
-                  : '0 2px 20px rgba(0,0,0,0.3)',
-            }}
-          />
+        {/* ── Content: Volume viewport + optional EditPanel ───────── */}
+        <div style={{
+          display: 'flex',
+          flexDirection: isExpanded ? (settingsOnRight ? 'row' : 'row-reverse') : 'column',
+          gap: isExpanded ? '16px' : '0',
+          transition: 'gap 300ms ease',
+        }}>
+          {/* Volume column */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Micro-interaction wrapper (CSS perspective tilt in Stage 1) */}
+            <div
+              ref={(el) => { if (el) microRefs.current[mode].wrapperEl = el; }}
+              style={{
+                position: 'relative',
+                transform: 'perspective(800px) rotateX(0deg) rotateY(0deg)',
+                transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              }}
+            >
+              <div
+                ref={containerRef}
+                style={{
+                  width: '100%',
+                  height,
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  background: viewportBg,
+                  cursor: isExpanded ? 'grab' : 'default',
+                  pointerEvents: isExpanded ? 'auto' : 'none',
+                  transition: 'box-shadow 300ms ease',
+                  boxShadow: isExpanded
+                    ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                    : theme === 'light'
+                      ? '0 2px 20px rgba(0,0,0,0.06)'
+                      : '0 2px 20px rgba(0,0,0,0.3)',
+                  border: isExpanded ? `1px solid ${colors.border}` : 'none',
+                }}
+              />
 
-          {/* Edit panel overlay */}
-          {isEditing && (
+              {/* Micro-interaction overlay (Stage 1 only — captures pointer for tilt) */}
+              {!isExpanded && (
+                <div
+                  style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
+                  onPointerDown={(e) => handleMicroPointerDown(mode, e)}
+                  onPointerMove={(e) => handleMicroPointerMove(mode, e)}
+                  onPointerUp={() => handleMicroPointerUp(mode)}
+                  onPointerLeave={() => handleMicroPointerUp(mode)}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Settings panel (Stage 2 only — flows beside the volume) */}
+          {isExpanded && (
             <EditPanel
               settings={modeSettings[mode]}
               cameraPreset={modeCamera[mode]}
@@ -892,19 +976,58 @@ export function VolumeViewer({
               onClose={() => setEditingMode(null)}
             />
           )}
-
-          {/* Calibration panel overlay (dev tool) */}
-          {isEditing && calibrationOpen && mode === 'instrument' && (
-            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: '360px', zIndex: 25 }}>
-              <CalibrationPanel
-                config={calibration}
-                onChange={handleCalibrationChange}
-                onClose={() => setCalibrationOpen(false)}
-                saved={calibrationSaved}
-              />
-            </div>
-          )}
         </div>
+
+        {/* ── Timeline slider (temporal modes only) ───────────────── */}
+        {isTemporal && hasFrames && totalFrames > 0 && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginTop: '12px',
+            padding: '10px 16px',
+            background: isExpanded ? colors.surface : 'transparent',
+            borderRadius: isExpanded ? '24px' : '8px',
+            border: isExpanded ? `1px solid ${colors.border}` : 'none',
+            transition: 'all 300ms ease',
+          }}>
+            <button
+              onClick={() => {
+                if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
+                setPlaying((p) => !p);
+              }}
+              style={{
+                width: '28px', height: '28px', borderRadius: '50%',
+                border: `1px solid ${colors.accent}`,
+                background: playing ? colors.accentMuted : 'transparent',
+                color: colors.accent, cursor: 'pointer', fontSize: '12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}
+            >
+              {playing ? '||' : '\u25B6'}
+            </button>
+            <input
+              type="range" min={0} max={totalFrames - 1} value={currentFrame}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
+              style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
+            />
+            <div style={{ fontSize: '11px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+              {currentTimeS.toFixed(1)}s — {currentFrame + 1}/{totalFrames}
+            </div>
+          </div>
+        )}
+
+        {/* Calibration panel (dev tool — only for instrument in Stage 2) */}
+        {isExpanded && calibrationOpen && mode === 'instrument' && (
+          <div style={{ marginTop: '16px' }}>
+            <CalibrationPanel
+              config={calibration}
+              onChange={handleCalibrationChange}
+              onClose={() => setCalibrationOpen(false)}
+              saved={calibrationSaved}
+            />
+          </div>
+        )}
       </section>
     );
   };
@@ -924,46 +1047,14 @@ export function VolumeViewer({
         </h1>
       </div>
 
-      {/* Volume sections — marketing-style, stacked vertically */}
-      {showC && renderVolumeSection('classic', containerCRef, 'Cône', 'Projection conique glissante', 'clamp(400px, 50vh, 600px)')}
-      {renderVolumeSection('instrument', containerARef, 'Trace', 'Empilement statique', 'clamp(350px, 45vh, 550px)')}
-      {showB && renderVolumeSection('spatial', containerBRef, 'Cube', 'Projection cubique du parcours', 'clamp(350px, 45vh, 550px)')}
-
-      {/* Timeline bar (Mode C temporal playback) */}
-      {hasFrames && totalFrames > 0 && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '12px',
-          padding: '10px 16px', background: colors.surface, borderRadius: '12px',
-          border: `1px solid ${colors.border}`, marginBottom: '48px',
-        }}>
-          <button
-            onClick={() => {
-              if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
-              setPlaying((p) => !p);
-            }}
-            style={{
-              width: '32px', height: '32px', borderRadius: '50%',
-              border: `1px solid ${colors.accent}`,
-              background: playing ? colors.accentMuted : 'transparent',
-              color: colors.accent, cursor: 'pointer', fontSize: '13px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
-            {playing ? '||' : '\u25B6'}
-          </button>
-          <div style={{ fontSize: '12px', color: colors.text2, fontVariantNumeric: 'tabular-nums', minWidth: '55px', flexShrink: 0 }}>
-            {currentTimeS.toFixed(1)}s
-          </div>
-          <input
-            type="range" min={0} max={totalFrames - 1} value={currentFrame}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setPlaying(false); setCurrentFrame(Number(e.target.value)); }}
-            style={{ flex: 1, height: '4px', cursor: 'pointer', accentColor: colors.accent }}
-          />
-          <div style={{ fontSize: '11px', color: colors.text3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-            {currentFrame + 1}/{totalFrames}
-          </div>
-        </div>
-      )}
+      {/* Volume sections — two-stage UI, stacked vertically */}
+      {(() => {
+        const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string; height: string }> = [];
+        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante', height: 'clamp(400px, 50vh, 600px)' });
+        sections.push({ mode: 'instrument', ref: containerARef, title: 'Trace', subtitle: 'Empilement statique', height: 'clamp(350px, 45vh, 550px)' });
+        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Cube', subtitle: 'Projection cubique du parcours', height: 'clamp(350px, 45vh, 550px)' });
+        return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, s.height, i));
+      })()}
 
       {/* GPS Map section */}
       {gpxTrack && gpxTrack.points.length > 1 && (
