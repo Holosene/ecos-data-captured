@@ -134,7 +134,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
             style={{
               padding: '10px 28px',
               borderRadius: '10px',
-              border: `1.5px solid ${colors.text1}`,
+              border: `1px solid ${colors.border}`,
               background: 'transparent',
               color: colors.text1,
               fontSize: '14px',
@@ -152,7 +152,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = 'transparent';
-              (e.currentTarget as HTMLElement).style.borderColor = colors.text1;
+              (e.currentTarget as HTMLElement).style.borderColor = colors.border;
               (e.currentTarget as HTMLElement).style.color = colors.text1;
             }}
           >

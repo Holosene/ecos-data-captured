@@ -300,31 +300,6 @@ function SettingsControls({
         ))}
       </div>
 
-      {/* Chromatic mode */}
-      <div>
-        <label style={{ fontSize: '11px', color: colors.text2, marginBottom: '4px', display: 'block' }}>
-          {t('v2.controls.palette')}
-        </label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-          {chromaticModes.map((m: ChromaticMode) => (
-            <button
-              key={m}
-              onClick={() => onUpdateSetting('chromaticMode', m)}
-              style={{
-                padding: '4px 8px', borderRadius: '16px',
-                border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                color: settings.chromaticMode === m ? colors.accent : colors.text2,
-                fontSize: '10px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                transition: 'all 150ms ease',
-              }}
-            >
-              {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Sliders */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <Slider label={t('v2.controls.opacity')} value={settings.opacityScale} min={0.1} max={5.0} step={0.1} onChange={(v: number) => onUpdateSetting('opacityScale', v)} />
@@ -498,25 +473,10 @@ export function VolumeViewer({
     micro.springRafId = requestAnimationFrame(springBack);
   }, [getRenderer]);
 
-  const handleMicroWheel = useCallback((mode: string, e: React.WheelEvent) => {
-    const ref = mode === 'instrument' ? containerARef : mode === 'spatial' ? containerBRef : containerCRef;
-    const el = ref.current;
-    if (!el) return;
-    const factor = e.deltaY > 0 ? 0.97 : 1.03;
-    const current = parseFloat(el.dataset.microScale ?? '1');
-    const newScale = Math.max(0.94, Math.min(1.06, current * factor));
-    el.dataset.microScale = String(newScale);
-    el.style.transition = 'none';
-    el.style.transform = `scale(${newScale})`;
-    const prev = parseInt(el.dataset.zoomTimer ?? '0');
-    if (prev) clearTimeout(prev);
-    const id = window.setTimeout(() => {
-      el.dataset.microScale = '1';
-      el.style.transition = 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
-      el.style.transform = 'scale(1)';
-    }, 200);
-    el.dataset.zoomTimer = String(id);
-  }, []);
+  const handleMicroPointerLeave = useCallback((mode: string) => {
+    const micro = microRefs.current[mode];
+    if (micro.dragging) handleMicroPointerUp(mode);
+  }, [handleMicroPointerUp]);
 
   // Calibration (hidden dev tool: press "b" x5)
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -579,7 +539,7 @@ export function VolumeViewer({
 
   // Theme sync
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    const bgColor = theme === 'light' ? '#F5F5F7' : '#111111';
     [rendererARef, rendererBRef, rendererCRef].forEach((ref) => {
       if (ref.current) {
         const cal = ref.current === rendererARef.current ? { ...DEFAULT_CALIBRATION, bgColor }
@@ -615,7 +575,7 @@ export function VolumeViewer({
 
   // ─── Initialize 3 renderers (each with its OWN engine + calibration from 7024cc8) ──
   useEffect(() => {
-    const bgColor = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+    const bgColor = theme === 'light' ? '#F5F5F7' : '#111111';
 
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION, camera 'frontal'
     if (containerARef.current && !rendererARef.current) {
@@ -811,6 +771,16 @@ export function VolumeViewer({
     }
   }, [sliceVolumeData, updateSetting]);
 
+  const handleChromaticChange = useCallback((mode: string, chromaticMode: ChromaticMode) => {
+    setModeSettings((prev) => {
+      const next = { ...prev, [mode]: { ...prev[mode], chromaticMode } };
+      if (mode === 'instrument') rendererARef.current?.updateSettings({ chromaticMode });
+      else if (mode === 'spatial') rendererBRef.current?.updateSettings({ chromaticMode });
+      else if (mode === 'classic') rendererCRef.current?.updateSettings({ chromaticMode });
+      return next;
+    });
+  }, []);
+
   const handleCaptureScreenshot = useCallback(() => {
     return rendererARef.current?.captureScreenshot() ?? null;
   }, []);
@@ -823,10 +793,10 @@ export function VolumeViewer({
   const showC = hasFrames && !!beam && !!grid;
 
   // Background that matches the page for borderless feel
-  const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
+  const viewportBg = theme === 'light' ? '#F5F5F7' : '#111111';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
-  const volumeHeight = 'clamp(550px, 70vh, 900px)';
+  const volumeHeight = 'clamp(650px, 85vh, 1000px)';
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
@@ -838,6 +808,7 @@ export function VolumeViewer({
     const isExpanded = editingMode === mode;
     const volumeOnLeft = sectionIndex % 2 === 0;
     const isTemporal = mode === 'classic' || mode === 'spatial';
+    const settings = modeSettings[mode];
 
     return (
       <section key={mode} style={{ marginBottom: '72px' }}>
@@ -863,130 +834,178 @@ export function VolumeViewer({
                 background: viewportBg,
                 cursor: isExpanded ? 'grab' : 'default',
                 pointerEvents: isExpanded ? 'auto' : 'none',
-                transition: 'box-shadow 400ms ease, border-color 400ms ease',
+                transition: 'box-shadow 400ms ease',
                 boxShadow: isExpanded
                   ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
                   : 'none',
-                border: isExpanded ? `1px solid ${colors.accent}50` : 'none',
+                border: isExpanded ? `1px solid ${colors.accent}50` : '1px solid transparent',
               }}
             />
 
-            {/* Stage 1 overlay — captures pointer for micro-rotation + zoom bounce */}
+            {/* Stage 1 overlay — captures pointer for micro-rotation */}
             {!isExpanded && (
               <div
                 style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
                 onPointerDown={(e) => handleMicroPointerDown(mode, e)}
                 onPointerMove={(e) => handleMicroPointerMove(mode, e)}
                 onPointerUp={() => handleMicroPointerUp(mode)}
-                onPointerLeave={() => handleMicroPointerUp(mode)}
-                onWheel={(e) => handleMicroWheel(mode, e)}
+                onPointerLeave={() => handleMicroPointerLeave(mode)}
               />
             )}
+
+            {/* ── Slider + Play — positioned at bottom edge of volume ── */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-20px',
+              left: volumeOnLeft ? '0' : 'auto',
+              right: volumeOnLeft ? 'auto' : '0',
+              width: '75%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              zIndex: 5,
+            }}>
+              <div style={{
+                width: '50%',
+                padding: '8px 14px',
+                background: colors.surface,
+                borderRadius: '24px',
+                border: `1px solid ${colors.border}`,
+                backdropFilter: 'blur(12px)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={isTemporal && hasFrames ? totalFrames - 1 : 100}
+                  value={isTemporal && hasFrames ? currentFrame : 50}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    if (isTemporal && hasFrames) {
+                      setPlaying(false);
+                      setCurrentFrame(Number(e.target.value));
+                    }
+                  }}
+                  style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
+                />
+              </div>
+
+              <button
+                onClick={() => {
+                  if (isTemporal && hasFrames) {
+                    if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
+                    setPlaying((p) => !p);
+                  }
+                }}
+                style={{
+                  marginTop: '12px',
+                  width: '48px', height: '48px', borderRadius: '50%',
+                  border: `2px solid ${colors.accent}`,
+                  background: playing && isTemporal ? colors.accentMuted : 'transparent',
+                  color: colors.accent,
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  paddingLeft: playing && isTemporal ? '0' : '3px',
+                  transition: 'background 200ms ease, transform 200ms ease',
+                }}
+              >
+                {playing && isTemporal ? '||' : '\u25B6'}
+              </button>
+            </div>
           </div>
 
-          {/* ── Settings column: 1 column ───────────────────────── */}
+          {/* ── Settings column: 1 column, sticky ──────────────── */}
           <div style={{
             gridColumn: volumeOnLeft ? '4' : '1',
             gridRow: '1',
+            position: 'sticky',
+            top: '16px',
+            alignSelf: 'start',
             display: 'flex',
             flexDirection: 'column',
+            gap: '12px',
+            paddingTop: '8px',
           }}>
-            {/* ── Stage 1: Plain title + chevron (NO background) ── */}
-            {!isExpanded && (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '16px',
-                paddingTop: '8px',
+            {/* Title — ALWAYS visible, never changes with settings */}
+            <div>
+              <h2 style={{
+                margin: 0,
+                fontFamily: fonts.display,
+                fontVariationSettings: "'wght' 600",
+                fontSize: 'clamp(26px, 2.5vw, 40px)',
+                color: colors.text1,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.1,
               }}>
-                <div>
-                  <h2 style={{
-                    margin: 0,
-                    fontFamily: fonts.display,
-                    fontSize: 'clamp(26px, 2.5vw, 40px)',
-                    fontWeight: 700,
-                    color: colors.text1,
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.1,
-                  }}>
-                    {title}
-                  </h2>
-                  <p style={{
-                    margin: '6px 0 0',
-                    fontSize: '14px',
-                    color: colors.text3,
-                    lineHeight: 1.4,
-                  }}>
-                    {subtitle}
-                  </p>
-                </div>
+                {title}
+              </h2>
+              <p style={{
+                margin: '6px 0 0',
+                fontSize: '14px',
+                color: colors.text3,
+                lineHeight: 1.4,
+              }}>
+                {subtitle}
+              </p>
+            </div>
+
+            {/* Chromatic pills — ALWAYS visible, below subtitle, above chevron */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {chromaticModes.map((m: ChromaticMode) => (
                 <button
-                  onClick={() => setEditingMode(mode)}
+                  key={m}
+                  onClick={() => handleChromaticChange(mode, m)}
                   style={{
-                    width: '36px', height: '36px',
-                    borderRadius: '50%',
-                    border: `1px solid ${colors.border}`,
-                    background: 'transparent',
-                    color: colors.text2,
+                    padding: '5px 10px',
+                    borderRadius: '16px',
+                    border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
+                    background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
+                    color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                    fontSize: '11px',
+                    fontWeight: 500,
                     cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'border-color 200ms ease, color 200ms ease',
+                    fontFamily: 'inherit',
+                    transition: 'all 150ms ease',
                   }}
                 >
-                  <IconChevronDown />
+                  {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
                 </button>
-              </div>
-            )}
+              ))}
+            </div>
 
-            {/* ── Stage 2: SINGLE panel = title + chevron + all settings ── */}
+            {/* Chevron — ALWAYS same button, same position, rotates when expanded */}
+            <button
+              onClick={() => setEditingMode(isExpanded ? null : mode)}
+              style={{
+                width: '36px', height: '36px',
+                borderRadius: '50%',
+                border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
+                background: isExpanded ? colors.accentMuted : 'transparent',
+                color: isExpanded ? colors.accent : colors.text2,
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transform: isExpanded ? 'rotate(180deg)' : 'none',
+                transition: 'all 200ms ease',
+              }}
+            >
+              <IconChevronDown />
+            </button>
+
+            {/* Settings panel — opens BELOW chevron, no duplicate title/subtitle */}
             {isExpanded && (
               <GlassPanel style={{
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '10px',
-                height: volumeHeight,
+                maxHeight: `calc(${volumeHeight} - 200px)`,
                 overflowY: 'auto',
                 borderRadius: '16px',
                 backdropFilter: 'blur(24px)',
                 animation: 'echos-fade-in 200ms ease',
               }}>
-                {/* Title + chevron row */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <h2 style={{
-                      margin: 0,
-                      fontFamily: fonts.display,
-                      fontSize: '18px',
-                      fontWeight: 600,
-                      color: colors.text1,
-                      letterSpacing: '-0.02em',
-                    }}>
-                      {title}
-                    </h2>
-                    <p style={{ margin: '2px 0 0', fontSize: '11px', color: colors.text3 }}>
-                      {subtitle}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setEditingMode(null)}
-                    style={{
-                      width: '28px', height: '28px',
-                      borderRadius: '50%',
-                      border: `1px solid ${colors.accent}`,
-                      background: colors.accentMuted,
-                      color: colors.accent,
-                      cursor: 'pointer', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transform: 'rotate(180deg)',
-                      transition: 'all 200ms ease',
-                    }}
-                  >
-                    <IconChevronDown />
-                  </button>
-                </div>
-
-                {/* All settings controls */}
                 <SettingsControls
                   settings={modeSettings[mode]}
                   cameraPreset={modeCamera[mode]}
@@ -1004,7 +1023,6 @@ export function VolumeViewer({
                   onPlaySpeed={setPlaySpeed}
                 />
 
-                {/* Calibration panel (dev tool) */}
                 {calibrationOpen && mode === 'instrument' && (
                   <CalibrationPanel
                     config={calibration}
@@ -1017,75 +1035,6 @@ export function VolumeViewer({
             )}
           </div>
         </div>
-
-        {/* ── Slider + Play (centered under volume, ALL modes) ───── */}
-        <div style={{
-          width: '75%',
-          marginLeft: volumeOnLeft ? '0' : 'auto',
-          marginRight: volumeOnLeft ? 'auto' : '0',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}>
-          {/* Slider — SlicePanel-style, no capsule in Stage 1, capsule in Stage 2 */}
-          <div style={{
-            marginTop: isExpanded ? '-22px' : '-16px',
-            position: 'relative',
-            zIndex: 5,
-            width: '40%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            ...(isExpanded ? {
-              padding: '8px 14px',
-              background: colors.surface,
-              borderRadius: '24px',
-              border: `1px solid ${colors.border}`,
-              backdropFilter: 'blur(12px)',
-            } : {
-              padding: '4px 0',
-            }),
-            transition: 'all 300ms ease',
-          }}>
-            <input
-              type="range"
-              min={0}
-              max={isTemporal && hasFrames ? totalFrames - 1 : 100}
-              value={isTemporal && hasFrames ? currentFrame : 50}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (isTemporal && hasFrames) {
-                  setPlaying(false);
-                  setCurrentFrame(Number(e.target.value));
-                }
-              }}
-              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
-            />
-          </div>
-
-          {/* Play button — big, centered, inviting */}
-          <button
-            onClick={() => {
-              if (isTemporal && hasFrames) {
-                if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
-                setPlaying((p) => !p);
-              }
-            }}
-            style={{
-              marginTop: '14px',
-              width: '48px', height: '48px', borderRadius: '50%',
-              border: `2px solid ${colors.accent}`,
-              background: playing && isTemporal ? colors.accentMuted : 'transparent',
-              color: colors.accent,
-              cursor: 'pointer',
-              fontSize: '18px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              paddingLeft: playing && isTemporal ? '0' : '3px',
-              transition: 'background 200ms ease, transform 200ms ease',
-            }}
-          >
-            {playing && isTemporal ? '||' : '\u25B6'}
-          </button>
-        </div>
       </section>
     );
   };
@@ -1097,6 +1046,7 @@ export function VolumeViewer({
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '16px',
+        paddingTop: 'clamp(32px, 5vh, 64px)',
         marginBottom: gpxTrack && gpxTrack.points.length > 1 ? '48px' : '24px',
         alignItems: 'end',
       }}>
@@ -1104,10 +1054,10 @@ export function VolumeViewer({
           gridColumn: '1 / 4',
           margin: 0,
           fontFamily: fonts.display,
-          fontSize: 'clamp(32px, 4vw, 56px)',
-          fontWeight: 700,
+          fontVariationSettings: "'wght' 600",
+          fontSize: 'clamp(28px, 3vw, 36px)',
           color: colors.text1,
-          letterSpacing: '-0.03em',
+          letterSpacing: '-0.02em',
           lineHeight: 1.1,
           textAlign: 'left',
         }}>
@@ -1152,38 +1102,35 @@ export function VolumeViewer({
         onCaptureScreenshot={handleCaptureScreenshot}
       />
 
-      {/* Poster button */}
-      <div style={{ marginTop: '32px', display: 'flex', justifyContent: 'center' }}>
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={() => {
-            const sessionData = {
-              timestamp: new Date().toISOString(),
-              gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
-              dimensions,
-              extent,
-              beam,
-              grid,
-              settings: modeSettings,
-            };
-            const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ecos-session-${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-        >
-          Poster
-        </Button>
-      </div>
-
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0, paddingBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
+          {/* Poster button — outline style, before Nouveau scan */}
+          <Button
+            variant="ghost"
+            size="lg"
+            onClick={() => {
+              const sessionData = {
+                timestamp: new Date().toISOString(),
+                gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
+                dimensions,
+                extent,
+                beam,
+                grid,
+                settings: modeSettings,
+              };
+              const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `ecos-session-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Poster
+          </Button>
           {onReconfigure && (
             <Button variant="ghost" size="lg" onClick={onReconfigure}>
               {t('v2.viewer.reconfigure')}
