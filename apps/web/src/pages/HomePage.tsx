@@ -128,13 +128,15 @@ export function HomePage() {
             <div
               key={src}
               className="visual-placeholder"
-              style={{ minHeight: '240px', cursor: 'pointer', position: 'relative', overflow: 'hidden' }}
+              style={{ minHeight: '240px', cursor: 'pointer', position: 'relative', overflow: 'hidden', border: `2px solid transparent`, borderRadius: '12px', transition: 'border-color 300ms ease' }}
               onClick={() => openLightbox(heroImages, i)}
               onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = colors.accent;
                 const img = e.currentTarget.querySelector('img');
                 if (img) { img.style.transform = 'scale(1.05)'; img.style.filter = 'brightness(1.1)'; }
               }}
               onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'transparent';
                 const img = e.currentTarget.querySelector('img');
                 if (img) { img.style.transform = 'scale(1)'; img.style.filter = 'brightness(1)'; }
               }}
@@ -263,6 +265,8 @@ export function HomePage() {
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
+                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
                 onMouseEnter={() => setHoveredImage(item.file)}
@@ -271,6 +275,7 @@ export function HomePage() {
                 <img
                   src={`${import.meta.env.BASE_URL}${item.file}`}
                   alt=""
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
@@ -294,6 +299,8 @@ export function HomePage() {
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
+                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
                 onMouseEnter={() => setHoveredImage(item.file)}
@@ -302,6 +309,7 @@ export function HomePage() {
                 <img
                   src={`${import.meta.env.BASE_URL}${item.file}`}
                   alt=""
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
@@ -340,7 +348,7 @@ export function HomePage() {
           </span>
         </div>
 
-        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden' }}>
+        <div style={{ height: 'clamp(400px, 50vh, 600px)', borderRadius: '12px', overflow: 'hidden', border: `1px solid ${colors.border}` }}>
           <MapView
             sessions={state.sessions}
             selectedSessionId={state.activeSessionId}

@@ -573,7 +573,10 @@ export function VolumeViewer({
         bPressTimerRef.current = setTimeout(() => { bPressCountRef.current = 0; }, 2000);
         if (bPressCountRef.current >= 5) {
           bPressCountRef.current = 0;
-          setCalibrationOpen((prev) => !prev);
+          // Only toggle calibration when at least one settings panel is open
+          if (editingMode) {
+            setCalibrationOpen((prev) => !prev);
+          }
         }
       }
 
@@ -923,8 +926,8 @@ export function VolumeViewer({
               overflow: 'hidden',
               background: isExpanded ? viewportBgEditing : viewportBg,
               cursor: 'grab',
-              transition: 'box-shadow 400ms ease, background 400ms ease',
-              border: `1.5px solid ${colors.accent}`,
+              transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
+              border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
               boxShadow: isExpanded
                 ? `0 8px 32px rgba(0,0,0,0.2)`
                 : theme === 'light'
@@ -1003,7 +1006,7 @@ export function VolumeViewer({
             gap: '10px',
             /* NO paddingTop — title top aligns exactly with volume top */
           }}>
-            {/* Title row: title (left) + number + chevron (right) */}
+            {/* Title row: title (left) + number + chevron/close (right) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 style={{
@@ -1011,11 +1014,11 @@ export function VolumeViewer({
                   fontFamily: fonts.display,
                   fontVariationSettings: "'wght' 600",
                   fontSize: 'clamp(26px, 2.5vw, 40px)',
-                  color: colors.text1,
+                  color: colors.accent,
                   letterSpacing: '-0.02em',
                   lineHeight: 1.1,
                 }}>
-                  {title}
+                  « {title} »
                 </h2>
                 <p style={{
                   margin: '2px 0 0',
@@ -1040,26 +1043,47 @@ export function VolumeViewer({
               }}>
                 {String(sectionIndex + 1).padStart(2, '0')}
               </div>
-              {/* Chevron */}
-              <button
-                onClick={() => setEditingMode(isExpanded ? null : mode)}
-                style={{
-                  width: '48px', height: '48px', minWidth: '48px',
-                  borderRadius: '50%',
-                  border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
-                  background: isExpanded ? colors.accentMuted : colors.surface,
-                  color: isExpanded ? colors.accent : colors.text2,
-                  cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transform: isExpanded ? 'rotate(180deg)' : 'none',
-                  transition: 'all 200ms ease',
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
+              {/* Chevron (settings toggle) or X (calibration close) */}
+              {isExpanded && calibrationOpen ? (
+                <button
+                  onClick={() => setCalibrationOpen(false)}
+                  style={{
+                    width: '48px', height: '48px', minWidth: '48px',
+                    borderRadius: '50%',
+                    border: `1.5px solid ${colors.accent}`,
+                    background: colors.accentMuted,
+                    color: colors.accent,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 200ms ease',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setEditingMode(isExpanded ? null : mode)}
+                  style={{
+                    width: '48px', height: '48px', minWidth: '48px',
+                    borderRadius: '50%',
+                    border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+                    background: isExpanded ? colors.accentMuted : colors.surface,
+                    color: isExpanded ? colors.accent : colors.text2,
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transform: isExpanded ? 'rotate(180deg)' : 'none',
+                    transition: 'all 200ms ease',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}>
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* Chromatic pills */}
@@ -1088,7 +1112,7 @@ export function VolumeViewer({
               ))}
             </div>
 
-            {/* Settings panel — flex:1 fills remaining height to align bottom with volume */}
+            {/* Settings or Calibration panel — flex:1 fills remaining height to align bottom with volume */}
             {isExpanded && (
               <GlassPanel className="echos-controls-panel" style={{
                 padding: '14px',
@@ -1102,29 +1126,29 @@ export function VolumeViewer({
                 backdropFilter: 'blur(24px)',
                 animation: 'echos-fade-in 200ms ease',
               }}>
-                <SettingsControls
-                  settings={modeSettings[mode]}
-                  cameraPreset={modeCamera[mode]}
-                  autoThreshold={autoThreshold}
-                  showGhostSlider={mode === 'spatial'}
-                  showBeamToggle={mode === 'instrument'}
-                  showSpeedSlider={mode === 'classic' && hasFrames}
-                  playSpeed={playSpeed}
-                  chromaticModes={chromaticModes}
-                  lang={lang}
-                  t={t}
-                  onUpdateSetting={updateSetting}
-                  onCameraPreset={handleCameraPreset}
-                  onAutoThreshold={handleAutoThreshold}
-                  onPlaySpeed={setPlaySpeed}
-                />
-
-                {calibrationOpen && mode === 'instrument' && (
+                {calibrationOpen ? (
                   <CalibrationPanel
                     config={calibration}
                     onChange={handleCalibrationChange}
                     onClose={() => setCalibrationOpen(false)}
                     saved={calibrationSaved}
+                  />
+                ) : (
+                  <SettingsControls
+                    settings={modeSettings[mode]}
+                    cameraPreset={modeCamera[mode]}
+                    autoThreshold={autoThreshold}
+                    showGhostSlider={mode === 'spatial'}
+                    showBeamToggle={mode === 'instrument'}
+                    showSpeedSlider={mode === 'classic' && hasFrames}
+                    playSpeed={playSpeed}
+                    chromaticModes={chromaticModes}
+                    lang={lang}
+                    t={t}
+                    onUpdateSetting={updateSetting}
+                    onCameraPreset={handleCameraPreset}
+                    onAutoThreshold={handleAutoThreshold}
+                    onPlaySpeed={setPlaySpeed}
                   />
                 )}
               </GlassPanel>
