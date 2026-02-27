@@ -39,15 +39,6 @@ const PALETTES: Record<ChromaticMode, ColorStop[]> = {
     { pos: 0.7, r: 140, g: 100, b: 255, a: 200 },
     { pos: 1.0, r: 225, g: 224, b: 235, a: 255 },
   ],
-  'structures': [
-    { pos: 0.0, r: 0, g: 0, b: 0, a: 0 },
-    { pos: 0.1, r: 0, g: 0, b: 0, a: 0 },
-    { pos: 0.2, r: 20, g: 10, b: 40, a: 30 },
-    { pos: 0.4, r: 66, g: 33, b: 206, a: 80 },
-    { pos: 0.6, r: 45, g: 212, b: 160, a: 180 },
-    { pos: 0.8, r: 225, g: 200, b: 100, a: 230 },
-    { pos: 1.0, r: 255, g: 255, b: 255, a: 255 },
-  ],
   'high-contrast': [
     { pos: 0.0, r: 0, g: 0, b: 0, a: 0 },
     { pos: 0.05, r: 0, g: 0, b: 0, a: 0 },
@@ -120,7 +111,6 @@ export function getChromaticModes(): ChromaticMode[] {
 export const CHROMATIC_LABELS: Record<ChromaticMode, { en: string; fr: string }> = {
   'sonar-original': { en: 'Sonar Original', fr: 'Sonar Original' },
   'water-off': { en: 'Water Off', fr: 'Water Off' },
-  'structures': { en: 'Structures', fr: 'Structures' },
   'high-contrast': { en: 'High Contrast', fr: 'Haut contraste' },
   'grayscale': { en: 'Grayscale', fr: 'Niveaux de gris' },
 };

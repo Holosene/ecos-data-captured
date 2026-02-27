@@ -139,7 +139,6 @@ export interface TransferFunctionPoint {
 export type ChromaticMode =
   | 'sonar-original'
   | 'water-off'
-  | 'structures'
   | 'high-contrast'
   | 'grayscale';
 

@@ -306,7 +306,6 @@ export const translations = {
     'v2.slices.axisWidth': 'Largeur (X)',
     'v2.slices.presetSonarOriginal': 'Sonar Original',
     'v2.slices.presetWaterOff': 'Water Off',
-    'v2.slices.presetStructures': 'Structures',
     'v2.slices.presetHighContrast': 'Haut contraste',
     'v2.slices.presetGrayscale': 'Niveaux de gris',
 
@@ -657,7 +656,6 @@ export const translations = {
     'v2.slices.axisWidth': 'Width (X)',
     'v2.slices.presetSonarOriginal': 'Sonar Original',
     'v2.slices.presetWaterOff': 'Water Off',
-    'v2.slices.presetStructures': 'Structures',
     'v2.slices.presetHighContrast': 'High Contrast',
     'v2.slices.presetGrayscale': 'Grayscale',
 

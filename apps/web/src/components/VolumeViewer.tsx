@@ -227,9 +227,10 @@ function GpsMap({ points, theme }: { points: Array<{ lat: number; lon: number }>
 
     mapInstanceRef.current = map;
     // Leaflet needs a layout pass to compute correct size in CSS grid
-    setTimeout(() => map.invalidateSize(), 200);
+    const sizeTimer = setTimeout(() => map.invalidateSize(), 200);
 
     return () => {
+      clearTimeout(sizeTimer);
       map.remove();
       mapInstanceRef.current = null;
     };
@@ -403,7 +404,14 @@ export function VolumeViewer({
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
 
-  // ─── Micro-interaction (Stage 1): rotate volume via rotateBy + zoom bounce ──
+  // ─── Strict Presentation Position System ────────────────────────────────
+  // Each volume has a saved "presentation pose". In Stage 1, OrbitControls
+  // are fully enabled but after the user releases, the camera smoothly
+  // snaps back to the presentation pose. In Stage 2 (settings), Ctrl+S
+  // saves the current camera position as the new presentation pose.
+
+  type CameraState = { position: [number, number, number]; up: [number, number, number]; target: [number, number, number] };
+
   const getRenderer = useCallback((mode: string) => {
     if (mode === 'instrument') return rendererARef.current;
     if (mode === 'spatial') return rendererBRef.current;
@@ -411,72 +419,65 @@ export function VolumeViewer({
     return null;
   }, []);
 
-  const microRefs = useRef<Record<string, {
-    startX: number; startY: number;
-    totalAz: number; totalPol: number;
-    dragging: boolean;
-    springRafId: number | null;
-  }>>({
-    instrument: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
-    spatial: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
-    classic: { startX: 0, startY: 0, totalAz: 0, totalPol: 0, dragging: false, springRafId: null },
+  const presentationPoses = useRef<Record<string, CameraState | null>>({
+    instrument: null, spatial: null, classic: null,
   });
 
-  const handleMicroPointerDown = useCallback((mode: string, e: React.PointerEvent) => {
-    const micro = microRefs.current[mode];
-    if (micro.springRafId !== null) { cancelAnimationFrame(micro.springRafId); micro.springRafId = null; }
-    micro.dragging = true;
-    micro.startX = e.clientX;
-    micro.startY = e.clientY;
-    micro.totalAz = 0;
-    micro.totalPol = 0;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  const snapBackRefs = useRef<Record<string, { rafId: number | null; timeoutId: number | null }>>({
+    instrument: { rafId: null, timeoutId: null },
+    spatial: { rafId: null, timeoutId: null },
+    classic: { rafId: null, timeoutId: null },
+  });
+
+  const cancelSnapBack = useCallback((mode: string) => {
+    const snap = snapBackRefs.current[mode];
+    if (snap.rafId) { cancelAnimationFrame(snap.rafId); snap.rafId = null; }
+    if (snap.timeoutId) { clearTimeout(snap.timeoutId); snap.timeoutId = null; }
   }, []);
 
-  const handleMicroPointerMove = useCallback((mode: string, e: React.PointerEvent) => {
-    const micro = microRefs.current[mode];
-    if (!micro.dragging) return;
-    const renderer = getRenderer(mode);
-    if (!renderer) return;
-    const sensitivity = 0.003;
-    const maxAngle = 0.3; // ~17° max total
-    const newAz = Math.max(-maxAngle, Math.min(maxAngle, (e.clientX - micro.startX) * sensitivity));
-    const newPol = Math.max(-maxAngle, Math.min(maxAngle, -(e.clientY - micro.startY) * sensitivity));
-    renderer.rotateBy(newAz - micro.totalAz, newPol - micro.totalPol);
-    micro.totalAz = newAz;
-    micro.totalPol = newPol;
-  }, [getRenderer]);
+  const lerp3 = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ];
 
-  const handleMicroPointerUp = useCallback((mode: string) => {
-    const micro = microRefs.current[mode];
-    micro.dragging = false;
-    // Spring-back: animate camera back to original position
-    const startAz = micro.totalAz;
-    const startPol = micro.totalPol;
-    const totalSteps = 20;
+  const startSnapBack = useCallback((mode: string) => {
+    const renderer = getRenderer(mode);
+    const pose = presentationPoses.current[mode];
+    if (!renderer || !pose) return;
+    const startState = renderer.getCameraState();
+    const totalSteps = 40;
     let step = 0;
-    let prevAz = startAz;
-    let prevPol = startPol;
-    const springBack = () => {
+    const animate = () => {
       step++;
       const t = step / totalSteps;
       const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-      const targetAz = startAz * (1 - ease);
-      const targetPol = startPol * (1 - ease);
-      const renderer = getRenderer(mode);
-      if (renderer) renderer.rotateBy(targetAz - prevAz, targetPol - prevPol);
-      prevAz = targetAz;
-      prevPol = targetPol;
-      if (step < totalSteps) { micro.springRafId = requestAnimationFrame(springBack); }
-      else { micro.totalAz = 0; micro.totalPol = 0; micro.springRafId = null; }
+      renderer.setCameraState({
+        position: lerp3(startState.position, pose.position, ease),
+        up: lerp3(startState.up, pose.up, ease),
+        target: lerp3(startState.target, pose.target, ease),
+      });
+      if (step < totalSteps) {
+        snapBackRefs.current[mode].rafId = requestAnimationFrame(animate);
+      } else {
+        snapBackRefs.current[mode].rafId = null;
+      }
     };
-    micro.springRafId = requestAnimationFrame(springBack);
+    snapBackRefs.current[mode].rafId = requestAnimationFrame(animate);
   }, [getRenderer]);
 
-  const handleMicroPointerLeave = useCallback((mode: string) => {
-    const micro = microRefs.current[mode];
-    if (micro.dragging) handleMicroPointerUp(mode);
-  }, [handleMicroPointerUp]);
+  const handleStage1PointerDown = useCallback((mode: string) => {
+    cancelSnapBack(mode);
+  }, [cancelSnapBack]);
+
+  const handleStage1PointerUp = useCallback((mode: string) => {
+    // Wait 400ms for OrbitControls damping to settle, then snap back
+    const snap = snapBackRefs.current[mode];
+    snap.timeoutId = window.setTimeout(() => {
+      snap.timeoutId = null;
+      startSnapBack(mode);
+    }, 400);
+  }, [startSnapBack]);
 
   // Calibration (hidden dev tool: press "b" x5)
   const [calibrationOpen, setCalibrationOpen] = useState(false);
@@ -508,13 +509,25 @@ export function VolumeViewer({
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key === 's' && calibrationOpen) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        const cal = rendererARef.current?.getCalibration() ?? calibration;
-        saveCalibration(cal);
-        downloadCalibration(cal);
-        setCalibrationSaved(true);
-        setTimeout(() => setCalibrationSaved(false), 2000);
+        // Save presentation pose in settings mode
+        if (editingMode) {
+          const renderer = getRenderer(editingMode);
+          if (renderer) {
+            const state = renderer.getCameraState();
+            presentationPoses.current[editingMode] = state;
+            console.log(`[ECOS] Presentation pose saved for "${editingMode}":`, JSON.stringify(state));
+          }
+        }
+        // Calibration save
+        if (calibrationOpen) {
+          const cal = rendererARef.current?.getCalibration() ?? calibration;
+          saveCalibration(cal);
+          downloadCalibration(cal);
+          setCalibrationSaved(true);
+          setTimeout(() => setCalibrationSaved(false), 2000);
+        }
         return;
       }
 
@@ -601,12 +614,31 @@ export function VolumeViewer({
     }
 
     return () => {
+      // Clean up snap-back animations and timeouts
+      (['instrument', 'spatial', 'classic'] as const).forEach((m) => {
+        const snap = snapBackRefs.current[m];
+        if (snap.rafId) cancelAnimationFrame(snap.rafId);
+        if (snap.timeoutId) clearTimeout(snap.timeoutId);
+      });
       rendererARef.current?.dispose(); rendererARef.current = null;
       rendererBRef.current?.dispose(); rendererBRef.current = null;
       rendererCRef.current?.dispose(); rendererCRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasFrames]);
+
+  // Initialize presentation poses after renderers are created
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      (['instrument', 'spatial', 'classic'] as const).forEach((mode) => {
+        const renderer = getRenderer(mode);
+        if (renderer && !presentationPoses.current[mode]) {
+          presentationPoses.current[mode] = renderer.getCameraState();
+        }
+      });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [hasFrames, getRenderer]);
 
   // Toggle grid/axes visibility based on edit mode
   useEffect(() => {
@@ -652,9 +684,11 @@ export function VolumeViewer({
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
 
-      const minKeep = Math.max(0, currentFrame - 4);
-      for (const key of cache.keys()) {
-        if (key < minKeep) cache.delete(key);
+      if (!cancelled) {
+        const minKeep = Math.max(0, currentFrame - 4);
+        for (const key of cache.keys()) {
+          if (key < minKeep) cache.delete(key);
+        }
       }
     })();
 
@@ -699,8 +733,10 @@ export function VolumeViewer({
         if (!cancelled) cache.set(idx, result);
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
-      const minKeep = Math.max(0, currentFrame - 4);
-      for (const key of cache.keys()) { if (key < minKeep) cache.delete(key); }
+      if (!cancelled) {
+        const minKeep = Math.max(0, currentFrame - 4);
+        for (const key of cache.keys()) { if (key < minKeep) cache.delete(key); }
+      }
     })();
     return () => { cancelled = true; };
   }, [currentFrame, frames, beam, grid, hasFrames]);
@@ -794,6 +830,8 @@ export function VolumeViewer({
 
   // Background that matches the page for borderless feel
   const viewportBg = theme === 'light' ? '#F5F5F7' : '#111111';
+  // Darker/lighter bg for settings mode (detaches volume from page)
+  const viewportBgEditing = theme === 'light' ? '#E8E8EE' : '#0a0a10';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
   const volumeHeight = 'clamp(650px, 85vh, 1000px)';
@@ -811,7 +849,7 @@ export function VolumeViewer({
     const settings = modeSettings[mode];
 
     return (
-      <section key={mode} style={{ marginBottom: '72px' }}>
+      <section key={mode} style={{ marginBottom: '140px' }}>
         {/* ── 4-column grid: 3/4 volume + 1/4 title/settings ───── */}
         <div style={{
           display: 'grid',
@@ -826,47 +864,35 @@ export function VolumeViewer({
           }}>
             <div
               ref={containerRef}
+              onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+              onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
               style={{
                 width: '100%',
                 height: volumeHeight,
                 borderRadius: '16px',
                 overflow: 'hidden',
-                background: viewportBg,
-                cursor: isExpanded ? 'grab' : 'default',
-                pointerEvents: isExpanded ? 'auto' : 'none',
-                transition: 'box-shadow 400ms ease',
+                background: isExpanded ? viewportBgEditing : viewportBg,
+                cursor: 'grab',
+                transition: 'box-shadow 400ms ease, background 400ms ease',
                 boxShadow: isExpanded
-                  ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
-                  : 'none',
-                border: isExpanded ? `1px solid ${colors.accent}50` : '1px solid transparent',
+                  ? `inset 0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                  : `inset 0 0 0 1px ${colors.accent}25`,
               }}
             />
 
-            {/* Stage 1 overlay — captures pointer for micro-rotation */}
-            {!isExpanded && (
-              <div
-                style={{ position: 'absolute', inset: 0, cursor: 'grab', borderRadius: '16px' }}
-                onPointerDown={(e) => handleMicroPointerDown(mode, e)}
-                onPointerMove={(e) => handleMicroPointerMove(mode, e)}
-                onPointerUp={() => handleMicroPointerUp(mode)}
-                onPointerLeave={() => handleMicroPointerLeave(mode)}
-              />
-            )}
-
-            {/* ── Slider + Play — positioned at bottom edge of volume ── */}
+            {/* ── Slider + Play — centered on volume bottom edge ── */}
             <div style={{
               position: 'absolute',
               bottom: '-20px',
-              left: volumeOnLeft ? '0' : 'auto',
-              right: volumeOnLeft ? 'auto' : '0',
-              width: '75%',
+              left: '50%',
+              transform: 'translateX(-50%)',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               zIndex: 5,
             }}>
               <div style={{
-                width: '50%',
+                width: 'max(200px, 30%)',
                 padding: '8px 14px',
                 background: colors.surface,
                 borderRadius: '24px',
@@ -928,30 +954,50 @@ export function VolumeViewer({
             gap: '12px',
             paddingTop: '8px',
           }}>
-            {/* Title — ALWAYS visible, never changes with settings */}
-            <div>
-              <h2 style={{
-                margin: 0,
-                fontFamily: fonts.display,
-                fontVariationSettings: "'wght' 600",
-                fontSize: 'clamp(26px, 2.5vw, 40px)',
-                color: colors.text1,
-                letterSpacing: '-0.02em',
-                lineHeight: 1.1,
-              }}>
-                {title}
-              </h2>
-              <p style={{
-                margin: '6px 0 0',
-                fontSize: '14px',
-                color: colors.text3,
-                lineHeight: 1.4,
-              }}>
-                {subtitle}
-              </p>
+            {/* Title row: chevron (left) + title (right) */}
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+              {/* Chevron — ALWAYS same button, same position, rotates when expanded */}
+              <button
+                onClick={() => setEditingMode(isExpanded ? null : mode)}
+                style={{
+                  width: '42px', height: '42px', minWidth: '42px',
+                  borderRadius: '50%',
+                  border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
+                  background: isExpanded ? colors.accentMuted : 'transparent',
+                  color: isExpanded ? colors.accent : colors.text2,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'all 200ms ease',
+                  marginTop: '2px',
+                }}
+              >
+                <IconChevronDown />
+              </button>
+              <div style={{ minWidth: 0 }}>
+                <h2 style={{
+                  margin: 0,
+                  fontFamily: fonts.display,
+                  fontVariationSettings: "'wght' 600",
+                  fontSize: 'clamp(26px, 2.5vw, 40px)',
+                  color: colors.text1,
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1.1,
+                }}>
+                  {title}
+                </h2>
+                <p style={{
+                  margin: '6px 0 0',
+                  fontSize: '14px',
+                  color: colors.text3,
+                  lineHeight: 1.4,
+                }}>
+                  {subtitle}
+                </p>
+              </div>
             </div>
 
-            {/* Chromatic pills — ALWAYS visible, below subtitle, above chevron */}
+            {/* Chromatic pills — ALWAYS visible, below title */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {chromaticModes.map((m: ChromaticMode) => (
                 <button
@@ -975,25 +1021,7 @@ export function VolumeViewer({
               ))}
             </div>
 
-            {/* Chevron — ALWAYS same button, same position, rotates when expanded */}
-            <button
-              onClick={() => setEditingMode(isExpanded ? null : mode)}
-              style={{
-                width: '36px', height: '36px',
-                borderRadius: '50%',
-                border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
-                background: isExpanded ? colors.accentMuted : 'transparent',
-                color: isExpanded ? colors.accent : colors.text2,
-                cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transform: isExpanded ? 'rotate(180deg)' : 'none',
-                transition: 'all 200ms ease',
-              }}
-            >
-              <IconChevronDown />
-            </button>
-
-            {/* Settings panel — opens BELOW chevron, no duplicate title/subtitle */}
+            {/* Settings panel — opens BELOW pills, no duplicate title/subtitle */}
             {isExpanded && (
               <GlassPanel style={{
                 padding: '14px',
@@ -1106,10 +1134,8 @@ export function VolumeViewer({
       <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
-          {/* Poster button — outline style, before Nouveau scan */}
-          <Button
-            variant="ghost"
-            size="lg"
+          {/* Poster button — accent outline */}
+          <button
             onClick={() => {
               const sessionData = {
                 timestamp: new Date().toISOString(),
@@ -1128,13 +1154,29 @@ export function VolumeViewer({
               a.click();
               URL.revokeObjectURL(url);
             }}
+            style={{
+              padding: '12px 32px', borderRadius: '12px',
+              border: `1.5px solid ${colors.accent}`,
+              background: 'transparent', color: colors.accent,
+              fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
+              cursor: 'pointer', transition: 'all 150ms ease',
+            }}
           >
             Poster
-          </Button>
+          </button>
           {onReconfigure && (
-            <Button variant="ghost" size="lg" onClick={onReconfigure}>
+            <button
+              onClick={onReconfigure}
+              style={{
+                padding: '12px 32px', borderRadius: '12px',
+                border: `1.5px solid ${colors.accent}`,
+                background: 'transparent', color: colors.accent,
+                fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
+                cursor: 'pointer', transition: 'all 150ms ease',
+              }}
+            >
               {t('v2.viewer.reconfigure')}
-            </Button>
+            </button>
           )}
           {onNewScan && (
             <Button variant="primary" size="lg" onClick={onNewScan}>

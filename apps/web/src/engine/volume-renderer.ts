@@ -349,6 +349,23 @@ export class VolumeRenderer {
     return this.currentPreset;
   }
 
+  /** Get full camera state for save/restore */
+  getCameraState(): { position: [number, number, number]; up: [number, number, number]; target: [number, number, number] } {
+    return {
+      position: [this.camera.position.x, this.camera.position.y, this.camera.position.z],
+      up: [this.camera.up.x, this.camera.up.y, this.camera.up.z],
+      target: [this.controls.target.x, this.controls.target.y, this.controls.target.z],
+    };
+  }
+
+  /** Restore full camera state */
+  setCameraState(state: { position: [number, number, number]; up: [number, number, number]; target: [number, number, number] }): void {
+    this.camera.position.set(state.position[0], state.position[1], state.position[2]);
+    this.camera.up.set(state.up[0], state.up[1], state.up[2]);
+    this.controls.target.set(state.target[0], state.target[1], state.target[2]);
+    this.controls.update();
+  }
+
   // ─── Volume data upload ─────────────────────────────────────────────────
 
   uploadVolume(

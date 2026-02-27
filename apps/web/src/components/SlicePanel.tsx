@@ -38,18 +38,6 @@ const PRESETS = {
       [1.0, 225, 224, 235, 255],
     ] as number[][],
   },
-  Structures: {
-    labelKey: 'v2.slices.presetStructures',
-    colorMap: [
-      [0.0, 0, 0, 0, 0],
-      [0.1, 0, 0, 0, 0],
-      [0.2, 20, 10, 40, 30],
-      [0.4, 66, 33, 206, 80],
-      [0.6, 45, 212, 160, 180],
-      [0.8, 225, 200, 100, 230],
-      [1.0, 255, 255, 255, 255],
-    ] as number[][],
-  },
   'High Contrast': {
     labelKey: 'v2.slices.presetHighContrast',
     colorMap: [

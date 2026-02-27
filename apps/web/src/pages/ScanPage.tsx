@@ -653,7 +653,7 @@ export function ScanPage() {
                 <FileDropZone
                   accept="video/mp4,video/*"
                   onFile={(file: File) => handleVideoFile([file])}
-                  label={state.videoFile ? state.videoFile.name : t('import.videoHint')}
+                  label={state.videoFile ? state.videoFile.name : t('import.dropVideo')}
                   hint={t('import.videoHint')}
                 />
               </GlassPanel>
@@ -668,7 +668,7 @@ export function ScanPage() {
                 <FileDropZone
                   accept=".gpx"
                   onFile={(file: File) => handleGpxFile([file])}
-                  label={state.gpxFile ? state.gpxFile.name : t('import.gpxHint')}
+                  label={state.gpxFile ? state.gpxFile.name : t('import.dropGpx')}
                   hint={t('import.gpxHint')}
                 />
               </GlassPanel>
