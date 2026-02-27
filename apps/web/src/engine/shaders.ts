@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — GLSL Ray Marching Shaders
+ * ECOS V2 — GLSL Ray Marching Shaders
  *
  * Vertex shader: renders a unit cube positioned around the volume.
  * Fragment shader: casts rays through the 3D texture, accumulates color

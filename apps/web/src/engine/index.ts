@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Engine exports
+ * ECOS V2 — Engine exports
  */
 
 export { VolumeRenderer } from './volume-renderer.js';

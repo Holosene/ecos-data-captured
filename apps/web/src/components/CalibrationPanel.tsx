@@ -1,5 +1,5 @@
 /**
- * ECHOS — Calibration Panel (hidden dev tool)
+ * ECOS — Calibration Panel (hidden dev tool)
  *
  * Activated by pressing "b" 5 times in the volume viewer.
  * Provides real-time sliders for all calibration parameters.

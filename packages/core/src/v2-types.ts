@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Type definitions
+ * ECOS V2 — Type definitions
  *
  * Probabilistic Conic Acoustic Projection Model
  *

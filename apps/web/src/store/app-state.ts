@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Application state (React context-based).
+ * ECOS V2 — Application state (React context-based).
  *
  * Manages both V1 wizard flow and V2 volumetric pipeline.
  */

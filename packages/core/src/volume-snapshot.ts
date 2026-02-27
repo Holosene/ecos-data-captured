@@ -1,5 +1,5 @@
 /**
- * ECHOS — Volume Snapshot (.echos-vol)
+ * ECOS — Volume Snapshot (.echos-vol)
  *
  * Fast binary format for saving/loading pre-computed volumes.
  * Skips the entire pipeline (video decode → preprocessing → projection)

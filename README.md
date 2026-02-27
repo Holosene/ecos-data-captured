@@ -1,8 +1,8 @@
-# ECHOS
+# ECOS
 
 **Perceptive archive from sonar screen captures and GPS traces.**
 
-ECHOS transforms consumer sonar screen recordings (MP4) and simultaneous GPS tracks (GPX) into explorable 3D volumes — all in your browser, no server required.
+ECOS transforms consumer sonar screen recordings (MP4) and simultaneous GPS tracks (GPX) into explorable 3D volumes — all in your browser, no server required.
 
 > *The screen recording is not a degraded copy of something better. It is the most accessible, most shareable, most reproducible form of the sonar observation.*
 
@@ -150,7 +150,7 @@ The app uses `HashRouter` to avoid 404 issues on GitHub Pages (URLs like `/#/sca
 
 After deployment, visit `https://<user>.github.io/echos-donees-capturees/`. You should see:
 
-- The **ECHOS** title with a gradient effect
+- The **ECOS** title with a gradient effect
 - A **"Start New Scan"** button
 - A dark glassmorphism UI (background `#1A1A1A`)
 - The wizard flow accessible at `/#/scan`

@@ -29,7 +29,7 @@ export function encodeNrrd(volume: Volume): Uint8Array {
     'endian: little',
     `space origin: (${metadata.origin.join(',')})`,
     'space directions: (1,0,0) (0,1,0) (0,0,1)',
-    `# ECHOS volume — depth_max=${metadata.depthMaxM}m, distance=${metadata.totalDistanceM.toFixed(1)}m`,
+    `# ECOS volume — depth_max=${metadata.depthMaxM}m, distance=${metadata.totalDistanceM.toFixed(1)}m`,
     `# frames=${metadata.sourceFrameCount}, slices=${metadata.resampledSliceCount}`,
     '',
     '',

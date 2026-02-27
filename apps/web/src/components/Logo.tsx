@@ -18,7 +18,7 @@ export function Logo({ height = 32, onClick, style }: LogoProps) {
   return (
     <img
       src={src}
-      alt="ECHOS"
+      alt="ECOS"
       height={height}
       style={{
         width: 'auto',

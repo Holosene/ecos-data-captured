@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Probabilistic Conic Acoustic Projection
+ * ECOS V2 — Probabilistic Conic Acoustic Projection
  *
  * Each sonar frame is interpreted as an acoustic cone (truncated):
  *   - The beam opens from a point (transducer) downward

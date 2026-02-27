@@ -156,7 +156,7 @@ export function buildVolume(
   const estimatedMB = (dimX * dimY * dimZ * 4) / (1024 * 1024);
   if (estimatedMB > 1024) {
     console.warn(
-      `[ECHOS] Volume size will be ~${estimatedMB.toFixed(0)} MB. Consider reducing resolution.`,
+      `[ECOS] Volume size will be ~${estimatedMB.toFixed(0)} MB. Consider reducing resolution.`,
     );
   }
 

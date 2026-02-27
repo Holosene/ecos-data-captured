@@ -1,5 +1,5 @@
 /**
- * ECHOS — Centralized branding assets
+ * ECOS — Centralized branding assets
  *
  * Single source of truth for all logo / favicon / title references.
  * All paths are relative to the public root via import.meta.env.BASE_URL.

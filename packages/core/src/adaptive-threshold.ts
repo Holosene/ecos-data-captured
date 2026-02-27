@@ -1,5 +1,5 @@
 /**
- * ECHOS — Adaptive Threshold
+ * ECOS — Adaptive Threshold
  *
  * Computes a percentile-based noise floor from volume data.
  * Used to auto-set the threshold that separates signal from noise.

@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Volume Viewer Component (Redesigned)
+ * ECOS V2 — Volume Viewer Component (Redesigned)
  *
  * Marketing-style presentation of 3 render modes:
  *   - Cône (Instrument): static stacked cone volume
@@ -170,9 +170,9 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
 
 // Mode definitions — clean labels, no color coding
 const MODE_DEFS = [
-  { key: 'instrument' as const, label: 'Cône', desc: 'Empilement statique' },
-  { key: 'spatial' as const, label: 'Trace', desc: 'Déroulé spatial' },
-  { key: 'classic' as const, label: 'Projection', desc: 'Fenêtre temporelle' },
+  { key: 'classic' as const, label: 'Cône', desc: 'Projection conique glissante' },
+  { key: 'instrument' as const, label: 'Trace', desc: 'Empilement statique' },
+  { key: 'spatial' as const, label: 'Cube', desc: 'Projection cubique du parcours' },
 ] as const;
 
 // ─── Leaflet Map component ─────────────────────────────────────────────────
@@ -925,9 +925,9 @@ export function VolumeViewer({
       </div>
 
       {/* Volume sections — marketing-style, stacked vertically */}
-      {renderVolumeSection('instrument', containerARef, 'Cône', 'Empilement statique — Volume acoustique reconstruit', 'clamp(400px, 50vh, 600px)')}
-      {showB && renderVolumeSection('spatial', containerBRef, 'Trace', 'Déroulé spatial — Projection le long du parcours', 'clamp(350px, 45vh, 550px)')}
-      {showC && renderVolumeSection('classic', containerCRef, 'Projection', 'Fenêtre temporelle — Projection conique glissante', 'clamp(350px, 45vh, 550px)')}
+      {showC && renderVolumeSection('classic', containerCRef, 'Cône', 'Projection conique glissante', 'clamp(400px, 50vh, 600px)')}
+      {renderVolumeSection('instrument', containerARef, 'Trace', 'Empilement statique', 'clamp(350px, 45vh, 550px)')}
+      {showB && renderVolumeSection('spatial', containerBRef, 'Cube', 'Projection cubique du parcours', 'clamp(350px, 45vh, 550px)')}
 
       {/* Timeline bar (Mode C temporal playback) */}
       {hasFrames && totalFrames > 0 && (
@@ -1030,7 +1030,7 @@ export function VolumeViewer({
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `echos-session-${Date.now()}.json`;
+            a.download = `ecos-session-${Date.now()}.json`;
             a.click();
             URL.revokeObjectURL(url);
           }}

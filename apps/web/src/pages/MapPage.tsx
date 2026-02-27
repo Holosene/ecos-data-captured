@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Map Page
+ * ECOS V2 — Map Page
  *
  * Session manager with map view.
  * Each recording is displayed as an independent GPS trace.

@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — WebGL2 Ray Marching Volume Renderer
+ * ECOS V2 — WebGL2 Ray Marching Volume Renderer
  *
  * Uses Three.js for scene management, camera controls, and WebGL2 3D textures.
  * Custom ShaderMaterial for GPU ray marching.
@@ -415,7 +415,7 @@ export class VolumeRenderer {
       (this.extent[2] / maxExtent) * cal.scale.z,
     );
     this.volumeScale = scale;
-    console.log('[ECHOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
+    console.log('[ECOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 

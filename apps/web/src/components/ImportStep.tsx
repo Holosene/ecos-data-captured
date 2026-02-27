@@ -106,11 +106,7 @@ export function ImportStep() {
           <FileDropZone
             accept="video/mp4,video/*"
             label={state.videoFile ? state.videoFile.name : t('import.dropVideo')}
-            hint={
-              state.videoFile
-                ? `${state.videoWidth}x${state.videoHeight} -${state.videoDurationS.toFixed(1)}s`
-                : t('import.videoHint')
-            }
+            hint={t('import.videoHint')}
             onFile={handleVideoFile}
             icon={<IconVideo size={28} color={colors.text3} />}
           />
@@ -120,11 +116,7 @@ export function ImportStep() {
           <FileDropZone
             accept=".gpx"
             label={state.gpxFile ? state.gpxFile.name : t('import.dropGpx')}
-            hint={
-              state.gpxTrack
-                ? `${state.gpxTrack.points.length} pts -${state.gpxTrack.totalDistanceM.toFixed(0)}m -${state.gpxTrack.durationS.toFixed(0)}s`
-                : t('import.gpxHint')
-            }
+            hint={t('import.gpxHint')}
             onFile={handleGpxFile}
             icon={<IconMapPin size={28} color={colors.text3} />}
           />

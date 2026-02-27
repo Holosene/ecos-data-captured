@@ -1,5 +1,5 @@
 /**
- * ECHOS — Orthogonal Slice View
+ * ECOS — Orthogonal Slice View
  *
  * Renders 2D slices of a 3D Float32Array volume along X, Y, and Z axes.
  * Inline color presets with adaptive canvas sizing to match content aspect ratio.

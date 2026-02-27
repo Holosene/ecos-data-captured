@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Map View Component
+ * ECOS V2 — Map View Component
  *
  * Leaflet-based map displaying recording sessions as GPS traces.
  * Each recording is an independent entity.

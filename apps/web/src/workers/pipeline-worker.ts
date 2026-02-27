@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Pipeline Web Worker
+ * ECOS V2 — Pipeline Web Worker
  *
  * Offloads heavy computation from the main thread:
  *   1. Frame preprocessing (bilateral denoise, gamma, Gaussian blur, median)

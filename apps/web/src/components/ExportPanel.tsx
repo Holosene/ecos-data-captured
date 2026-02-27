@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Export Panel
+ * ECOS V2 — Export Panel
  *
  * Provides multi-format export for the current volume:
  *   - NRRD volume
@@ -52,7 +52,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
       'endian: little',
       'space origin: (0,0,0)',
       'space directions: (1,0,0) (0,1,0) (0,0,1)',
-      `# ECHOS V2 volume — extent: ${eX.toFixed(1)} x ${eY.toFixed(1)} x ${eZ.toFixed(1)} m`,
+      `# ECOS V2 volume — extent: ${eX.toFixed(1)} x ${eY.toFixed(1)} x ${eZ.toFixed(1)} m`,
       '',
       '',
     ].join('\n');

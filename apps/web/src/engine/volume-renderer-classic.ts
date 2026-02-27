@@ -1,5 +1,5 @@
 /**
- * ECHOS — Classic Volume Renderer (0223f6b engine)
+ * ECOS — Classic Volume Renderer (0223f6b engine)
  *
  * This is the volumetric engine from commit 0223f6b:
  *   - Full CalibrationConfig support (position, scale, camera, grid, axes, bgColor)
@@ -331,7 +331,7 @@ export class VolumeRendererClassic {
       (this.extent[2] / maxExtent) * cal.scale.z,
     );
     this.volumeScale = scale;
-    console.log('[ECHOS-C] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
+    console.log('[ECOS-C] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
 
     const halfScale = scale.clone().multiplyScalar(0.5);
 

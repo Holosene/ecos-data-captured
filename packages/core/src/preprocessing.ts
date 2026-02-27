@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Preprocessing pipeline
+ * ECOS V2 — Preprocessing pipeline
  *
  * Transforms raw sonar screen-capture frames into clean intensity data.
  * All operations run on CPU via Canvas API.

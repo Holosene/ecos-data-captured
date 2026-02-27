@@ -1,5 +1,5 @@
 /**
- * ECHOS — Scan Page (V2 only)
+ * ECOS — Scan Page (V2 only)
  *
  * Workflow:
  *   1. Importer — MP4 + GPX
@@ -654,7 +654,7 @@ export function ScanPage() {
                   accept="video/mp4,video/*"
                   onFile={(file: File) => handleVideoFile([file])}
                   label={state.videoFile ? state.videoFile.name : t('import.videoHint')}
-                  hint={state.videoFile ? `${state.videoWidth}×${state.videoHeight} — ${state.videoDurationS.toFixed(1)}s` : t('import.videoHint')}
+                  hint={t('import.videoHint')}
                 />
               </GlassPanel>
 
@@ -669,7 +669,7 @@ export function ScanPage() {
                   accept=".gpx"
                   onFile={(file: File) => handleGpxFile([file])}
                   label={state.gpxFile ? state.gpxFile.name : t('import.gpxHint')}
-                  hint={state.gpxTrack ? `${state.gpxTrack.points.length} pts — ${state.gpxTrack.totalDistanceM.toFixed(0)}m — ${state.gpxTrack.durationS.toFixed(1)}s` : t('import.gpxHint')}
+                  hint={t('import.gpxHint')}
                 />
               </GlassPanel>
             </div>
@@ -898,64 +898,9 @@ export function ScanPage() {
                       <div style={{ color: colors.text3, fontSize: '11px', lineHeight: 1.4 }}>
                         {hintMap[q]}
                       </div>
-                      <div style={{
-                        marginTop: '8px',
-                        display: 'flex',
-                        gap: '8px',
-                        fontSize: '10px',
-                        color: colors.text3,
-                        justifyContent: 'center',
-                      }}>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: selected ? `${color}20` : colors.surface,
-                        }}>
-                          {cfg.fps} fps
-                        </span>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: selected ? `${color}20` : colors.surface,
-                        }}>
-                          {cfg.grid.resX}&sup3;
-                        </span>
-                      </div>
                     </button>
                   );
                 })}
-              </div>
-            </GlassPanel>
-
-            {/* Mode info — all 3 modes generated simultaneously */}
-            <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
-              <h3 style={{ color: colors.text1, fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>
-                {t('v2.config.viewMode')}
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                {[
-                  { label: `Mode A — ${t('v2.mode.instrument')}`, desc: t('v2.mode.instrumentDesc') },
-                  { label: `Mode B — ${t('v2.mode.spatial')}`, desc: t('v2.mode.spatialDesc') },
-                  { label: `Mode C — ${t('v2.mode.classic')}`, desc: t('v2.mode.classicDesc') },
-                ].map((m) => (
-                  <div
-                    key={m.label}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '12px',
-                      border: `2px solid ${colors.accent}`,
-                      background: colors.accentMuted,
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-                      {m.label}
-                    </div>
-                    <div style={{ color: colors.text3, fontSize: '12px', lineHeight: 1.5 }}>
-                      {m.desc}
-                    </div>
-                  </div>
-                ))}
               </div>
             </GlassPanel>
 

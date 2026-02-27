@@ -1,5 +1,5 @@
 /**
- * ECHOS V2 — Transfer Function & Chromatic Modes
+ * ECOS V2 — Transfer Function & Chromatic Modes
  *
  * Generates 1D color lookup textures (256 RGBA entries)
  * for ray marching volume rendering.

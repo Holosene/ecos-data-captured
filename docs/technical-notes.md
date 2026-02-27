@@ -1,8 +1,8 @@
-# ECHOS — Technical Notes
+# ECOS — Technical Notes
 
 ## Architecture
 
-ECHOS is a client-side web application deployed as a static site on GitHub Pages. All processing happens in the user's browser — no server is required.
+ECOS is a client-side web application deployed as a static site on GitHub Pages. All processing happens in the user's browser — no server is required.
 
 ### Monorepo Structure
 
