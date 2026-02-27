@@ -446,6 +446,21 @@ export function VolumeViewer({
     const pose = presentationPoses.current[mode];
     if (!renderer || !pose) return;
     const startState = renderer.getCameraState();
+    // Preserve current camera distance (zoom level) — only snap back rotation/direction
+    const dist = (p: [number, number, number], t: [number, number, number]) =>
+      Math.sqrt((p[0] - t[0]) ** 2 + (p[1] - t[1]) ** 2 + (p[2] - t[2]) ** 2);
+    const currentDist = dist(startState.position, startState.target);
+    const poseDist = dist(pose.position, pose.target) || 1;
+    const dir: [number, number, number] = [
+      (pose.position[0] - pose.target[0]) / poseDist,
+      (pose.position[1] - pose.target[1]) / poseDist,
+      (pose.position[2] - pose.target[2]) / poseDist,
+    ];
+    const adjustedPos: [number, number, number] = [
+      pose.target[0] + dir[0] * currentDist,
+      pose.target[1] + dir[1] * currentDist,
+      pose.target[2] + dir[2] * currentDist,
+    ];
     const totalSteps = 40;
     let step = 0;
     const animate = () => {
@@ -453,7 +468,7 @@ export function VolumeViewer({
       const t = step / totalSteps;
       const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
       renderer.setCameraState({
-        position: lerp3(startState.position, pose.position, ease),
+        position: lerp3(startState.position, adjustedPos, ease),
         up: lerp3(startState.up, pose.up, ease),
         target: lerp3(startState.target, pose.target, ease),
       });
@@ -830,8 +845,8 @@ export function VolumeViewer({
 
   // Background matches the renderer scene background for seamless 3D
   const viewportBg = theme === 'light' ? '#f5f5f7' : '#0a0a0f';
-  // Darker/lighter bg for settings mode (detaches volume from page)
-  const viewportBgEditing = theme === 'light' ? '#E8E8EE' : '#080810';
+  // Stage 2 bg matches the settings panel (GlassPanel / colors.surface)
+  const viewportBgEditing = theme === 'light' ? '#FFFFFF' : '#1A1A20';
 
   // ─── Render a single volume section (Two-Stage Grid UI) ─────────────
   const volumeHeight = 'clamp(650px, 85vh, 1000px)';
@@ -873,52 +888,56 @@ export function VolumeViewer({
                 overflow: 'hidden',
                 background: isExpanded ? viewportBgEditing : viewportBg,
                 cursor: 'grab',
-                transition: 'box-shadow 400ms ease, background 400ms ease',
+                transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
+                border: `1.5px solid ${colors.accent}${isExpanded ? '60' : '30'}`,
                 boxShadow: isExpanded
-                  ? `0 0 0 2px ${colors.accent}40, 0 8px 32px rgba(0,0,0,0.2)`
+                  ? `0 8px 32px rgba(0,0,0,0.2)`
                   : theme === 'light'
                     ? '0 2px 20px rgba(0,0,0,0.06)'
                     : '0 2px 20px rgba(0,0,0,0.3)',
               }}
             />
 
-            {/* ── Slider + Play — centered on volume bottom edge ── */}
+            {/* ── Slider — fixed ON the bottom border ── */}
             <div style={{
               position: 'absolute',
-              bottom: '-20px',
+              bottom: '-1px',
+              left: '50%',
+              transform: 'translate(-50%, 50%)',
+              zIndex: 5,
+              width: 'max(200px, 30%)',
+              padding: '6px 14px',
+              background: colors.surface,
+              borderRadius: '24px',
+              border: `1px solid ${colors.border}`,
+              backdropFilter: 'blur(12px)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}>
+              <input
+                type="range"
+                min={0}
+                max={isTemporal && hasFrames ? totalFrames - 1 : 100}
+                value={isTemporal && hasFrames ? currentFrame : 50}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (isTemporal && hasFrames) {
+                    setPlaying(false);
+                    setCurrentFrame(Number(e.target.value));
+                  }
+                }}
+                style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* ── Play button — just below slider ── */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-58px',
               left: '50%',
               transform: 'translateX(-50%)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
               zIndex: 5,
             }}>
-              <div style={{
-                width: 'max(200px, 30%)',
-                padding: '8px 14px',
-                background: colors.surface,
-                borderRadius: '24px',
-                border: `1px solid ${colors.border}`,
-                backdropFilter: 'blur(12px)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}>
-                <input
-                  type="range"
-                  min={0}
-                  max={isTemporal && hasFrames ? totalFrames - 1 : 100}
-                  value={isTemporal && hasFrames ? currentFrame : 50}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    if (isTemporal && hasFrames) {
-                      setPlaying(false);
-                      setCurrentFrame(Number(e.target.value));
-                    }
-                  }}
-                  style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer' }}
-                />
-              </div>
-
               <button
                 onClick={() => {
                   if (isTemporal && hasFrames) {
@@ -927,16 +946,15 @@ export function VolumeViewer({
                   }
                 }}
                 style={{
-                  marginTop: '12px',
-                  width: '48px', height: '48px', borderRadius: '50%',
-                  border: `2px solid ${colors.accent}`,
-                  background: playing && isTemporal ? colors.accentMuted : 'transparent',
+                  width: '40px', height: '40px', borderRadius: '50%',
+                  border: `1.5px solid ${colors.accent}`,
+                  background: playing && isTemporal ? colors.accentMuted : colors.surface,
                   color: colors.accent,
                   cursor: 'pointer',
-                  fontSize: '18px',
+                  fontSize: '14px',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  paddingLeft: playing && isTemporal ? '0' : '3px',
-                  transition: 'background 200ms ease, transform 200ms ease',
+                  paddingLeft: playing && isTemporal ? '0' : '2px',
+                  transition: 'all 150ms ease',
                 }}
               >
                 {playing && isTemporal ? '||' : '\u25B6'}
@@ -956,27 +974,9 @@ export function VolumeViewer({
             gap: '12px',
             paddingTop: '8px',
           }}>
-            {/* Title row: chevron (left) + title (right) */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              {/* Chevron — ALWAYS same button, same position, rotates when expanded */}
-              <button
-                onClick={() => setEditingMode(isExpanded ? null : mode)}
-                style={{
-                  width: '42px', height: '42px', minWidth: '42px',
-                  borderRadius: '50%',
-                  border: `1px solid ${isExpanded ? colors.accent : colors.border}`,
-                  background: isExpanded ? colors.accentMuted : 'transparent',
-                  color: isExpanded ? colors.accent : colors.text2,
-                  cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  transform: isExpanded ? 'rotate(180deg)' : 'none',
-                  transition: 'all 200ms ease',
-                  marginTop: '2px',
-                }}
-              >
-                <IconChevronDown />
-              </button>
-              <div style={{ minWidth: 0 }}>
+            {/* Title row: title (left) + chevron (right, vertically centered) */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <h2 style={{
                   margin: 0,
                   fontFamily: fonts.display,
@@ -997,25 +997,47 @@ export function VolumeViewer({
                   {subtitle}
                 </p>
               </div>
+              {/* Chevron — right side, vertically centered, bigger icon */}
+              <button
+                onClick={() => setEditingMode(isExpanded ? null : mode)}
+                style={{
+                  width: '48px', height: '48px', minWidth: '48px',
+                  borderRadius: '50%',
+                  border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+                  background: isExpanded ? colors.accentMuted : colors.surface,
+                  color: isExpanded ? colors.accent : colors.text2,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transform: isExpanded ? 'rotate(180deg)' : 'none',
+                  transition: 'all 200ms ease',
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
             </div>
 
-            {/* Chromatic pills — ALWAYS visible, below title */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {/* Chromatic pills — single row, styled like page buttons */}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', overflow: 'hidden' }}>
               {chromaticModes.map((m: ChromaticMode) => (
                 <button
                   key={m}
                   onClick={() => handleChromaticChange(mode, m)}
                   style={{
-                    padding: '5px 10px',
-                    borderRadius: '16px',
-                    border: `1px solid ${settings.chromaticMode === m ? colors.accent : colors.border}`,
-                    background: settings.chromaticMode === m ? colors.accentMuted : 'transparent',
-                    color: settings.chromaticMode === m ? colors.accent : colors.text2,
+                    padding: '6px 12px',
+                    borderRadius: '9999px',
+                    border: `1px solid ${settings.chromaticMode === m ? colors.accent : 'transparent'}`,
+                    background: settings.chromaticMode === m ? colors.accentMuted : colors.surface,
+                    color: settings.chromaticMode === m ? colors.accent : colors.text1,
                     fontSize: '11px',
                     fontWeight: 500,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     transition: 'all 150ms ease',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
                   }}
                 >
                   {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}

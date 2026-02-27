@@ -799,7 +799,7 @@ export function ScanPage() {
                 justifyContent: 'center',
                 transition: 'opacity 600ms ease',
               }}>
-                <div style={{ width: '100%', maxWidth: '380px', textAlign: 'center' }}>
+                <div style={{ width: '100%', maxWidth: '480px', textAlign: 'center' }}>
                   {progress.stage === 'ready' ? (
                     /* Completion state — checkmark animation */
                     <div style={{ animation: 'echos-fade-in 400ms ease' }}>
@@ -838,18 +838,40 @@ export function ScanPage() {
                         {Math.round(progress.progress * 100)}%
                       </div>
 
-                      <ProgressBar value={progress.progress} showPercent={false} />
+                      <ProgressBar value={progress.progress} showPercent={false} height={6} />
 
                       <div style={{ marginTop: '32px' }}>
-                        <Button
-                          variant="ghost"
+                        <button
                           onClick={() => {
                             abortRef.current = true;
                             setPhase('settings');
                           }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = colors.accentMuted;
+                            e.currentTarget.style.color = colors.accent;
+                            e.currentTarget.style.borderColor = colors.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = colors.surface;
+                            e.currentTarget.style.color = colors.text1;
+                            e.currentTarget.style.borderColor = 'transparent';
+                          }}
+                          style={{
+                            padding: '10px 24px',
+                            borderRadius: '9999px',
+                            border: '1px solid transparent',
+                            background: colors.surface,
+                            color: colors.text1,
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            transition: 'all 150ms ease',
+                            letterSpacing: '-0.01em',
+                          }}
                         >
                           {t('v2.pipeline.abort')}
-                        </Button>
+                        </button>
                       </div>
                     </>
                   )}
