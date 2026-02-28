@@ -25,6 +25,7 @@ export function ManifestoPage() {
           {t('manifesto.title')}
         </h1>
         <p
+          className="manifesto-subtitle"
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",

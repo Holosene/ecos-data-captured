@@ -43,13 +43,6 @@ export function HomePage() {
     { title: t('home.feat4.title'), desc: t('home.feat4.desc'), num: '04' },
   ];
 
-  const STATS = [
-    { value: '100%', label: t('home.stat.clientSide') },
-    { value: '4', label: t('home.stat.steps') },
-    { value: 'NRRD', label: t('home.stat.export') },
-    { value: '0', label: t('home.stat.dataSent') },
-  ];
-
   const openLightbox = (images: string[], startIndex: number) => {
     setLightboxImages(images);
     setLightboxIndex(startIndex);
@@ -91,6 +84,7 @@ export function HomePage() {
         </div>
 
         <p
+          className="hero-desc"
           style={{
             fontSize: 'clamp(15px, 1.2vw, 17px)',
             color: colors.text3,
@@ -153,37 +147,6 @@ export function HomePage() {
                 <IconImage size={32} color={colors.text3} />
                 <span style={{ fontSize: '13px' }}>{i === 0 ? 'hero-main.png' : 'hero-side.png'}</span>
               </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Stats */}
-      <section style={{ padding: `0 var(--content-gutter) clamp(40px, 4vw, 64px)` }}>
-        <div
-          className="stats-row"
-          style={{
-            display: 'flex',
-            background: colors.surface,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '12px',
-            padding: '24px 0',
-          }}
-        >
-          {STATS.map((stat, i) => (
-            <div
-              key={stat.label}
-              style={{
-                textAlign: 'center',
-                padding: '0 32px',
-                borderRight: i < STATS.length - 1 ? `1px solid ${colors.border}` : 'none',
-                flex: 1,
-              }}
-            >
-              <div style={{ fontSize: '24px', fontWeight: 600, color: colors.text1, fontVariantNumeric: 'tabular-nums' }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: '13px', color: colors.text3, marginTop: '4px' }}>{stat.label}</div>
             </div>
           ))}
         </div>
@@ -524,6 +487,7 @@ export function HomePage() {
           {t('manifesto.title')}
         </h2>
         <p
+          className="manifesto-subtitle"
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",

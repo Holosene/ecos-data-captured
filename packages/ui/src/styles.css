@@ -426,18 +426,13 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   align-items: center;
 }
 
-/* Map touch overlay — two-finger hint */
+/* Map touch overlay — two-finger hint (discreet, bottom) */
 .map-touch-overlay {
   position: absolute;
-  inset: 0;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  border-radius: inherit;
   pointer-events: none;
   opacity: 0;
   transition: opacity 400ms ease;
@@ -446,13 +441,13 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   opacity: 1;
 }
 .map-touch-overlay span {
-  color: #fff;
-  font-size: 14px;
+  color: var(--c-text-3);
+  font-size: 11px;
   font-weight: 500;
-  padding: 10px 20px;
+  padding: 5px 12px;
   border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
 }
 
 /* dvh fix for iOS mobile browser chrome */
@@ -476,6 +471,44 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .mobile-nav-backdrop { display: block; }
   .mobile-nav-drawer { display: flex; }
 
+  /* ── Global mobile spacing reduction ─────────────────── */
+  /* Tighter section paddings */
+  section {
+    padding-top: clamp(20px, 3vw, 32px) !important;
+    padding-bottom: clamp(20px, 3vw, 32px) !important;
+  }
+  /* Reduce heading sizes for mobile */
+  h1 {
+    font-size: clamp(24px, 6vw, 32px) !important;
+    margin-bottom: 4px !important;
+  }
+  h2 {
+    font-size: clamp(20px, 5vw, 26px) !important;
+    margin-bottom: 8px !important;
+  }
+  h3 {
+    font-size: clamp(16px, 4vw, 20px) !important;
+    margin-bottom: 8px !important;
+  }
+  /* Subtitle / description spacing after headings */
+  h2 + p, h1 + p {
+    margin-bottom: 20px !important;
+    font-size: 14px !important;
+  }
+  /* GlassPanel tighter padding on mobile */
+  .glass {
+    padding: 20px !important;
+  }
+  /* Manifesto grid tighter gap */
+  .manifesto-grid {
+    gap: 14px !important;
+  }
+  /* Manifesto subtitle — reduce bottom margin on mobile */
+  .manifesto-subtitle {
+    margin-bottom: 20px !important;
+    font-size: clamp(15px, 3.5vw, 18px) !important;
+  }
+
   .grid-2-cols {
     grid-template-columns: 1fr !important;
   }
@@ -484,24 +517,18 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   }
   .echos-quad-grid {
     grid-template-columns: 1fr !important;
-    gap: 16px !important;
+    gap: 12px !important;
   }
   .hero-visual-grid {
     grid-template-columns: 1fr !important;
     grid-template-rows: auto !important;
   }
-  .hero-visual-grid > div { min-height: 200px !important; }
-  .stats-row {
-    flex-wrap: wrap !important;
-  }
-  .stats-row > div {
-    border-right: none !important;
-    border-bottom: 1px solid var(--c-border);
-    flex: 1 1 45% !important;
-    padding: 12px 0 !important;
-  }
-  .stats-row > div:last-child {
-    border-bottom: none;
+  .hero-visual-grid > div { min-height: 180px !important; }
+  /* Hero description — tighter margin on mobile */
+  .hero-desc {
+    margin-bottom: 24px !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
   }
   /* Hero CTA buttons — smaller on mobile */
   .hero-cta-row button {
@@ -518,6 +545,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   /* Scroll to top — VISIBLE on mobile */
   .scroll-to-top {
     display: flex !important;
+    padding-bottom: 80px !important;
   }
 
   /* Gallery: single horizontal scroll block on mobile */
@@ -534,7 +562,8 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   }
   .gallery-card {
     flex: none !important;
-    min-height: 200px !important;
+    min-height: 160px !important;
+    height: 200px !important;
     scroll-snap-align: start;
   }
   .gallery-card[data-baseflex="2"] {
@@ -547,16 +576,17 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     object-fit: cover !important;
   }
 
-  /* Map section — full-width bleed on mobile */
+  /* Map section — respect page margins on mobile */
   #map-section {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+    padding-top: clamp(24px, 3vw, 40px) !important;
+    padding-bottom: clamp(32px, 4vw, 56px) !important;
+  }
+  #map-section > div:first-child {
+    margin-bottom: 12px !important;
   }
   .map-outer-container {
-    border-radius: 0 !important;
-    border-left: none !important;
-    border-right: none !important;
-    height: clamp(350px, 55vh, 500px) !important;
+    border-radius: var(--radius-md) !important;
+    height: clamp(300px, 50vh, 450px) !important;
     flex-direction: column !important;
   }
   .map-main-area {
@@ -576,6 +606,28 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     gap: 8px !important;
   }
 
+  /* Step indicator — compact on mobile */
+  .step-indicator-bar {
+    padding: 12px 0 !important;
+    gap: 0;
+  }
+  .step-indicator-bar button {
+    min-width: 48px !important;
+    gap: 4px !important;
+  }
+  .step-indicator-bar button > div:first-child {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 12px !important;
+  }
+  .step-indicator-bar button > span {
+    font-size: 10px !important;
+  }
+  .step-indicator-bar > div:not(button) {
+    min-width: 12px !important;
+    margin-bottom: 24px !important;
+  }
+
   /* Scan page — stack grids */
   .scan-import-grid {
     grid-template-columns: 1fr !important;
@@ -589,6 +641,16 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   }
   .scan-quality-grid button > div:first-child {
     font-size: 17px !important;
+  }
+  /* Scan page — nofiles & next button accessible on mobile */
+  .scan-no-files {
+    margin-top: 24px !important;
+    flex-direction: column;
+    gap: 10px !important;
+  }
+  .scan-next-btn {
+    margin-top: 12px !important;
+    padding-bottom: 24px !important;
   }
 
   /* Roadmap list — single column on mobile */
@@ -613,19 +675,14 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     grid-column: 1 !important;
   }
 
-  /* Floating CTA — centered on mobile */
+  /* Floating CTA — smaller on mobile, keep bottom-right */
   .floating-scan-cta-wrap {
-    left: 50% !important;
-    right: auto !important;
-    bottom: 24px !important;
-    transform: translateX(-50%) !important;
-  }
-  .floating-scan-cta-wrap[style*="opacity: 0"] {
-    transform: translateX(-50%) translateY(20px) !important;
+    bottom: 20px !important;
+    right: 16px !important;
   }
   .floating-scan-cta {
-    padding: 16px 36px 18px !important;
-    font-size: 17px !important;
+    padding: 14px 28px 15px !important;
+    font-size: 15px !important;
   }
 }
 
