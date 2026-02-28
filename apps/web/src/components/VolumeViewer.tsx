@@ -362,6 +362,15 @@ export function VolumeViewer({
   onReconfigure,
   onNewScan,
 }: VolumeViewerProps) {
+  // Mobile detection — responsive to resize
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)');
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
   // Refs for the 3 viewport containers
   const containerARef = useRef<HTMLDivElement>(null);
   const containerBRef = useRef<HTMLDivElement>(null);
@@ -1458,6 +1467,193 @@ export function VolumeViewer({
   }
 
   const hasMap = gpxTrack && gpxTrack.points.length > 1;
+
+  // ─── Mobile volume section renderer ──────────────────────────────────────
+  const renderMobileVolumeSection = (
+    mode: 'instrument' | 'spatial' | 'classic',
+    containerRef: React.RefObject<HTMLDivElement | null>,
+    title: string,
+    subtitle: string,
+    sectionIndex: number,
+  ) => {
+    const isExpanded = editingMode === mode;
+    const isTemporal = mode === 'classic' || mode === 'spatial';
+    const settings = modeSettings[mode];
+
+    return (
+      <section key={mode} style={{ marginBottom: '24px' }}>
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: colors.text1, lineHeight: 1.1 }}>
+              <span style={{ color: colors.accent, fontSize: '0.7em', marginRight: '4px' }}>"</span>{title}<span style={{ color: colors.accent, fontSize: '0.7em', marginLeft: '4px' }}>"</span>
+            </h2>
+            <p style={{ margin: '2px 0 0', fontSize: '11px', color: colors.text3, lineHeight: 1.3 }}>{subtitle}</p>
+          </div>
+          <div style={{ width: '32px', height: '32px', minWidth: '32px', borderRadius: '50%', border: `2px solid ${colors.accent}`, color: colors.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600 }}>
+            {String(sectionIndex + 1).padStart(2, '0')}
+          </div>
+          <button
+            onClick={() => {
+              if (isExpanded) { startSnapBack(mode); setEditingMode(null); }
+              else { cancelSnapBack(mode); setEditingMode(mode); }
+            }}
+            style={{ width: '36px', height: '36px', minWidth: '36px', borderRadius: '50%', border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`, background: isExpanded ? colors.accentMuted : colors.surface, color: isExpanded ? colors.accent : colors.text2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'all 200ms ease' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+        </div>
+
+        {/* Chromatic pills — horizontal scroll */}
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'nowrap', overflowX: 'auto', marginBottom: '8px', paddingBottom: '2px' }}>
+          {chromaticModes.map((m: ChromaticMode) => (
+            <button key={m} onClick={() => handleChromaticChange(mode, m)} style={{ padding: '4px 10px', borderRadius: '9999px', border: `1px solid ${settings.chromaticMode === m ? colors.accent : 'transparent'}`, background: settings.chromaticMode === m ? colors.accentMuted : colors.surface, color: settings.chromaticMode === m ? colors.accent : colors.text1, fontSize: '10px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}
+            </button>
+          ))}
+        </div>
+
+        {/* 3D Volume viewport — square, full width */}
+        <div
+          ref={containerRef}
+          onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+          onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+          style={{
+            width: '100%',
+            height: '52vw',
+            maxHeight: '320px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: isExpanded ? viewportBgEditing : viewportBg,
+            cursor: 'grab',
+            border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+            marginBottom: '8px',
+          }}
+        />
+
+        {/* Slider + play controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <div style={{ flex: 1, padding: '6px 12px', background: colors.surface, borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center' }}>
+            <input
+              type="range"
+              min={mode === 'instrument' ? -0.75 : 0}
+              max={mode === 'instrument' ? 0.75 : (isTemporal && hasFrames ? totalFrames - 1 : 100)}
+              step={mode === 'instrument' ? 0.01 : 1}
+              value={mode === 'instrument' ? -tracePositionZ : (isTemporal && hasFrames ? currentFrame : 50)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                if (mode === 'instrument') { handleTracePositionZ(-parseFloat(e.target.value)); }
+                else if (isTemporal && hasFrames) { setPlaying(false); const v = Number(e.target.value); currentFrameRef.current = v; setCurrentFrame(v); }
+              }}
+              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '4px' }}
+            />
+          </div>
+          {isTemporal && (
+            <button
+              onClick={() => { if (isTemporal && hasFrames) { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); } }}
+              style={{ width: '36px', height: '36px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, paddingLeft: playing ? '0' : '2px' }}
+            >
+              {playing && isTemporal ? (<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : '\u25B6'}
+            </button>
+          )}
+        </div>
+
+        {/* Settings panel — collapsible */}
+        {isExpanded && (
+          <GlassPanel className="echos-controls-panel" style={{ padding: '10px', borderRadius: '12px', marginTop: '6px', animation: 'echos-fade-in 200ms ease' }}>
+            {calibrationOpen ? (
+              <CalibrationPanel config={calibrations[mode]} onChange={handleCalibrationChange} onClose={() => setCalibrationOpen(false)} saved={calibrationSaved} saveLabel={calibrationSaveLabel} />
+            ) : (
+              <SettingsControls settings={modeSettings[mode]} cameraPreset={modeCamera[mode]} autoThreshold={autoThreshold} showGhostSlider={mode === 'spatial' || mode === 'classic'} showBeamToggle={mode === 'instrument'} showSpeedSlider={false} playSpeed={playSpeed} chromaticModes={chromaticModes} lang={lang} t={t} onUpdateSetting={updateSetting} onCameraPreset={handleCameraPreset} onAutoThreshold={handleAutoThreshold} onPlaySpeed={setPlaySpeed} />
+            )}
+          </GlassPanel>
+        )}
+      </section>
+    );
+  };
+
+  // ─── MOBILE LAYOUT ─────────────────────────────────────────────────────────
+  if (isMobile) {
+    const mobileSections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string }> = [];
+    if (showC) mobileSections.push({ mode: 'classic', ref: containerCRef, title: t('v2.vol.cone' as TranslationKey), subtitle: t('v2.vol.coneDesc' as TranslationKey) });
+    mobileSections.push({ mode: 'instrument', ref: containerARef, title: t('v2.vol.trace' as TranslationKey), subtitle: t('v2.vol.traceDesc' as TranslationKey) });
+    if (showB) mobileSections.push({ mode: 'spatial', ref: containerBRef, title: t('v2.vol.block' as TranslationKey), subtitle: t('v2.vol.blockDesc' as TranslationKey) });
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '100vw', overflow: 'hidden' }}>
+        {/* Title */}
+        <div style={{ paddingTop: '16px', marginBottom: '12px' }}>
+          <h1 style={{ margin: 0, color: colors.text1, fontSize: '20px', fontWeight: 600, marginBottom: '2px' }}>
+            {t('v2.viewer.title')}
+          </h1>
+          <p style={{ margin: 0, color: colors.text2, fontSize: '12px', lineHeight: 1.4 }}>
+            {t('v2.viewer.desc')}
+          </p>
+        </div>
+
+        {/* File info — compact card */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: colors.surface, border: `1px solid ${colors.border}`, borderRadius: '12px', padding: '10px 12px', marginBottom: '12px', overflow: 'hidden' }}>
+          <div style={{ width: '56px', height: '56px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0, background: viewportBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {yzThumbnailRef.current ? (
+              <img src={yzThumbnailRef.current} alt="YZ" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={colors.text3} strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '13px', fontWeight: 600, color: colors.text1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {videoFileName || 'Session'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px', fontSize: '11px', color: colors.text2, marginTop: '2px' }}>
+              {videoDurationS != null && videoDurationS > 0 && <span>{videoDurationS.toFixed(1)}s</span>}
+              {dimensions && <span>{dimensions[0]}×{dimensions[1]}×{dimensions[2]}</span>}
+              {gpxTrack && <span>{gpxTrack.totalDistanceM.toFixed(0)}m</span>}
+              {frames && frames.length > 0 && <span>{frames.length} frames</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Map — compact */}
+        {hasMap && (
+          <div style={{ borderRadius: '12px', overflow: 'hidden', border: `1px solid ${colors.border}`, height: '140px', marginBottom: '16px', position: 'relative' }}>
+            <GpsMap points={gpxTrack!.points} theme={theme} />
+          </div>
+        )}
+
+        {/* Volume sections — stacked */}
+        {mobileSections.map((s, i) => renderMobileVolumeSection(s.mode, s.ref, s.title, s.subtitle, i))}
+
+        {/* Bottom actions */}
+        {(onReconfigure || onNewScan) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
+            <button
+              className="echos-action-btn"
+              onClick={() => {
+                const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
+                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+              }}
+              style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
+            >
+              {t('common.poster' as TranslationKey)}
+            </button>
+            {onReconfigure && (
+              <button className="echos-action-btn" onClick={onReconfigure} style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}>
+                {t('v2.viewer.reconfigure')}
+              </button>
+            )}
+            {onNewScan && (
+              <Button variant="primary" size="lg" onClick={onNewScan}>
+                {t('v2.viewer.newScan')}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── DESKTOP LAYOUT (unchanged) ────────────────────────────────────────────
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>

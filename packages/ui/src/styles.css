@@ -465,9 +465,9 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   :root {
     --content-gutter: var(--page-gutter);
   }
-  /* Hide scrollbar on mobile — keep native touch scrolling */
+  /* Hide scrollbar on mobile — keep native touch scrolling, block horizontal scroll */
   #main-content::-webkit-scrollbar { display: none; }
-  #main-content { scrollbar-width: none; }
+  #main-content { scrollbar-width: none; overflow-x: hidden !important; }
   /* Topbar — compact */
   .echos-topbar { height: 56px; }
   .topbar-nav { display: none !important; }

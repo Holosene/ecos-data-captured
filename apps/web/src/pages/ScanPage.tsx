@@ -497,11 +497,20 @@ export function ScanPage() {
     );
     workerRef.current = worker;
 
+    // On mobile, cap grid resolution to 64³ and skip heavy preprocessing
+    const mobileCheck = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    const pipelineGrid = mobileCheck
+      ? { resX: Math.min(grid.resX, 64), resY: Math.min(grid.resY, 64), resZ: Math.min(grid.resZ, 64) }
+      : grid;
+    const pipelinePreprocessing = mobileCheck
+      ? { ...preprocessing, denoiseStrength: 0, gaussianSigma: 0, deblockStrength: 0 }
+      : preprocessing;
+
     worker.postMessage({
       type: 'init',
-      preprocessing,
+      preprocessing: pipelinePreprocessing,
       beam,
-      grid,
+      grid: pipelineGrid,
     });
 
     let extractionDone = false;
@@ -536,7 +545,15 @@ export function ScanPage() {
     });
 
     // Use more parallel video decoders — each handles sequential seeks in its chunk
-    const PARALLEL = Math.min(6, Math.max(2, navigator.hardwareConcurrency || 4));
+    // On mobile, reduce parallelism and downscale frames for faster processing
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    const PARALLEL = isMobile
+      ? Math.min(2, navigator.hardwareConcurrency || 2)
+      : Math.min(6, Math.max(2, navigator.hardwareConcurrency || 4));
+    // Downscale factor: on mobile, halve frame dimensions (4x fewer pixels to process)
+    const mobileScale = isMobile ? 0.5 : 1;
+    const bitmapW = Math.round(crop.width * mobileScale);
+    const bitmapH = Math.round(crop.height * mobileScale);
     const blobUrl = video.src;
     const chunkSize = Math.ceil(totalFrames / PARALLEL);
     let extractedCount = 0;
@@ -551,6 +568,7 @@ export function ScanPage() {
 
         const bitmap = await createImageBitmap(
           videoEl, crop.x, crop.y, crop.width, crop.height,
+          mobileScale < 1 ? { resizeWidth: bitmapW, resizeHeight: bitmapH, resizeQuality: 'low' } : undefined as any,
         );
 
         worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
