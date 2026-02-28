@@ -231,10 +231,12 @@ export function ScanPage() {
       const videoName = 'exemple_video_2026-02-28_at_00.05.10.mp4';
       const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
       const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
-      const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
+      const testVideoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
       const gpxUrl = `${basePath}examples/${encodeURIComponent(gpxName)}`;
+
+      // HEAD for video (no download), full fetch for GPX (6KB)
       const [mp4Resp, gpxResp] = await Promise.all([
-        fetch(videoUrl),
+        fetch(testVideoUrl, { method: 'HEAD' }),
         fetch(gpxUrl),
       ]);
       const missing: string[] = [];
@@ -244,23 +246,35 @@ export function ScanPage() {
         dispatch({ type: 'SET_ERROR', error: `Fichiers introuvables dans ${basePath}examples/ : ${missing.join(', ')}` });
         return;
       }
-      // Process video and GPX blobs in parallel
-      const [mp4Blob, gpxBlob] = await Promise.all([
-        mp4Resp.blob(),
-        gpxResp.blob(),
-      ]);
-      const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
+
+      // Load video metadata directly from URL (no download)
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('Failed to read video metadata'));
+        video.src = testVideoUrl;
+      });
+      dispatch({
+        type: 'SET_VIDEO',
+        file: new File([], videoName, { type: 'video/mp4' }),
+        url: testVideoUrl,
+        durationS: video.duration,
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+      setCrop({ x: 0, y: 0, width: video.videoWidth, height: video.videoHeight });
+
+      // GPX is tiny, process normally
+      const gpxBlob = await gpxResp.blob();
       const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
-      await Promise.all([
-        handleVideoFile([mp4File]),
-        handleGpxFile([gpxFile]),
-      ]);
+      await handleGpxFile([gpxFile]);
     } catch (e) {
       dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
     } finally {
       setLoadingTest(false);
     }
-  }, [dispatch, handleVideoFile, handleGpxFile]);
+  }, [dispatch, handleGpxFile]);
 
   // ─── Crop tool: auto-detect + visual canvas ───────────────────────────
 
@@ -268,10 +282,12 @@ export function ScanPage() {
     if (phase !== 'crop' || !state.videoFile) return;
     setFrameReady(false);
 
-    const url = URL.createObjectURL(state.videoFile);
+    const isBlobUrl = !state.videoUrl;
+    const url = state.videoUrl ?? URL.createObjectURL(state.videoFile);
     const video = document.createElement('video');
     video.preload = 'auto';
     video.muted = true;
+    video.crossOrigin = 'anonymous';
     let disposed = false;
 
     video.onloadeddata = () => {
@@ -281,7 +297,7 @@ export function ScanPage() {
     video.onseeked = async () => {
       if (disposed) return;
       const canvas = canvasRef.current;
-      if (!canvas) { URL.revokeObjectURL(url); return; }
+      if (!canvas) { if (isBlobUrl) URL.revokeObjectURL(url); return; }
 
       const container = containerRef.current;
       const maxW = container ? container.clientWidth - 20 : 800;
@@ -323,13 +339,13 @@ export function ScanPage() {
         setAutoDepth(true);
       }
 
-      URL.revokeObjectURL(url);
+      if (isBlobUrl) URL.revokeObjectURL(url);
       if (!disposed) setFrameReady(true);
     };
 
     video.src = url;
-    return () => { disposed = true; URL.revokeObjectURL(url); };
-  }, [phase, state.videoFile]);
+    return () => { disposed = true; if (isBlobUrl) URL.revokeObjectURL(url); };
+  }, [phase, state.videoFile, state.videoUrl]);
 
   // ─── Draw crop overlay ──────────
   const drawCropOverlay = useCallback(() => {
@@ -451,7 +467,8 @@ export function ScanPage() {
 
     const video = document.createElement('video');
     video.preload = 'auto';
-    video.src = URL.createObjectURL(state.videoFile);
+    video.crossOrigin = 'anonymous';
+    video.src = state.videoUrl ?? URL.createObjectURL(state.videoFile!);
     await new Promise<void>((r) => { video.oncanplaythrough = () => r(); });
 
     const track = state.gpxTrack;

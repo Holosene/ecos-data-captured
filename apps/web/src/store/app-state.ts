@@ -46,6 +46,7 @@ export interface AppState {
 
   // Files
   videoFile: File | null;
+  videoUrl: string | null;
   gpxFile: File | null;
   videoDurationS: number;
   videoWidth: number;
@@ -118,6 +119,7 @@ export const INITIAL_STATE: AppState = {
   useV2: true,
 
   videoFile: null,
+  videoUrl: null,
   gpxFile: null,
   videoDurationS: 0,
   videoWidth: 0,
@@ -167,7 +169,7 @@ export type AppAction =
   | { type: 'SET_V2_STEP'; step: V2Step }
   | { type: 'SET_USE_V2'; useV2: boolean }
   // Files
-  | { type: 'SET_VIDEO'; file: File; durationS: number; width: number; height: number }
+  | { type: 'SET_VIDEO'; file: File; durationS: number; width: number; height: number; url?: string }
   | { type: 'SET_GPX'; file: File; track: GpxTrack }
   // Crop
   | { type: 'SET_CROP'; crop: CropRect }
@@ -216,6 +218,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         videoFile: action.file,
+        videoUrl: action.url ?? null,
         videoDurationS: action.durationS,
         videoWidth: action.width,
         videoHeight: action.height,
