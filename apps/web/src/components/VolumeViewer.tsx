@@ -560,7 +560,7 @@ export function VolumeViewer({
           if (renderer) {
             const state = renderer.getCameraState();
             presentationPoses.current[editingMode] = state;
-            console.log(`[ECOS] Presentation pose saved for "${editingMode}":`, JSON.stringify(state));
+            // pose saved
           }
         } else {
           // Stage 1: snap ALL volumes back to their presentation poses at once

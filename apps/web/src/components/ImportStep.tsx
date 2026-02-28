@@ -93,20 +93,22 @@ export function ImportStep() {
 
   const handleLoadTest = useCallback(async () => {
     try {
+      const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
+      const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
       const [mp4Resp, gpxResp] = await Promise.all([
-        fetch('/examples/test.mp4'),
-        fetch('/examples/test.gpx'),
+        fetch(`/examples/${videoName}`),
+        fetch(`/examples/${gpxName}`),
       ]);
       if (!mp4Resp.ok || !gpxResp.ok) {
         dispatch({ type: 'SET_ERROR', error: 'Fichiers test introuvables dans /examples/' });
         return;
       }
       const mp4Blob = await mp4Resp.blob();
-      const mp4File = new File([mp4Blob], 'test.mp4', { type: 'video/mp4' });
+      const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
       await handleVideoFile(mp4File);
 
       const gpxBlob = await gpxResp.blob();
-      const gpxFile = new File([gpxBlob], 'test.gpx', { type: 'application/gpx+xml' });
+      const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
       await handleGpxFile(gpxFile);
     } catch (e) {
       dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });

@@ -368,6 +368,9 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .manifesto-grid > *, .docs-grid > * {
     grid-column: 1 !important;
   }
+  .scroll-to-top {
+    display: none !important;
+  }
   /* Gallery: single horizontal scroll block on mobile */
   .gallery-container {
     display: flex !important;

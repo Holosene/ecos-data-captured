@@ -571,25 +571,25 @@ export function HomePage() {
             <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s4.title')}
             </h3>
-            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gap: '8px' }}>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '10px' }}>
               {tArray('manifesto.s4.items').map((item, i) => (
-                <li key={i} style={{ display: 'flex', gap: '12px' }}>
-                  <span style={{ color: colors.accent, flexShrink: 0 }}>-</span>
-                  {item}
+                <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>-</span>
+                  <span>{item}</span>
                 </li>
               ))}
             </ul>
           </GlassPanel>
 
-          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }}>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+          <GlassPanel padding="40px 36px" style={{ gridColumn: 'span 2' }}>
+            <h3 style={{ fontSize: '26px', fontWeight: 700, marginBottom: '24px', color: colors.text1, letterSpacing: '-0.01em' }}>
               {t('manifesto.s5.title')}
             </h3>
-            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
+            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px' }}>
               {tArray('manifesto.s5.items').map((item, i) => (
-                <li key={i} style={{ display: 'flex', gap: '12px' }}>
-                  <span style={{ color: colors.accent, flexShrink: 0 }}>+</span>
-                  {item}
+                <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
+                  <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>+</span>
+                  <span>{item}</span>
                 </li>
               ))}
             </ul>
@@ -598,8 +598,8 @@ export function HomePage() {
 
       </section>
 
-      {/* Scroll to top */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 0 clamp(32px, 4vw, 56px)' }}>
+      {/* Scroll to top — hidden on mobile via .scroll-to-top */}
+      <div className="scroll-to-top" style={{ display: 'flex', justifyContent: 'center', padding: '0 0 clamp(32px, 4vw, 56px)' }}>
         <button
           onClick={() => (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' })}
           style={{

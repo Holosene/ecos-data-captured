@@ -85,14 +85,6 @@ export function parseGpx(xmlString: string): GpxTrack {
 
   const totalSkipped = skippedNoCoords + skippedNanCoords + skippedNoTime + skippedInvalidTime;
 
-  // Log diagnostics
-  console.log(
-    `[GPX] Parsed ${points.length}/${trkpts.length} trackpoints` +
-    (totalSkipped > 0
-      ? ` (dropped ${totalSkipped}: noCoords=${skippedNoCoords}, nanCoords=${skippedNanCoords}, noTime=${skippedNoTime}, invalidTime=${skippedInvalidTime})`
-      : ''),
-  );
-
   if (points.length < 2) {
     throw new Error(
       `GPX file has only ${points.length} valid trackpoint(s) out of ${trkpts.length} total. ` +
@@ -124,16 +116,6 @@ export function parseGpx(xmlString: string): GpxTrack {
       );
     }
   }
-
-  // Check for segment gaps (pauses in recording)
-  const trksegs = doc.querySelectorAll('trkseg');
-  if (trksegs.length > 1) {
-    console.log(`[GPX] File contains ${trksegs.length} track segments (possible pauses in recording).`);
-  }
-
-  console.log(
-    `[GPX] Time range: ${startTime.toISOString()} → ${endTime.toISOString()} = ${durationS.toFixed(1)}s (${(durationS / 60).toFixed(1)} min)`,
-  );
 
   return {
     name: trackName,

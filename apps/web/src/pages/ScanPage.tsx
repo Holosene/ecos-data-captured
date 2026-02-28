@@ -212,7 +212,6 @@ export function ScanPage() {
       try {
         const text = await file.text();
         const track = parseGpx(text);
-        console.log(`[GPX Import] ${file.name}: ${track.points.length} points, ${track.durationS.toFixed(1)}s, ${track.totalDistanceM.toFixed(0)}m, start=${track.startTime.toISOString()}, end=${track.endTime.toISOString()}`);
         dispatch({ type: 'SET_GPX', file, track });
       } catch (e) {
         dispatch({ type: 'SET_ERROR', error: `Could not parse GPX: ${(e as Error).message}` });
@@ -665,7 +664,7 @@ export function ScanPage() {
               <GlassPanel style={{ padding: '24px', opacity: !state.gpxFile ? 0.7 : 1 }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
-                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.text3, marginLeft: '8px' }}>
+                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.accentMuted, marginLeft: '8px' }}>
                     ({t('common.optional')})
                   </span>
                 </h3>
