@@ -46,6 +46,7 @@ export class VolumeRendererClassic {
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
   private resizeObserver: ResizeObserver | null = null;
+  private _needsRender = true;
   // Pre-allocated vectors to avoid GC pressure in hot loops
   private _camLocal = new THREE.Vector3();
   private _offsetVec = new THREE.Vector3();
@@ -91,6 +92,7 @@ export class VolumeRendererClassic {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.8;
+    this.controls.addEventListener('change', () => { this._needsRender = true; });
 
     // Transfer function texture (1D: 256x1 RGBA)
     const lutData = generateLUT(this.settings.chromaticMode);
@@ -151,6 +153,7 @@ export class VolumeRendererClassic {
 
   setCalibration(config: CalibrationConfig): void {
     this.calibration = config;
+    this._needsRender = true;
 
     // Position + rotation on mesh
     if (this.volumeMesh) {
@@ -220,6 +223,7 @@ export class VolumeRendererClassic {
 
   /** Programmatically orbit the camera by delta angles (radians) */
   rotateBy(deltaAzimuth: number, deltaPolar: number): void {
+    this._needsRender = true;
     this._offsetVec.copy(this.camera.position).sub(this.controls.target);
     this._spherical.setFromVector3(this._offsetVec);
     this._spherical.theta -= deltaAzimuth;
@@ -272,6 +276,7 @@ export class VolumeRendererClassic {
     }
 
     this.controls.update();
+    this._needsRender = true;
   }
 
   getCameraPreset(): CameraPreset {
@@ -293,6 +298,7 @@ export class VolumeRendererClassic {
     this.camera.up.set(state.up[0], state.up[1], state.up[2]);
     this.controls.target.set(state.target[0], state.target[1], state.target[2]);
     this.controls.update();
+    this._needsRender = true;
   }
 
   // ─── Volume data upload ─────────────────────────────────────────────────
@@ -318,6 +324,7 @@ export class VolumeRendererClassic {
     if (!dimsChanged && this.volumeTexture && this.meshCreated && this.material) {
       (this.volumeTexture.image as { data: Float32Array }).data.set(data);
       this.volumeTexture.needsUpdate = true;
+      this._needsRender = true;
       if (!extentChanged) return;
       const maxExtent = Math.max(...this.extent);
       this._scaleVec.set(
@@ -355,6 +362,7 @@ export class VolumeRendererClassic {
     }
 
     this.createVolumeMesh();
+    this._needsRender = true;
   }
 
   getVolumeDimensions(): [number, number, number] {
@@ -566,6 +574,7 @@ void main() {
 
   updateSettings(partial: Partial<RendererSettings>): void {
     this.settings = { ...this.settings, ...partial };
+    this._needsRender = true;
 
     if (this.material) {
       const u = this.material.uniforms;
@@ -620,10 +629,13 @@ void main() {
     if (this.disposed) return;
     this.animationId = requestAnimationFrame(this.animate);
 
-    this.controls.update();
+    const controlsMoved = this.controls.update();
+    if (controlsMoved) this._needsRender = true;
+
+    if (!this._needsRender) return;
+    this._needsRender = false;
 
     if (this.material && this.volumeMesh) {
-      // Reuse pre-allocated vector to avoid GC pressure (~60 allocs/sec per renderer)
       this._camLocal.copy(this.camera.position);
       this.volumeMesh.worldToLocal(this._camLocal);
       this.material.uniforms.uCameraPos.value.copy(this._camLocal);
@@ -642,6 +654,7 @@ void main() {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
+    this._needsRender = true;
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────────────
@@ -676,6 +689,7 @@ void main() {
 
   setSceneBg(color: string): void {
     this.renderer.setClearColor(new THREE.Color(color), 1);
+    this._needsRender = true;
   }
 
   // ─── Accessors ────────────────────────────────────────────────────────

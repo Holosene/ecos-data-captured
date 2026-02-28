@@ -797,7 +797,7 @@ export function VolumeViewer({
   const gridRef = useRef(grid);
   gridRef.current = grid;
 
-  /** Build window volume into a pre-allocated or cached Float32Array */
+  /** Build window volume into a pre-allocated Float32Array (for direct GPU upload, NOT for caching) */
   const buildWindowVolumePooled = useCallback((
     allFrames: PreprocessedFrame[],
     centerIndex: number,
@@ -806,16 +806,17 @@ export function VolumeViewer({
     const half = Math.floor(windowSize / 2);
     const start = Math.max(0, centerIndex - half);
     const end = Math.min(allFrames.length, start + windowSize);
-    const windowFrames = allFrames.slice(start, end);
+    const count = end - start;
 
-    if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
+    if (count === 0 || allFrames[start].width === 0 || allFrames[start].height === 0) {
       return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
     }
 
-    const dimX = windowFrames[0].width;
-    const dimY = windowFrames.length;
-    const dimZ = windowFrames[0].height;
+    const dimX = allFrames[start].width;
+    const dimY = count;
+    const dimZ = allFrames[start].height;
     const totalSize = dimX * dimY * dimZ;
+    const strideZ = dimY * dimX;
 
     // Reuse pre-allocated buffer if large enough, otherwise grow it
     if (windowBufRef.current.size < totalSize) {
@@ -823,24 +824,20 @@ export function VolumeViewer({
     }
     const data = windowBufRef.current.buf;
 
+    // Row-copy: O(dimY * dimZ) subarray ops instead of O(dimX * dimY * dimZ) pixel ops
     for (let yi = 0; yi < dimY; yi++) {
-      const frame = windowFrames[yi];
+      const intensity = allFrames[start + yi].intensity;
+      const yiOffset = yi * dimX;
       for (let zi = 0; zi < dimZ; zi++) {
-        for (let xi = 0; xi < dimX; xi++) {
-          const srcIdx = zi * dimX + xi;
-          const dstIdx = zi * dimY * dimX + yi * dimX + xi;
-          data[dstIdx] = frame.intensity[srcIdx] ?? 0;
-        }
+        const srcOffset = zi * dimX;
+        const dstOffset = zi * strideZ + yiOffset;
+        data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
       }
     }
 
     const aspect = dimX / dimZ;
-    // Return a view/copy of just the needed portion (texture needs exact size)
-    const normalized = totalSize === windowBufRef.current.size
-      ? data
-      : data.subarray(0, totalSize);
     return {
-      normalized,
+      normalized: totalSize === windowBufRef.current.size ? data : data.subarray(0, totalSize),
       dimensions: [dimX, dimY, dimZ],
       extent: [aspect, 0.5, 1],
     };
@@ -855,9 +852,14 @@ export function VolumeViewer({
     if (rendererBRef.current) {
       const cacheB = frameCacheBRef.current;
       const cachedB = cacheB.get(frameIdx);
-      const volB = cachedB ?? buildWindowVolumePooled(frms, frameIdx, WINDOW_SIZE);
-      if (!cachedB) cacheB.set(frameIdx, volB);
-      rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+      if (cachedB) {
+        // Use cached (already cloned) data
+        rendererBRef.current.uploadVolume(cachedB.normalized, cachedB.dimensions, cachedB.extent);
+      } else {
+        // Build into pooled buffer → upload directly to GPU → do NOT cache pooled ref
+        const volB = buildWindowVolumePooled(frms, frameIdx, WINDOW_SIZE);
+        rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+      }
     }
 
     // Mode C upload
@@ -866,9 +868,14 @@ export function VolumeViewer({
     if (rendererCRef.current && bm && gd) {
       const cacheC = frameCacheCRef.current;
       const cachedC = cacheC.get(frameIdx);
-      const volC = cachedC ?? projectFrameWindow(frms, frameIdx, WINDOW_SIZE, bm, gd);
-      if (!cachedC) cacheC.set(frameIdx, volC);
-      rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+      if (cachedC) {
+        rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
+      } else {
+        // projectFrameWindow allocates its own array — safe to cache
+        const volC = projectFrameWindow(frms, frameIdx, WINDOW_SIZE, bm, gd);
+        cacheC.set(frameIdx, volC);
+        rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+      }
     }
   }, [buildWindowVolumePooled]);
 
