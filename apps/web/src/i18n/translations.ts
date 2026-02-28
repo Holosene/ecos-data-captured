@@ -289,7 +289,7 @@ export const translations = {
     'v2.controls.ghost': 'Renforcement fantôme',
     'v2.controls.steps': 'Pas ray march',
     'v2.controls.showBeam': 'Afficher le faisceau',
-    'v2.controls.playSpeed': 'Vitesse lecture',
+    'v2.controls.playSpeed': 'Vitesse de lecture',
 
     // V2 Slices
     'v2.slices.title': 'Coupes orthogonales',
@@ -334,10 +334,19 @@ export const translations = {
     'v2.sync.trimStartTooltip': 'Retire des secondes au début de l\u2019enregistrement GPX pour aligner avec la vidéo.',
     'v2.sync.trimEndTooltip': 'Retire des secondes à la fin de l\u2019enregistrement GPX pour aligner avec la vidéo.',
 
+    // V2 Volume section titles
+    'v2.vol.cone': 'Cône',
+    'v2.vol.coneDesc': 'Projection conique glissante',
+    'v2.vol.trace': 'Tracé',
+    'v2.vol.traceDesc': 'Empilement statique',
+    'v2.vol.block': 'Bloc',
+    'v2.vol.blockDesc': 'Projection cubique du parcours',
+
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
     'v2.map.sessions': 'sessions',
     'v2.map.empty': 'Importez un scan pour voir les traces GPS sur la carte.',
+    'v2.map.gpxHint': 'Importez un fichier GPX pour accéder à la carte.',
     'v2.map.noSessions': 'Aucune session enregistrée.',
     'v2.map.newScan': 'Nouveau scan',
 
@@ -680,10 +689,19 @@ export const translations = {
     'v2.sync.trimStartTooltip': 'Remove seconds from the beginning of the GPX recording to align with video.',
     'v2.sync.trimEndTooltip': 'Remove seconds from the end of the GPX recording to align with video.',
 
+    // V2 Volume section titles
+    'v2.vol.cone': 'Cone',
+    'v2.vol.coneDesc': 'Sliding conic projection',
+    'v2.vol.trace': 'Trace',
+    'v2.vol.traceDesc': 'Static stacking',
+    'v2.vol.block': 'Block',
+    'v2.vol.blockDesc': 'Cubic path projection',
+
     // V2 Map
     'v2.map.title': 'Recording Sessions',
     'v2.map.sessions': 'sessions',
     'v2.map.empty': 'Import a scan to see GPS traces on the map.',
+    'v2.map.gpxHint': 'Import a GPX file to access the map.',
     'v2.map.noSessions': 'No sessions recorded yet.',
     'v2.map.newScan': 'New Scan',
 
