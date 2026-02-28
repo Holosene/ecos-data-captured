@@ -60,7 +60,7 @@ interface QualityConfig {
 
 const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
   minimal: {
-    fps: 1,
+    fps: 2,
     grid: { resX: 64, resY: 64, resZ: 64 },
     preprocessing: {
       upscaleFactor: 1,
@@ -71,7 +71,7 @@ const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
     },
   },
   medium: {
-    fps: 2,
+    fps: 4,
     grid: { resX: 96, resY: 96, resZ: 96 },
     preprocessing: {
       upscaleFactor: 1,
@@ -82,7 +82,7 @@ const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
     },
   },
   complete: {
-    fps: 4,
+    fps: 8,
     grid: { resX: 128, resY: 128, resZ: 128 },
     preprocessing: {
       ...DEFAULT_PREPROCESSING,
@@ -710,7 +710,7 @@ export function ScanPage() {
         </div>
       )}
 
-      <div className="scan-content" style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+      <div className="scan-content" style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (

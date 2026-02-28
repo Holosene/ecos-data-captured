@@ -27,10 +27,9 @@ export function HomePage() {
   useEffect(() => {
     const el = heroCtaRef.current;
     if (!el) return;
-    const mainContent = document.getElementById('main-content');
     const observer = new IntersectionObserver(
       ([entry]) => setShowFloatingCta(!entry.isIntersecting),
-      { threshold: 0, root: mainContent },
+      { threshold: 0 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -600,41 +599,34 @@ export function HomePage() {
       </div>
 
       {/* Floating scan CTA — accent bg, frosted, appears when hero CTA scrolls out */}
-      <div
-        className="floating-scan-cta-wrap"
+      <button
+        onClick={() => navigate('/scan')}
+        className="floating-scan-cta"
         style={{
           position: 'fixed',
           bottom: '32px',
           right: '32px',
           zIndex: 90,
+          padding: '20px 48px 22px',
+          fontSize: '20px',
+          fontWeight: 600,
+          letterSpacing: '-0.01em',
+          fontFamily: 'inherit',
+          color: '#FFFFFF',
+          background: 'var(--cta-bg-soft)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: 'var(--radius-full)',
+          cursor: 'pointer',
+          boxShadow: 'none',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',
-          transition: 'opacity 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
       >
-        <button
-          onClick={() => navigate('/scan')}
-          className="floating-scan-cta"
-          style={{
-            padding: '20px 48px 22px',
-            fontSize: '20px',
-            fontWeight: 600,
-            letterSpacing: '-0.01em',
-            fontFamily: 'inherit',
-            color: '#FFFFFF',
-            background: 'var(--cta-bg-soft)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: 'var(--radius-full)',
-            cursor: 'pointer',
-            boxShadow: 'none',
-          }}
-        >
-          {t('home.cta')}
-        </button>
-      </div>
+        {t('home.cta')}
+      </button>
 
       {/* Lightbox */}
       {lightboxOpen && (
