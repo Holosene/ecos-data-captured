@@ -6,7 +6,7 @@
  * Clicking a recording loads its volumetric viewer.
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { RecordingSession } from '@echos/core';
@@ -36,10 +36,14 @@ export function MapView({
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const layersRef = useRef<Map<string, L.Polyline>>(new Map());
   const { t } = useTranslation();
+  const [showTouchHint, setShowTouchHint] = useState(false);
+  const touchHintTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize map
   useEffect(() => {
     if (!mapRef.current || leafletMap.current) return;
+
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
     const map = L.map(mapRef.current, {
       center: [46.6, 2.3],
@@ -47,6 +51,7 @@ export function MapView({
       zoomControl: false,
       scrollWheelZoom: false,
       attributionControl: false,
+      dragging: !isTouchDevice,
     });
 
     // Custom zoom control positioned top-right
@@ -164,6 +169,44 @@ export function MapView({
     setTimeout(() => map.invalidateSize(), 350);
   }, [deepFocus, selectedSessionId, sessions, gpxTracks]);
 
+  // Two-finger touch handling — show hint on single-finger, enable drag on two-finger
+  useEffect(() => {
+    const map = leafletMap.current;
+    const el = mapRef.current;
+    if (!map || !el) return;
+
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice) return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        map.dragging.enable();
+        setShowTouchHint(false);
+        if (touchHintTimer.current) clearTimeout(touchHintTimer.current);
+      } else if (e.touches.length === 1) {
+        map.dragging.disable();
+        setShowTouchHint(true);
+        if (touchHintTimer.current) clearTimeout(touchHintTimer.current);
+        touchHintTimer.current = setTimeout(() => setShowTouchHint(false), 1500);
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        map.dragging.disable();
+      }
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: true });
+    el.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchend', handleTouchEnd);
+      if (touchHintTimer.current) clearTimeout(touchHintTimer.current);
+    };
+  }, []);
+
   return (
     <div style={{ position: 'relative', height: '100%', minHeight: '300px' }}>
       <div
@@ -176,6 +219,11 @@ export function MapView({
           border: `1px solid ${colors.border}`,
         }}
       />
+      {/* Two-finger touch hint overlay */}
+      <div className={`map-touch-overlay${showTouchHint ? ' visible' : ''}`}>
+        <span>{t('v2.map.twoFingerHint')}</span>
+      </div>
+
       {/* Accent tint overlay — colors water zones toward site accent */}
       <div
         style={{

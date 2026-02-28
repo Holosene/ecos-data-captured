@@ -349,6 +349,7 @@ export const translations = {
     'v2.map.gpxHint': 'Importez un fichier GPX pour accéder à la carte.',
     'v2.map.noSessions': 'Aucune session enregistrée.',
     'v2.map.newScan': 'Nouveau scan',
+    'v2.map.twoFingerHint': 'Utilisez deux doigts pour déplacer la carte',
 
     // Common
     'common.back': 'Retour',
@@ -708,6 +709,7 @@ export const translations = {
     'v2.map.gpxHint': 'Import a GPX file to access the map.',
     'v2.map.noSessions': 'No sessions recorded yet.',
     'v2.map.newScan': 'New Scan',
+    'v2.map.twoFingerHint': 'Use two fingers to move the map',
 
     // Common
     'common.back': 'Back',

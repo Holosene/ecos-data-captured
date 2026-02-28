@@ -70,6 +70,8 @@ export function Button({
     justifyContent: 'center',
     gap: '8px',
     letterSpacing: '-0.01em',
+    outline: 'none',
+    WebkitTapHighlightColor: 'transparent',
     ...style,
   };
 
