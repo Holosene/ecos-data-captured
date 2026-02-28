@@ -67,7 +67,7 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
 export const DEFAULT_CALIBRATION_B: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 90, y: 0, z: 0 },
-  scale: { x: 1.66, y: 2, z: 1 },
+  scale: { x: 2, y: 2, z: 1 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
   camera: {
     dist: 1.6,
@@ -89,15 +89,15 @@ export const DEFAULT_CALIBRATION_B: CalibrationConfig = {
 export const DEFAULT_CALIBRATION_C: CalibrationConfig = {
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 90, y: 0, z: 0 },
-  scale: { x: 2.75, y: 1, z: 1.01 },
+  scale: { x: 2, y: 1, z: 1 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
   camera: {
     dist: 1.5,
     fov: 39,
     orbit: {
-      posX: -0.06556017468629348,
-      posY: -0.290820286343246,
-      posZ: 1.8747881499061871,
+      posX: -0.47426702506952767,
+      posY: -0.06230380348254261,
+      posZ: 1.8370885137863182,
       targetX: 0,
       targetY: 0,
       targetZ: 0,
