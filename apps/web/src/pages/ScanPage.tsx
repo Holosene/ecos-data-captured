@@ -228,12 +228,18 @@ export function ScanPage() {
     try {
       const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
       const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
+      const basePath = import.meta.env.BASE_URL ?? '/echos-data-capture/';
+      const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
+      const gpxUrl = `${basePath}examples/${encodeURIComponent(gpxName)}`;
       const [mp4Resp, gpxResp] = await Promise.all([
-        fetch(`/echos-data-capture/examples/${videoName}`),
-        fetch(`/echos-data-capture/examples/${gpxName}`),
+        fetch(videoUrl),
+        fetch(gpxUrl),
       ]);
-      if (!mp4Resp.ok || !gpxResp.ok) {
-        dispatch({ type: 'SET_ERROR', error: 'Fichiers test introuvables dans /examples/' });
+      const missing: string[] = [];
+      if (!mp4Resp.ok) missing.push(videoName);
+      if (!gpxResp.ok) missing.push(gpxName);
+      if (missing.length > 0) {
+        dispatch({ type: 'SET_ERROR', error: `Fichiers introuvables dans ${basePath}examples/ : ${missing.join(', ')}` });
         return;
       }
       const mp4Blob = await mp4Resp.blob();
@@ -689,7 +695,7 @@ export function ScanPage() {
               <GlassPanel style={{ padding: '24px' }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
-                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.accent, opacity: 0.5, marginLeft: '8px' }}>
+                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.accent, marginLeft: '8px' }}>
                     ({t('common.optional')})
                   </span>
                 </h3>

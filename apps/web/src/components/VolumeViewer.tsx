@@ -93,31 +93,30 @@ function buildWindowVolume(
   const half = Math.floor(windowSize / 2);
   const start = Math.max(0, centerIndex - half);
   const end = Math.min(allFrames.length, start + windowSize);
-  const windowFrames = allFrames.slice(start, end);
+  const count = end - start;
 
-  if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
+  if (count === 0 || allFrames[start].width === 0 || allFrames[start].height === 0) {
     return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
   }
 
-  const dimX = windowFrames[0].width;    // lateral (beam columns)
-  const dimY = windowFrames.length;      // track (window frames)
-  const dimZ = windowFrames[0].height;   // depth (sonar rows)
+  const dimX = allFrames[start].width;
+  const dimY = count;
+  const dimZ = allFrames[start].height;
+  const strideZ = dimY * dimX;
 
   const data = new Float32Array(dimX * dimY * dimZ);
 
+  // Row-copy: O(dimY × dimZ) subarray ops instead of O(dimX × dimY × dimZ)
   for (let yi = 0; yi < dimY; yi++) {
-    const frame = windowFrames[yi];
+    const intensity = allFrames[start + yi].intensity;
+    const yiOffset = yi * dimX;
     for (let zi = 0; zi < dimZ; zi++) {
-      for (let xi = 0; xi < dimX; xi++) {
-        const srcIdx = zi * dimX + xi;
-        const dstIdx = zi * dimY * dimX + yi * dimX + xi;
-        data[dstIdx] = frame.intensity[srcIdx] ?? 0;
-      }
+      const srcOffset = zi * dimX;
+      const dstOffset = zi * strideZ + yiOffset;
+      data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
     }
   }
 
-  // Extent: Y forced thick (0.5) so volume has visible depth
-  // even with few frames (12 frames vs 200+ pixels).
   const aspect = dimX / dimZ;
   return {
     normalized: data,
@@ -631,7 +630,25 @@ export function VolumeViewer({
 
       if (e.key === 'Escape') {
         if (calibrationOpen) setCalibrationOpen(false);
-        else if (editingMode) setEditingMode(null);
+        else if (editingMode) {
+          // Reset calibration to strict base defaults on Escape
+          const defaults: Record<string, CalibrationConfig> = {
+            instrument: { ...DEFAULT_CALIBRATION },
+            spatial: { ...DEFAULT_CALIBRATION_B },
+            classic: { ...DEFAULT_CALIBRATION_C },
+          };
+          const baseCal = defaults[editingMode];
+          if (baseCal) {
+            const renderer = getRenderer(editingMode);
+            const currentBg = renderer
+              ? (renderer.getCalibration?.() ?? baseCal).bgColor
+              : baseCal.bgColor;
+            const resetCal = { ...baseCal, bgColor: currentBg };
+            setCalibrations(prev => ({ ...prev, [editingMode]: resetCal }));
+            renderer?.setCalibration(resetCal);
+          }
+          setEditingMode(null);
+        }
       }
     };
     document.addEventListener('keydown', handleKey);
@@ -897,20 +914,22 @@ export function VolumeViewer({
     }
   }, []);
 
-  // Prefetch ahead of current frame (runs when currentFrame changes via slider or on stop)
+  // Prefetch ahead of current frame — ONLY when NOT playing (slider interaction / initial load).
+  // During playback, volumes are built on-the-fly via pooled buffer to avoid CPU contention.
   useEffect(() => {
-    if (!hasFrames || !frames || frames.length === 0) return;
+    if (!hasFrames || !frames || frames.length === 0 || playing) return;
     let cancelled = false;
     const lookAhead = 8;
 
     (async () => {
-      // Prefetch Mode B
+      // Prefetch Mode B (uses optimized row-copy buildWindowVolume)
       const cacheB = frameCacheBRef.current;
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames.length || cacheB.has(idx)) continue;
         cacheB.set(idx, buildWindowVolume(frames, idx, WINDOW_SIZE));
-        if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+        // Yield to main thread every 2 frames to avoid jank
+        if (offset % 2 === 1) await new Promise((r) => setTimeout(r, 0));
       }
 
       // Prefetch Mode C
@@ -920,7 +939,8 @@ export function VolumeViewer({
           const idx = currentFrame + offset;
           if (idx >= frames.length || cacheC.has(idx)) continue;
           cacheC.set(idx, projectFrameWindow(frames, idx, WINDOW_SIZE, beam, grid));
-          if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
+          // Yield more often — projectFrameWindow is heavy
+          await new Promise((r) => setTimeout(r, 0));
         }
       }
 
@@ -928,7 +948,7 @@ export function VolumeViewer({
     })();
 
     return () => { cancelled = true; };
-  }, [currentFrame, frames, hasFrames, beam, grid, evictCaches]);
+  }, [currentFrame, frames, hasFrames, beam, grid, playing, evictCaches]);
 
   // Upload when currentFrame changes (slider interaction or initial load)
   useEffect(() => {
@@ -948,51 +968,74 @@ export function VolumeViewer({
   }, [fullSliceVolume, volumeData, dimensions]);
 
   // ─── Playback loop — ref-driven, uploads directly to renderers ──────────
-  // During playback: RAF loop uploads directly to WebGL (no React state change per frame).
-  // React state only syncs every ~250ms for the UI slider display.
+  // During playback: setTimeout-based loop for consistent frame timing.
+  // Mode B is updated every frame; Mode C is throttled to every Nth frame
+  // (projectFrameWindow is heavy — cone projection per pixel).
+  // React state only syncs at 4Hz for the UI slider display.
   useEffect(() => {
     if (!hasFrames || !playing) return;
     playingRef.current = true;
     const intervalMs = 1000 / playSpeed;
-    let lastTime = 0;
-    let lastStateSync = 0;
+    let lastStateSync = performance.now();
     const STATE_SYNC_INTERVAL = 250; // ms — sync React state for slider UI at 4Hz
-    let rafId: number;
+    const MODE_C_EVERY = 3; // update Mode C only every 3rd frame
+    let frameCounter = 0;
+    let timerId: ReturnType<typeof setTimeout>;
 
-    const tick = (timestamp: number) => {
+    const tick = () => {
       if (!playingRef.current) return;
-      if (lastTime === 0) { lastTime = timestamp; lastStateSync = timestamp; }
 
-      if (timestamp - lastTime >= intervalMs) {
-        lastTime = timestamp;
-        const next = currentFrameRef.current + 1;
-        if (next >= framesRef.current!.length) {
-          // End of playback — sync final frame to React state
-          setCurrentFrame(currentFrameRef.current);
-          setPlaying(false);
-          return;
-        }
-        currentFrameRef.current = next;
+      const next = currentFrameRef.current + 1;
+      if (next >= framesRef.current!.length) {
+        setCurrentFrame(currentFrameRef.current);
+        setPlaying(false);
+        return;
+      }
+      currentFrameRef.current = next;
+      frameCounter++;
 
-        // Direct upload to WebGL renderers (bypasses React entirely)
-        uploadFrameToRenderers(next);
+      // Mode B: always upload (fast — pooled buffer + FAST PATH GPU upload)
+      const frms = framesRef.current;
+      if (frms && frms.length > 0 && rendererBRef.current) {
+        const volB = buildWindowVolumePooled(frms, next, WINDOW_SIZE);
+        rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+      }
 
-        // Sync React state at reduced frequency for UI slider
-        if (timestamp - lastStateSync >= STATE_SYNC_INTERVAL) {
-          lastStateSync = timestamp;
-          setCurrentFrame(next);
+      // Mode C: only update every Nth frame (projectFrameWindow is heavy)
+      const bm = beamRef.current;
+      const gd = gridRef.current;
+      if (rendererCRef.current && bm && gd && frms && frameCounter % MODE_C_EVERY === 0) {
+        const cacheC = frameCacheCRef.current;
+        const cachedC = cacheC.get(next);
+        if (cachedC) {
+          rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
+        } else {
+          const volC = projectFrameWindow(frms, next, WINDOW_SIZE, bm, gd);
+          cacheC.set(next, volC);
+          rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
         }
       }
-      rafId = requestAnimationFrame(tick);
+
+      // Sync React state at reduced frequency for UI slider
+      const now = performance.now();
+      if (now - lastStateSync >= STATE_SYNC_INTERVAL) {
+        lastStateSync = now;
+        setCurrentFrame(next);
+      }
+
+      // Schedule next frame with setTimeout for consistent timing
+      timerId = setTimeout(tick, intervalMs);
     };
-    rafId = requestAnimationFrame(tick);
+
+    // Start first frame after a short delay
+    timerId = setTimeout(tick, intervalMs);
     return () => {
       playingRef.current = false;
-      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
       // On stop: sync final frame position to React state
       setCurrentFrame(currentFrameRef.current);
     };
-  }, [playing, playSpeed, hasFrames, uploadFrameToRenderers]);
+  }, [playing, playSpeed, hasFrames, buildWindowVolumePooled]);
 
   // Settings update — per-mode
   const updateSetting = useCallback(
@@ -1271,7 +1314,30 @@ export function VolumeViewer({
                 </button>
               ) : (
                 <button
-                  onClick={() => setEditingMode(isExpanded ? null : mode)}
+                  onClick={() => {
+                    if (isExpanded) {
+                      // Closing settings → reset calibration to strict base defaults
+                      const defaults: Record<string, CalibrationConfig> = {
+                        instrument: { ...DEFAULT_CALIBRATION },
+                        spatial: { ...DEFAULT_CALIBRATION_B },
+                        classic: { ...DEFAULT_CALIBRATION_C },
+                      };
+                      const baseCal = defaults[mode];
+                      if (baseCal) {
+                        // Preserve the current bgColor (theme-dependent)
+                        const renderer = getRenderer(mode);
+                        const currentBg = renderer
+                          ? (renderer.getCalibration?.() ?? baseCal).bgColor
+                          : baseCal.bgColor;
+                        const resetCal = { ...baseCal, bgColor: currentBg };
+                        setCalibrations(prev => ({ ...prev, [mode]: resetCal }));
+                        renderer?.setCalibration(resetCal);
+                      }
+                      setEditingMode(null);
+                    } else {
+                      setEditingMode(mode);
+                    }
+                  }}
                   style={{
                     width: '48px', height: '48px', minWidth: '48px',
                     borderRadius: '50%',
