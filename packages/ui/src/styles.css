@@ -471,10 +471,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   /* Topbar — compact */
   .echos-topbar { height: 56px; }
   .topbar-nav { display: none !important; }
-  .topbar-actions { display: none !important; }
-  .mobile-menu-btn { display: flex !important; }
-  .mobile-nav-backdrop { display: block; }
-  .mobile-nav-drawer { display: flex; }
+  /* Nav links hidden on mobile, but keep topbar action buttons visible */
 
   /* ── Global mobile spacing reduction ─────────────────── */
   /* Tighter section paddings */
@@ -482,23 +479,23 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     padding-top: clamp(20px, 3vw, 32px) !important;
     padding-bottom: clamp(20px, 3vw, 32px) !important;
   }
-  /* Reduce heading sizes for mobile */
+  /* Heading sizes for mobile — keep readable */
   h1 {
-    font-size: clamp(24px, 6vw, 32px) !important;
-    margin-bottom: 4px !important;
+    font-size: clamp(28px, 7vw, 36px) !important;
+    margin-bottom: 6px !important;
   }
   h2 {
-    font-size: clamp(20px, 5vw, 26px) !important;
+    font-size: clamp(22px, 5.5vw, 28px) !important;
     margin-bottom: 8px !important;
   }
   h3 {
-    font-size: clamp(16px, 4vw, 20px) !important;
+    font-size: clamp(17px, 4.5vw, 22px) !important;
     margin-bottom: 8px !important;
   }
-  /* Subtitle / description spacing after headings */
+  /* Subtitle / description after headings */
   h2 + p, h1 + p {
     margin-bottom: 20px !important;
-    font-size: 14px !important;
+    font-size: 15px !important;
   }
   /* GlassPanel tighter padding on mobile */
   .glass {
@@ -531,14 +528,14 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   .hero-visual-grid > div { min-height: 180px !important; }
   /* Hero description — tighter margin on mobile */
   .hero-desc {
-    margin-bottom: 24px !important;
-    font-size: 14px !important;
+    margin-bottom: 28px !important;
+    font-size: 15px !important;
     line-height: 1.6 !important;
   }
-  /* Hero CTA buttons — smaller on mobile */
+  /* Hero CTA buttons */
   .hero-cta-row button {
-    padding: 10px 20px !important;
-    font-size: 14px !important;
+    padding: 12px 24px !important;
+    font-size: 15px !important;
   }
   .manifesto-grid, .docs-grid {
     grid-template-columns: 1fr !important;
@@ -658,12 +655,16 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
     padding-bottom: 8px !important;
   }
 
-  /* ── Scan page — compress all elements to fit viewport ── */
+  /* ── Scan page — allow vertical scroll on mobile to reach buttons ── */
   .scan-content {
-    overflow: hidden !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch;
     padding-top: 4px !important;
     padding-bottom: 4px !important;
   }
+  .scan-content::-webkit-scrollbar { display: none; }
+  .scan-content { scrollbar-width: none; }
 
   /* Import phase — compact */
   .scan-content h1 {
@@ -786,13 +787,11 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   }
 
   /* Floating CTA — smaller on mobile, keep bottom-right */
-  .floating-scan-cta-wrap {
-    bottom: 20px !important;
-    right: 16px !important;
-  }
   .floating-scan-cta {
-    padding: 14px 28px 15px !important;
-    font-size: 15px !important;
+    padding: 14px 28px 16px !important;
+    font-size: 16px !important;
+    bottom: 20px !important;
+    right: 20px !important;
   }
 }
 
@@ -868,21 +867,27 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
 }
 
+/* Scan content — overflow hidden on desktop (crop phase flex fill) */
+.scan-content {
+  overflow: hidden;
+}
+
 /* Floating scan CTA — simple hover & click feedback */
 .floating-scan-cta {
   transition:
+    opacity 300ms ease,
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1),
     background 200ms ease,
-    filter 200ms ease,
-    transform 200ms ease;
+    filter 200ms ease;
 }
 .floating-scan-cta:hover {
-  transform: translateY(-3px) scale(1.03);
+  transform: translateY(-3px) scale(1.03) !important;
   filter: brightness(1.1);
 }
 .floating-scan-cta:active {
-  transform: translateY(1px) scale(0.97);
+  transform: translateY(1px) scale(0.97) !important;
   filter: brightness(0.9);
-  transition-duration: 80ms;
+  transition-duration: 80ms !important;
 }
 
 /* Bottom action buttons — accent hover */
