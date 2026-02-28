@@ -631,22 +631,8 @@ export function VolumeViewer({
       if (e.key === 'Escape') {
         if (calibrationOpen) setCalibrationOpen(false);
         else if (editingMode) {
-          // Reset calibration to strict base defaults on Escape
-          const defaults: Record<string, CalibrationConfig> = {
-            instrument: { ...DEFAULT_CALIBRATION },
-            spatial: { ...DEFAULT_CALIBRATION_B },
-            classic: { ...DEFAULT_CALIBRATION_C },
-          };
-          const baseCal = defaults[editingMode];
-          if (baseCal) {
-            const renderer = getRenderer(editingMode);
-            const currentBg = renderer
-              ? (renderer.getCalibration?.() ?? baseCal).bgColor
-              : baseCal.bgColor;
-            const resetCal = { ...baseCal, bgColor: currentBg };
-            setCalibrations(prev => ({ ...prev, [editingMode]: resetCal }));
-            renderer?.setCalibration(resetCal);
-          }
+          // Close settings — keep current calibration
+          cancelSnapBack(editingMode);
           setEditingMode(null);
         }
       }
@@ -671,8 +657,10 @@ export function VolumeViewer({
       const bgColor = isExpanded ? stage2Bg : stage1Bg;
       ref.current.setSceneBg(bgColor);
       ref.current.setScrollZoom(isExpanded);
+      // Cancel any pending snap-back when entering or leaving edit mode
+      cancelSnapBack(mode);
     });
-  }, [theme, editingMode]);
+  }, [theme, editingMode, cancelSnapBack]);
 
   const handleCalibrationChange = useCallback((cal: CalibrationConfig) => {
     if (!editingMode) return;
@@ -1316,25 +1304,11 @@ export function VolumeViewer({
                 <button
                   onClick={() => {
                     if (isExpanded) {
-                      // Closing settings → reset calibration to strict base defaults
-                      const defaults: Record<string, CalibrationConfig> = {
-                        instrument: { ...DEFAULT_CALIBRATION },
-                        spatial: { ...DEFAULT_CALIBRATION_B },
-                        classic: { ...DEFAULT_CALIBRATION_C },
-                      };
-                      const baseCal = defaults[mode];
-                      if (baseCal) {
-                        // Preserve the current bgColor (theme-dependent)
-                        const renderer = getRenderer(mode);
-                        const currentBg = renderer
-                          ? (renderer.getCalibration?.() ?? baseCal).bgColor
-                          : baseCal.bgColor;
-                        const resetCal = { ...baseCal, bgColor: currentBg };
-                        setCalibrations(prev => ({ ...prev, [mode]: resetCal }));
-                        renderer?.setCalibration(resetCal);
-                      }
+                      // Closing settings — keep current calibration, just exit edit mode
+                      cancelSnapBack(mode);
                       setEditingMode(null);
                     } else {
+                      cancelSnapBack(mode);
                       setEditingMode(mode);
                     }
                   }}
