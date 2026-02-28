@@ -17,6 +17,7 @@ export interface StepIndicatorProps {
 export function StepIndicator({ steps, currentStep, onStepClick, processingProgress }: StepIndicatorProps) {
   return (
     <div
+      className="step-indicator-bar"
       style={{
         display: 'flex',
         alignItems: 'center',

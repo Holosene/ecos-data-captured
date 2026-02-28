@@ -675,7 +675,7 @@ export function ScanPage() {
         </div>
       )}
 
-      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
@@ -731,7 +731,7 @@ export function ScanPage() {
             )}
 
             {canConfigure && (
-              <div style={{ textAlign: 'center' }}>
+              <div className="scan-next-btn" style={{ textAlign: 'center', marginTop: '16px', paddingBottom: '16px' }}>
                 <Button variant="primary" size="lg" onClick={() => setPhase('crop')}>
                   {t('common.next')}
                 </Button>
@@ -739,7 +739,7 @@ export function ScanPage() {
             )}
 
             {noFilesYet && (
-              <div style={{
+              <div className="scan-no-files" style={{
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center',
