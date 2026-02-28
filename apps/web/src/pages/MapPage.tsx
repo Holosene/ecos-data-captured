@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { GlassPanel, Button, colors } from '@echos/ui';
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
@@ -18,6 +19,7 @@ export function MapPage() {
   const { state, dispatch } = useAppState();
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const handleSessionSelect = useCallback((id: string) => {
@@ -59,7 +61,7 @@ export function MapPage() {
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => window.location.hash = '#/scan'}
+                  onClick={() => navigate('/scan')}
                 >
                   {t('v2.map.newScan')}
                 </Button>

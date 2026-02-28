@@ -13,7 +13,7 @@ if (!rootEl) throw new Error('Root element not found');
 
 createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter basename="/echos-data-capture">
+    <BrowserRouter basename="/ecos-data-captured">
       <ThemeProvider>
         <I18nProvider>
           <App />
