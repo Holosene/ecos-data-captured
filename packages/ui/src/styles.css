@@ -650,7 +650,63 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   }
   .scan-next-btn {
     margin-top: 12px !important;
-    padding-bottom: 24px !important;
+    padding-bottom: 80px !important;
+  }
+
+  /* Scan page — scrollable content on mobile */
+  .scan-content {
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+    min-height: 0 !important;
+  }
+  .scan-content::-webkit-scrollbar { display: none; }
+
+  /* Crop phase — no flex fill, natural flow, constrained canvas */
+  .scan-crop-phase {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 80px;
+  }
+  .scan-crop-phase canvas {
+    max-height: 35vh !important;
+  }
+  .scan-crop-panel {
+    padding: 8px !important;
+  }
+
+  /* Quality presets — compact on mobile */
+  .scan-quality-grid button {
+    padding: 12px 10px !important;
+  }
+  .scan-quality-grid button > div:first-child {
+    font-size: 16px !important;
+    margin-bottom: 3px !important;
+  }
+  .scan-quality-grid button > div:last-child {
+    font-size: 10px !important;
+  }
+
+  /* Settings — bottom padding for floating button */
+  .scan-content > div:last-child {
+    padding-bottom: 80px;
+  }
+
+  /* Floating mobile action button */
+  .scan-mobile-fab {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 12px 20px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--c-black) 70%, transparent);
+    justify-content: center;
+    z-index: 50;
+  }
+  .scan-mobile-fab button {
+    width: 100%;
+    max-width: 400px;
   }
 
   /* Roadmap list — single column on mobile */

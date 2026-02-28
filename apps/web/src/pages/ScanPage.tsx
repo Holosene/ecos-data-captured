@@ -692,7 +692,7 @@ export function ScanPage() {
         </div>
       )}
 
-      <div style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="scan-content" style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
@@ -813,15 +813,15 @@ export function ScanPage() {
 
         {/* ── Crop Phase ─────────────────────── */}
         {phase === 'crop' && (
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px', flexShrink: 0 }}>
+          <div className="scan-crop-phase">
+            <h2 style={{ color: colors.text1, fontSize: 'clamp(18px, 2vw, 24px)', fontWeight: 600, marginBottom: '4px' }}>
               {t('crop.title')}
             </h2>
-            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.4, maxWidth: '640px', flexShrink: 0 }}>
+            <p style={{ color: colors.text2, fontSize: '13px', marginBottom: '12px', lineHeight: 1.4, maxWidth: '640px' }}>
               {t('crop.desc')}
             </p>
 
-            <GlassPanel style={{ padding: '12px', marginBottom: '12px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <GlassPanel className="scan-crop-panel" style={{ padding: '12px', marginBottom: '12px' }}>
               <div
                 ref={containerRef}
                 style={{
@@ -830,7 +830,6 @@ export function ScanPage() {
                   justifyContent: 'center',
                   alignItems: 'center',
                   cursor: 'crosshair',
-                  flex: 1,
                   overflow: 'hidden',
                 }}
               >
@@ -840,7 +839,7 @@ export function ScanPage() {
                   onMouseMove={handleMouseMove}
                   onMouseUp={handleMouseUp}
                   onMouseLeave={handleMouseUp}
-                  style={{ borderRadius: '8px', maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                  style={{ borderRadius: '8px', maxWidth: '100%', maxHeight: '50vh', objectFit: 'contain' }}
                 />
                 {!frameReady && (
                   <div style={{
@@ -857,12 +856,11 @@ export function ScanPage() {
                 )}
               </div>
 
-              <div style={{
+              <div className="scan-crop-info" style={{
                 marginTop: '8px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: '8px',
-                flexShrink: 0,
               }}>
                 {[
                   { label: 'X', value: crop.x },
@@ -880,7 +878,7 @@ export function ScanPage() {
               </div>
             </GlassPanel>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Button variant="ghost" size="lg" onClick={() => setPhase('import')}>
                 {t('common.back')}
               </Button>
@@ -1221,6 +1219,32 @@ export function ScanPage() {
           </div>
         )}
       </div>
+
+      {/* Floating mobile action button — always visible at bottom */}
+      {phase !== 'viewer' && phase !== 'processing' && (
+        <div className="scan-mobile-fab" style={{ display: 'none' }}>
+          {phase === 'import' && canConfigure && (
+            <Button variant="primary" size="lg" onClick={() => setPhase('crop')}>
+              {t('common.next')}
+            </Button>
+          )}
+          {phase === 'crop' && (
+            <Button
+              variant="primary"
+              size="lg"
+              disabled={crop.width < 20 || crop.height < 20}
+              onClick={() => setPhase('settings')}
+            >
+              {t('common.next')}
+            </Button>
+          )}
+          {phase === 'settings' && (
+            <Button variant="primary" size="lg" onClick={runPipeline}>
+              {t('v2.config.generate')}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
