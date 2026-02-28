@@ -96,8 +96,8 @@ export function ImportStep() {
       const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
       const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
       const [mp4Resp, gpxResp] = await Promise.all([
-        fetch(`/examples/${videoName}`),
-        fetch(`/examples/${gpxName}`),
+        fetch(`/echos-data-capture/examples/${videoName}`),
+        fetch(`/echos-data-capture/examples/${gpxName}`),
       ]);
       if (!mp4Resp.ok || !gpxResp.ok) {
         dispatch({ type: 'SET_ERROR', error: 'Fichiers test introuvables dans /examples/' });

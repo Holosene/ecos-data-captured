@@ -222,6 +222,31 @@ export function ScanPage() {
 
   // Both Rendu A and Rendu B only require video; GPX is optional
   const canConfigure = !!state.videoFile;
+  const noFilesYet = !state.videoFile && !state.gpxFile;
+
+  const handleLoadTest = useCallback(async () => {
+    try {
+      const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
+      const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
+      const [mp4Resp, gpxResp] = await Promise.all([
+        fetch(`/echos-data-capture/examples/${videoName}`),
+        fetch(`/echos-data-capture/examples/${gpxName}`),
+      ]);
+      if (!mp4Resp.ok || !gpxResp.ok) {
+        dispatch({ type: 'SET_ERROR', error: 'Fichiers test introuvables dans /examples/' });
+        return;
+      }
+      const mp4Blob = await mp4Resp.blob();
+      const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
+      await handleVideoFile([mp4File]);
+
+      const gpxBlob = await gpxResp.blob();
+      const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
+      await handleGpxFile([gpxFile]);
+    } catch (e) {
+      dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
+    }
+  }, [dispatch, handleVideoFile, handleGpxFile]);
 
   // ─── Crop tool: auto-detect + visual canvas ───────────────────────────
 
@@ -661,10 +686,10 @@ export function ScanPage() {
                 />
               </GlassPanel>
 
-              <GlassPanel style={{ padding: '24px', opacity: !state.gpxFile ? 0.7 : 1 }}>
+              <GlassPanel style={{ padding: '24px' }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropGpx')}
-                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.accentMuted, marginLeft: '8px' }}>
+                  <span style={{ fontWeight: 400, fontSize: '12px', color: colors.accent, opacity: 0.5, marginLeft: '8px' }}>
                     ({t('common.optional')})
                   </span>
                 </h3>
@@ -696,6 +721,38 @@ export function ScanPage() {
                 <Button variant="primary" size="lg" onClick={() => setPhase('crop')}>
                   {t('common.next')}
                 </Button>
+              </div>
+            )}
+
+            {noFilesYet && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '12px',
+                marginTop: '48px',
+              }}>
+                <span style={{ fontSize: '14px', color: colors.text3 }}>
+                  Pas de fichiers ?
+                </span>
+                <button
+                  onClick={handleLoadTest}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: '9999px',
+                    border: `1.5px solid ${colors.accent}`,
+                    background: 'transparent',
+                    color: colors.accent,
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    transition: 'all 150ms ease',
+                  }}
+                  className="echos-action-btn"
+                >
+                  test
+                </button>
               </div>
             )}
           </div>
