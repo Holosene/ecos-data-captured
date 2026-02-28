@@ -35,6 +35,75 @@ import { VolumeViewer } from '../components/VolumeViewer.js';
 
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
 
+// ─── Synthetic test data generators ──────────────────────────────────────────
+
+function drawSonarFrame(ctx: CanvasRenderingContext2D, W: number, H: number, frame: number): void {
+  const sonarTop = Math.round(H * 0.07);
+  const sonarBottom = Math.round(H * 0.95);
+  const sonarH = sonarBottom - sonarTop;
+
+  // Black status bar
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, sonarTop);
+  // Dark sonar background
+  ctx.fillStyle = '#060e1e';
+  ctx.fillRect(0, sonarTop, W, sonarH);
+  // Bottom bar
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, sonarBottom, W, H - sonarBottom);
+
+  // Bottom return (bright band ~80% depth)
+  const bottomY = sonarTop + sonarH * 0.82 + Math.sin(frame * 0.15) * 6;
+  const g = ctx.createLinearGradient(0, bottomY - 15, 0, bottomY + 30);
+  g.addColorStop(0, 'transparent');
+  g.addColorStop(0.3, 'rgba(30,90,220,0.5)');
+  g.addColorStop(0.5, 'rgba(50,140,255,0.8)');
+  g.addColorStop(0.7, 'rgba(25,70,180,0.4)');
+  g.addColorStop(1, 'transparent');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, bottomY - 15, W, 45);
+
+  // Scatter echoes
+  for (let i = 0; i < 80; i++) {
+    const x = (Math.random() * W + frame * 3) % W;
+    const y = sonarTop + Math.random() * sonarH * 0.75;
+    const b = 20 + Math.random() * 80;
+    ctx.fillStyle = `rgba(${b * 0.2},${b * 0.4},${b},0.3)`;
+    ctx.fillRect(x, y, 1 + Math.random() * 2, 1 + Math.random() * 2);
+  }
+
+  // UI overlays — depth + temp text
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.fillText('12.5m', 8, sonarTop + 22);
+  ctx.fillText('17°C', W - 55, sonarTop + 22);
+
+  // Depth scale on left
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (let i = 1; i < 5; i++) {
+    const y = sonarTop + (sonarH * i) / 5;
+    ctx.fillRect(0, y, 30, 1);
+    ctx.font = '10px sans-serif';
+    ctx.fillText(`${i * 3}`, 4, y + 12);
+  }
+}
+
+function generateTestGpx(): string {
+  const base = new Date('2026-02-28T10:00:00Z');
+  const lat0 = 48.8566, lon0 = 2.3522;
+  let pts = '';
+  for (let i = 0; i < 120; i++) {
+    const t = new Date(base.getTime() + i * 500);
+    const lat = (lat0 + i * 0.00004).toFixed(6);
+    const lon = (lon0 + Math.sin(i * 0.08) * 0.00002).toFixed(6);
+    pts += `<trkpt lat="${lat}" lon="${lon}"><ele>0</ele><time>${t.toISOString()}</time></trkpt>\n`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="echos-test" xmlns="http://www.topografix.com/GPX/1/1">
+<trk><name>Test Track</name><trkseg>
+${pts}</trkseg></trk></gpx>`;
+}
+
 // Steps shown in the bar (no "Traitement")
 const PIPELINE_STEP_KEYS = [
   { labelKey: 'v2.step.import', key: 'import' },
@@ -226,31 +295,53 @@ export function ScanPage() {
 
   const handleLoadTest = useCallback(async () => {
     try {
-      const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
-      const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
-      const basePath = import.meta.env.BASE_URL ?? '/echos-data-capture/';
-      const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
-      const gpxUrl = `${basePath}examples/${encodeURIComponent(gpxName)}`;
-      const [mp4Resp, gpxResp] = await Promise.all([
-        fetch(videoUrl),
-        fetch(gpxUrl),
-      ]);
-      const missing: string[] = [];
-      if (!mp4Resp.ok) missing.push(videoName);
-      if (!gpxResp.ok) missing.push(gpxName);
-      if (missing.length > 0) {
-        dispatch({ type: 'SET_ERROR', error: `Fichiers introuvables dans ${basePath}examples/ : ${missing.join(', ')}` });
-        return;
-      }
-      const mp4Blob = await mp4Resp.blob();
-      const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
-      await handleVideoFile([mp4File]);
+      // Generate synthetic sonar video in-memory using Canvas + MediaRecorder
+      const W = 360, H = 640;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d')!;
+      drawSonarFrame(ctx, W, H, 0);
 
-      const gpxBlob = await gpxResp.blob();
-      const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
+      const stream = canvas.captureStream(30);
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : MediaRecorder.isTypeSupported('video/webm')
+          ? 'video/webm'
+          : 'video/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      const videoReady = new Promise<Blob>((resolve) => {
+        recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+      });
+
+      recorder.start();
+      let frameN = 0;
+      const endTime = performance.now() + 2000;
+      await new Promise<void>((resolve) => {
+        const tick = () => {
+          if (performance.now() >= endTime) { resolve(); return; }
+          drawSonarFrame(ctx, W, H, frameN++);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      recorder.stop();
+
+      const videoBlob = await videoReady;
+      const ext = mimeType.includes('webm') ? 'webm' : 'mp4';
+      const videoFile = new File([videoBlob], `test-sonar.${ext}`, { type: mimeType });
+      await handleVideoFile([videoFile]);
+
+      // Generate synthetic GPX track
+      const gpxXml = generateTestGpx();
+      const gpxBlob = new Blob([gpxXml], { type: 'application/gpx+xml' });
+      const gpxFile = new File([gpxBlob], 'test-track.gpx', { type: 'application/gpx+xml' });
       await handleGpxFile([gpxFile]);
     } catch (e) {
-      dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
+      dispatch({ type: 'SET_ERROR', error: `Erreur test: ${(e as Error).message}` });
     }
   }, [dispatch, handleVideoFile, handleGpxFile]);
 
@@ -863,6 +954,7 @@ export function ScanPage() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
+                paddingBottom: '12vh',
                 transition: 'opacity 600ms ease',
               }}>
                 <div style={{ width: '100%', maxWidth: '480px', textAlign: 'center' }}>

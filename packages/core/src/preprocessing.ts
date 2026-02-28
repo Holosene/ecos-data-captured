@@ -351,9 +351,8 @@ export function autoDetectCropRegion(
   const { data, width, height } = imageData;
 
   // ── Step 1: Adaptive status-bar / nav-bar detection ─────────────────────
-  // Instead of fixed %, scan rows for horizontal uniform bands (solid-color bars).
-  // A "uniform row" has low brightness variance across pixels.
-  const ROW_SAMPLE_STEP = 2; // sample every 2nd pixel for speed
+  // Scan rows for horizontal uniform bands (solid-color bars / status bars).
+  const ROW_SAMPLE_STEP = 2;
   const rowBrightness = new Float32Array(height);
   const rowVariance = new Float32Array(height);
 
@@ -373,36 +372,32 @@ export function autoDetectCropRegion(
     rowVariance[y] = sumSq / count - mean * mean;
   }
 
-  // Find top content edge: scan down from top, skip rows that are:
-  //   - Very uniform (variance < 30): solid color bars, status bar
-  //   - Very bright and uniform: white/light toolbars
-  // Stop at the first row with significant variance (sonar content starts)
-  const UNIFORM_THRESHOLD = 30;
+  // Find top content edge: scan down from top, skip uniform rows
+  // (status bar, dark header bar, solid-color toolbars)
+  // Also skip rows that are very dark AND uniform (sonar app dark headers)
+  const UNIFORM_THRESHOLD = 25;
   let safeTop = 0;
-  for (let y = 0; y < Math.floor(height * 0.35); y++) {
+  for (let y = 0; y < Math.floor(height * 0.40); y++) {
     if (rowVariance[y] > UNIFORM_THRESHOLD) break;
     safeTop = y + 1;
   }
 
   // Find bottom content edge: scan up from bottom
   let safeBottom = height;
-  for (let y = height - 1; y > Math.floor(height * 0.65); y--) {
+  for (let y = height - 1; y > Math.floor(height * 0.60); y--) {
     if (rowVariance[y] > UNIFORM_THRESHOLD) break;
     safeBottom = y;
   }
 
-  // Also detect "toolbar" bands in the middle (app UI overlays):
-  // Scan for consecutive uniform rows within the safe zone that span the full width
-  // and are brighter than their neighbors (floating toolbars)
+  // Detect toolbar bands (UI overlays within the content zone)
   const TOOLBAR_MIN_HEIGHT = 4;
   const toolbarBands: Array<{ top: number; bottom: number }> = [];
   let bandStart = -1;
   for (let y = safeTop; y < safeBottom; y++) {
-    if (rowVariance[y] < UNIFORM_THRESHOLD && rowBrightness[y] > 40) {
+    if (rowVariance[y] < UNIFORM_THRESHOLD && rowBrightness[y] > 35) {
       if (bandStart === -1) bandStart = y;
     } else {
       if (bandStart !== -1 && y - bandStart >= TOOLBAR_MIN_HEIGHT) {
-        // Only treat as toolbar if it's thinner than 8% of height (real UI bars)
         if (y - bandStart < height * 0.08) {
           toolbarBands.push({ top: bandStart, bottom: y });
         }
@@ -411,10 +406,42 @@ export function autoDetectCropRegion(
     }
   }
 
-  // Adjust safeTop/safeBottom if toolbar bands are at the edges
   for (const band of toolbarBands) {
     if (band.top <= safeTop + height * 0.05) safeTop = band.bottom;
     if (band.bottom >= safeBottom - height * 0.05) safeBottom = band.top;
+  }
+
+  // ── Step 1b: Skip sonar UI text overlays at top of content area ──────
+  // Sonar apps (Deeper, Lowrance) overlay depth/temp text in the top ~10%
+  // of the sonar zone. These are sparse bright pixels on dark background.
+  // Detect by checking if rows have mostly dark pixels with a few bright spots
+  // (text) vs genuine sonar content (broad variance across the full row width).
+  const textOverlayEnd = Math.min(safeTop + Math.ceil(height * 0.12), safeBottom);
+  for (let y = safeTop; y < textOverlayEnd; y++) {
+    // Count bright pixel clusters in this row (bright = >120)
+    let brightRuns = 0;
+    let inBright = false;
+    let brightPixels = 0;
+    let totalSampled = 0;
+    for (let x = 0; x < width; x += ROW_SAMPLE_STEP) {
+      const i = (y * width + x) * 4;
+      const b = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      totalSampled++;
+      if (b > 120) {
+        brightPixels++;
+        if (!inBright) { brightRuns++; inBright = true; }
+      } else {
+        inBright = false;
+      }
+    }
+    const brightRatio = brightPixels / totalSampled;
+    // Text overlay: few bright clusters (<15% bright pixels) on dark background
+    // vs sonar content: more distributed brightness variations
+    if (brightRuns > 0 && brightRuns <= 6 && brightRatio < 0.15 && brightRatio > 0.005) {
+      safeTop = y + 1;
+    } else if (brightRatio >= 0.15 || rowVariance[y] > UNIFORM_THRESHOLD * 2) {
+      break; // genuine sonar content starts
+    }
   }
 
   // Safety: ensure we have enough area to analyze
