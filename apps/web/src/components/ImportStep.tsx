@@ -89,6 +89,29 @@ export function ImportStep() {
   );
 
   const canProceed = state.videoFile !== null && state.gpxFile !== null;
+  const noFilesYet = state.videoFile === null && state.gpxFile === null;
+
+  const handleLoadTest = useCallback(async () => {
+    try {
+      const [mp4Resp, gpxResp] = await Promise.all([
+        fetch('/examples/test.mp4'),
+        fetch('/examples/test.gpx'),
+      ]);
+      if (!mp4Resp.ok || !gpxResp.ok) {
+        dispatch({ type: 'SET_ERROR', error: 'Fichiers test introuvables dans /examples/' });
+        return;
+      }
+      const mp4Blob = await mp4Resp.blob();
+      const mp4File = new File([mp4Blob], 'test.mp4', { type: 'video/mp4' });
+      await handleVideoFile(mp4File);
+
+      const gpxBlob = await gpxResp.blob();
+      const gpxFile = new File([gpxBlob], 'test.gpx', { type: 'application/gpx+xml' });
+      await handleGpxFile(gpxFile);
+    } catch (e) {
+      dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
+    }
+  }, [dispatch, handleVideoFile, handleGpxFile]);
 
   return (
     <div style={{ display: 'grid', gap: '32px' }}>
@@ -158,6 +181,38 @@ export function ImportStep() {
           {t('import.next')}
         </Button>
       </div>
+
+      {noFilesYet && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: '12px',
+          marginTop: '48px',
+        }}>
+          <span style={{ fontSize: '14px', color: colors.text3 }}>
+            Pas de fichiers ?
+          </span>
+          <button
+            onClick={handleLoadTest}
+            style={{
+              padding: '8px 20px',
+              borderRadius: '9999px',
+              border: `1.5px solid ${colors.accent}`,
+              background: 'transparent',
+              color: colors.accent,
+              fontSize: '14px',
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              transition: 'all 150ms ease',
+            }}
+            className="echos-action-btn"
+          >
+            test
+          </button>
+        </div>
+      )}
     </div>
   );
 }

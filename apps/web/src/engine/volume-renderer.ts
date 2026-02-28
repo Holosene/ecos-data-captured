@@ -135,6 +135,15 @@ export class VolumeRenderer {
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
   private resizeObserver: ResizeObserver | null = null;
+  // Pre-allocated vectors to avoid GC pressure in hot loops
+  private _camLocal = new THREE.Vector3();
+  private _offsetVec = new THREE.Vector3();
+  private _spherical = new THREE.Spherical();
+  private _scaleVec = new THREE.Vector3();
+  private _halfScaleVec = new THREE.Vector3();
+  // Shared geometry singleton (avoids re-creation per mesh)
+  private static _sharedBoxGeometry: THREE.BoxGeometry | null = null;
+  private static _sharedBoxRefCount = 0;
 
   constructor(
     container: HTMLElement,
@@ -245,19 +254,19 @@ export class VolumeRenderer {
       );
     }
 
-    // Recompute scale — extent * calibration scale
+    // Recompute scale — extent * calibration scale (reuse pre-allocated vectors)
     if (this.material) {
       const maxExtent = Math.max(...this.extent);
-      const scale = new THREE.Vector3(
+      this._scaleVec.set(
         (this.extent[0] / maxExtent) * config.scale.x,
         (this.extent[1] / maxExtent) * config.scale.y,
         (this.extent[2] / maxExtent) * config.scale.z,
       );
-      this.volumeScale = scale;
-      const halfScale = scale.clone().multiplyScalar(0.5);
-      this.material.uniforms.volumeScale.value.copy(scale);
-      this.material.uniforms.uVolumeMin.value.copy(halfScale).negate();
-      this.material.uniforms.uVolumeMax.value.copy(halfScale);
+      this.volumeScale.copy(this._scaleVec);
+      this._halfScaleVec.copy(this._scaleVec).multiplyScalar(0.5);
+      this.material.uniforms.volumeScale.value.copy(this._scaleVec);
+      this.material.uniforms.uVolumeMin.value.copy(this._halfScaleVec).negate();
+      this.material.uniforms.uVolumeMax.value.copy(this._halfScaleVec);
 
       // Bend deformation
       this.material.uniforms.uBendAngle.value = (config.bend?.angle ?? 0) * Math.PI / 180;
@@ -305,13 +314,13 @@ export class VolumeRenderer {
 
   /** Programmatically orbit the camera by delta angles (radians) */
   rotateBy(deltaAzimuth: number, deltaPolar: number): void {
-    const offset = this.camera.position.clone().sub(this.controls.target);
-    const spherical = new THREE.Spherical().setFromVector3(offset);
-    spherical.theta -= deltaAzimuth;
-    spherical.phi -= deltaPolar;
-    spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, spherical.phi));
-    offset.setFromSpherical(spherical);
-    this.camera.position.copy(this.controls.target).add(offset);
+    this._offsetVec.copy(this.camera.position).sub(this.controls.target);
+    this._spherical.setFromVector3(this._offsetVec);
+    this._spherical.theta -= deltaAzimuth;
+    this._spherical.phi -= deltaPolar;
+    this._spherical.phi = Math.max(0.01, Math.min(Math.PI - 0.01, this._spherical.phi));
+    this._offsetVec.setFromSpherical(this._spherical);
+    this.camera.position.copy(this.controls.target).add(this._offsetVec);
     this.controls.update();
   }
 
@@ -435,23 +444,27 @@ export class VolumeRenderer {
   private createVolumeMesh(): void {
     if (this.volumeMesh) {
       this.scene.remove(this.volumeMesh);
-      this.volumeMesh.geometry.dispose();
+      // Don't dispose shared geometry — it's reused across instances
       this.material?.dispose();
     }
 
     const maxExtent = Math.max(...this.extent);
     const cal = this.calibration;
-    const scale = new THREE.Vector3(
+    this._scaleVec.set(
       (this.extent[0] / maxExtent) * cal.scale.x,
       (this.extent[1] / maxExtent) * cal.scale.y,
       (this.extent[2] / maxExtent) * cal.scale.z,
     );
-    this.volumeScale = scale;
-    console.log('[ECOS] createVolumeMesh — scale X(lateral):', scale.x, 'Y(track):', scale.y, 'Z(depth):', scale.z);
+    this.volumeScale.copy(this._scaleVec);
 
-    const halfScale = scale.clone().multiplyScalar(0.5);
+    this._halfScaleVec.copy(this._scaleVec).multiplyScalar(0.5);
 
-    const geometry = new THREE.BoxGeometry(2, 2, 2);
+    // Reuse shared BoxGeometry singleton across all renderer instances
+    if (!VolumeRenderer._sharedBoxGeometry) {
+      VolumeRenderer._sharedBoxGeometry = new THREE.BoxGeometry(2, 2, 2);
+    }
+    VolumeRenderer._sharedBoxRefCount++;
+    const geometry = VolumeRenderer._sharedBoxGeometry;
 
     this.material = new THREE.RawShaderMaterial({
       glslVersion: THREE.GLSL3,
@@ -461,10 +474,10 @@ export class VolumeRenderer {
         uVolume: { value: this.volumeTexture },
         uTransferFunction: { value: this.tfTexture },
         uCameraPos: { value: new THREE.Vector3() },
-        uVolumeMin: { value: new THREE.Vector3().copy(halfScale).negate() },
-        uVolumeMax: { value: halfScale.clone() },
+        uVolumeMin: { value: new THREE.Vector3().copy(this._halfScaleVec).negate() },
+        uVolumeMax: { value: this._halfScaleVec.clone() },
         uVolumeSize: { value: new THREE.Vector3(...this.dimensions) },
-        volumeScale: { value: scale },
+        volumeScale: { value: this._scaleVec.clone() },
         uOpacityScale: { value: this.settings.opacityScale },
         uThreshold: { value: this.settings.threshold },
         uDensityScale: { value: this.settings.densityScale },
@@ -730,10 +743,10 @@ void main() {
 
     if (this.material && this.volumeMesh) {
       // Transform camera position into mesh local space for correct ray marching
-      // when position/rotation calibration is applied
-      const camLocal = this.camera.position.clone();
-      this.volumeMesh.worldToLocal(camLocal);
-      this.material.uniforms.uCameraPos.value.copy(camLocal);
+      // Reuse pre-allocated vector to avoid GC pressure (~60 allocs/sec per renderer)
+      this._camLocal.copy(this.camera.position);
+      this.volumeMesh.worldToLocal(this._camLocal);
+      this.material.uniforms.uCameraPos.value.copy(this._camLocal);
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -762,12 +775,19 @@ void main() {
     this.volumeTexture?.dispose();
     this.tfTexture.dispose();
     this.material?.dispose();
-    this.volumeMesh?.geometry.dispose();
+    // Shared geometry — only dispose when last renderer releases it
+    VolumeRenderer._sharedBoxRefCount--;
+    if (VolumeRenderer._sharedBoxRefCount <= 0 && VolumeRenderer._sharedBoxGeometry) {
+      VolumeRenderer._sharedBoxGeometry.dispose();
+      VolumeRenderer._sharedBoxGeometry = null;
+      VolumeRenderer._sharedBoxRefCount = 0;
+    }
     this.gridHelper.dispose();
     this.axesHelper.dispose();
+    // forceContextLoss BEFORE dispose — releases GPU memory immediately
+    this.renderer.forceContextLoss();
     this.renderer.dispose();
     this.renderer.domElement.remove();
-    this.renderer.forceContextLoss();
   }
 
   setScrollZoom(enabled: boolean): void {

@@ -782,7 +782,8 @@ export function VolumeViewer({
   }, [volumeData, dimensions, extent]);
 
   // ─── Mode B: sliding window temporal playback (buildWindowVolume) ────────
-  // Exactly as in 7024cc8: pre-compute windowed volumes ahead of current position
+  // Pre-compute windowed volumes ahead of current position (LRU-bounded)
+  const MAX_CACHE_ENTRIES = 20; // Hard limit: ~20 entries × ~1.4MB = ~28MB max per cache
   const frameCacheBRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
   useEffect(() => {
@@ -801,9 +802,18 @@ export function VolumeViewer({
       }
 
       if (!cancelled) {
+        // Evict entries outside the relevant window
         const minKeep = Math.max(0, currentFrame - 2);
+        const maxKeep = currentFrame + lookAhead;
         for (const key of cache.keys()) {
-          if (key < minKeep) cache.delete(key);
+          if (key < minKeep || key > maxKeep) cache.delete(key);
+        }
+        // Hard limit: if still too large, drop oldest entries
+        if (cache.size > MAX_CACHE_ENTRIES) {
+          const keys = [...cache.keys()].sort((a, b) => a - b);
+          while (cache.size > MAX_CACHE_ENTRIES) {
+            cache.delete(keys.shift()!);
+          }
         }
       }
     })();
@@ -834,15 +844,16 @@ export function VolumeViewer({
     }
   }, [fullSliceVolume, volumeData, dimensions]);
 
-  // ─── Mode C: temporal projection + cache ────────────────────────────
+  // ─── Mode C: temporal projection + cache (LRU-bounded) ────────────────────
   const frameCacheCRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
   useEffect(() => {
     if (!hasFrames || !beam || !grid) return;
     const cache = frameCacheCRef.current;
+    const lookAhead = 8;
     let cancelled = false;
     (async () => {
-      for (let offset = 0; offset <= 8 && !cancelled; offset++) {
+      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
         const idx = currentFrame + offset;
         if (idx >= frames!.length || cache.has(idx)) continue;
         const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
@@ -851,7 +862,16 @@ export function VolumeViewer({
       }
       if (!cancelled) {
         const minKeep = Math.max(0, currentFrame - 2);
-        for (const key of cache.keys()) { if (key < minKeep) cache.delete(key); }
+        const maxKeep = currentFrame + lookAhead;
+        for (const key of cache.keys()) {
+          if (key < minKeep || key > maxKeep) cache.delete(key);
+        }
+        if (cache.size > MAX_CACHE_ENTRIES) {
+          const keys = [...cache.keys()].sort((a, b) => a - b);
+          while (cache.size > MAX_CACHE_ENTRIES) {
+            cache.delete(keys.shift()!);
+          }
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -1306,6 +1326,9 @@ export function VolumeViewer({
         }
         ctx.putImageData(imgData, 0, 0);
         yzThumbnailRef.current = canvas.toDataURL('image/png');
+        // Release canvas memory — clear pixel buffer and nullify dimensions
+        canvas.width = 0;
+        canvas.height = 0;
       }
     } catch { /* ignore */ }
   }
