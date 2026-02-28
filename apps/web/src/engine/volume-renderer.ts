@@ -451,13 +451,6 @@ export class VolumeRenderer {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
-    // If mesh exists and dimensions/extent haven't changed, just update the texture
-    // (prevents camera reset during Mode A temporal playback)
-    if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
-      this.material.uniforms.uVolume.value = this.volumeTexture;
-      return;
-    }
-
     this.createVolumeMesh();
     this._needsRender = true;
   }

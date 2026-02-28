@@ -963,6 +963,8 @@ export function VolumeViewer({
   useEffect(() => {
     if (!hasFrames || !playing) return;
     playingRef.current = true;
+    // Sync ref from React state so playback starts from the current slider position
+    currentFrameRef.current = currentFrame;
     const intervalMs = 1000 / playSpeed;
     let lastStateSync = performance.now();
     const STATE_SYNC_INTERVAL = 250; // ms — sync React state for slider UI at 4Hz
@@ -1193,7 +1195,9 @@ export function VolumeViewer({
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       if (isTemporal && hasFrames) {
                         setPlaying(false);
-                        setCurrentFrame(Number(e.target.value));
+                        const val = Number(e.target.value);
+                        currentFrameRef.current = val;
+                        setCurrentFrame(val);
                       }
                     }}
                     style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
@@ -1205,7 +1209,10 @@ export function VolumeViewer({
                 <button
                   onClick={() => {
                     if (isTemporal && hasFrames) {
-                      if (currentFrame >= totalFrames - 1) setCurrentFrame(0);
+                      if (currentFrame >= totalFrames - 1) {
+                        currentFrameRef.current = 0;
+                        setCurrentFrame(0);
+                      }
                       setPlaying((p) => !p);
                     }
                   }}
