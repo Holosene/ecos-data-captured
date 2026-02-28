@@ -220,24 +220,30 @@ export function ImportStep() {
               cursor: loadingTest ? 'wait' : 'pointer',
               transition: 'all 150ms ease',
               opacity: loadingTest ? 0.7 : 1,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
+              position: 'relative',
             }}
             className="echos-action-btn"
           >
+            <span style={{ visibility: loadingTest ? 'hidden' : 'visible' }}>test</span>
             {loadingTest && (
               <span style={{
-                display: 'inline-block',
-                width: '14px',
-                height: '14px',
-                border: `2px solid ${colors.accent}33`,
-                borderTopColor: colors.accent,
-                borderRadius: '50%',
-                animation: 'echos-spin 0.8s linear infinite',
-              }} />
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: '14px',
+                  height: '14px',
+                  border: `2px solid ${colors.accent}33`,
+                  borderTopColor: colors.accent,
+                  borderRadius: '50%',
+                  animation: 'echos-spin 0.8s linear infinite',
+                }} />
+              </span>
             )}
-            {loadingTest ? 'chargement…' : 'test'}
           </button>
         </div>
       )}
