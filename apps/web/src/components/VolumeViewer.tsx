@@ -1286,7 +1286,7 @@ export function VolumeViewer({
             </div>
 
             {/* Chromatic pills */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {chromaticModes.map((m: ChromaticMode) => (
                 <button
                   key={m}
@@ -1303,7 +1303,6 @@ export function VolumeViewer({
                     fontFamily: 'inherit',
                     transition: 'all 150ms ease',
                     whiteSpace: 'nowrap',
-                    flexShrink: 0,
                   }}
                 >
                   {CHROMATIC_LABELS[m][lang as 'en' | 'fr'] || CHROMATIC_LABELS[m].en}

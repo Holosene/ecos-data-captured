@@ -248,11 +248,7 @@ function SliceView({
           border: `1px solid ${colors.border}`,
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
         }}>
-          <span style={{ fontSize: '11px', color: colors.text3, minWidth: '24px', fontVariantNumeric: 'tabular-nums' }}>
-            {sliceIdx}
-          </span>
           <input
             type="range"
             min={0}
@@ -261,9 +257,6 @@ function SliceView({
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSliceIdx(parseInt(e.target.value))}
             style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
           />
-          <span style={{ fontSize: '11px', color: colors.text3, minWidth: '24px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
-            {maxSlice}
-          </span>
         </div>
       </div>
     </div>
