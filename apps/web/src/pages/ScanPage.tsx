@@ -777,8 +777,8 @@ export function ScanPage() {
                         display: 'inline-block',
                         width: '14px',
                         height: '14px',
-                        border: `2px solid ${colors.accent}33`,
-                        borderTopColor: colors.accent,
+                        border: '2px solid color-mix(in srgb, currentColor 20%, transparent)',
+                        borderTopColor: 'currentColor',
                         borderRadius: '50%',
                         animation: 'echos-spin 0.8s linear infinite',
                       }} />
