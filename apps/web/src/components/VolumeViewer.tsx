@@ -469,10 +469,10 @@ export function VolumeViewer({
     const pose = presentationPoses.current[mode];
     if (!renderer || !pose) return;
     const startState = renderer.getCameraState();
-    // Preserve current camera distance (zoom level) at EVERY frame
     const vecDist = (p: [number, number, number], t: [number, number, number]) =>
       Math.sqrt((p[0] - t[0]) ** 2 + (p[1] - t[1]) ** 2 + (p[2] - t[2]) ** 2);
-    const fixedDist = vecDist(startState.position, startState.target);
+    const startDist = vecDist(startState.position, startState.target);
+    const targetDist = vecDist(pose.position, pose.target);
     const totalSteps = 40;
     let step = 0;
     const animate = () => {
@@ -483,10 +483,11 @@ export function VolumeViewer({
       const tgt = lerp3(startState.target, pose.target, ease);
       // Lerp position
       const rawPos = lerp3(startState.position, pose.position, ease);
-      // Normalize distance: keep camera at fixedDist from interpolated target
+      // Interpolate distance to restore exact zoom level
+      const interpDist = startDist + (targetDist - startDist) * ease;
       const dx = rawPos[0] - tgt[0], dy = rawPos[1] - tgt[1], dz = rawPos[2] - tgt[2];
       const rawDist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-      const scale = fixedDist / rawDist;
+      const scale = interpDist / rawDist;
       const pos: [number, number, number] = [
         tgt[0] + dx * scale,
         tgt[1] + dy * scale,
@@ -500,6 +501,8 @@ export function VolumeViewer({
       if (step < totalSteps) {
         snapBackRefs.current[mode].rafId = requestAnimationFrame(animate);
       } else {
+        // Ensure exact final pose (no floating-point drift)
+        renderer.setCameraState(pose);
         snapBackRefs.current[mode].rafId = null;
       }
     };
@@ -631,8 +634,8 @@ export function VolumeViewer({
       if (e.key === 'Escape') {
         if (calibrationOpen) setCalibrationOpen(false);
         else if (editingMode) {
-          // Close settings — keep current calibration
-          cancelSnapBack(editingMode);
+          // Close settings — snap back to exact presentation pose
+          startSnapBack(editingMode);
           setEditingMode(null);
         }
       }
@@ -657,8 +660,8 @@ export function VolumeViewer({
       const bgColor = isExpanded ? stage2Bg : stage1Bg;
       ref.current.setSceneBg(bgColor);
       ref.current.setScrollZoom(isExpanded);
-      // Cancel any pending snap-back when entering or leaving edit mode
-      cancelSnapBack(mode);
+      // Only cancel snap-back when entering edit mode (not when leaving)
+      if (isExpanded) cancelSnapBack(mode);
     });
   }, [theme, editingMode, cancelSnapBack]);
 
@@ -966,7 +969,7 @@ export function VolumeViewer({
     playingRef.current = true;
     currentFrameRef.current = currentFrame;
     const intervalMs = 1000 / playSpeed;
-    const MODE_C_EVERY = 3;
+    const MODE_C_EVERY = 1;
     let frameCounter = 0;
     let lastFrameTime = 0;
     let rafId: number;
@@ -1307,8 +1310,8 @@ export function VolumeViewer({
                 <button
                   onClick={() => {
                     if (isExpanded) {
-                      // Closing settings — keep current calibration, just exit edit mode
-                      cancelSnapBack(mode);
+                      // Closing settings — snap back to exact presentation pose
+                      startSnapBack(mode);
                       setEditingMode(null);
                     } else {
                       cancelSnapBack(mode);
