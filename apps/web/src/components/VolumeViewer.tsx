@@ -337,7 +337,7 @@ function SettingsControls({
       )}
 
       {showSpeedSlider && (
-        <Slider label={t('v2.controls.playSpeed')} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        <Slider label={t('v2.controls.playSpeed')} value={playSpeed} min={1} max={30} step={1} onChange={(v: number) => onPlaySpeed(v)} />
       )}
     </>
   );
@@ -670,7 +670,7 @@ export function VolumeViewer({
   const hasFrames = !!(frames && frames.length > 0);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(4);
+  const [playSpeed, setPlaySpeed] = useState(20);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
