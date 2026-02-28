@@ -743,7 +743,7 @@ export function ScanPage() {
                 marginTop: '48px',
               }}>
                 <span style={{ fontSize: '14px', color: colors.text3 }}>
-                  Pas de fichiers ?
+                  {t('common.noFiles')}
                 </span>
                 <button
                   onClick={handleLoadTest}

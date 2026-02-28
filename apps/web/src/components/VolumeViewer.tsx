@@ -337,7 +337,7 @@ function SettingsControls({
       )}
 
       {showSpeedSlider && (
-        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        <Slider label={t('v2.controls.playSpeed')} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
       )}
     </>
   );
@@ -1644,7 +1644,7 @@ export function VolumeViewer({
               cursor: 'pointer', transition: 'all 150ms ease',
             }}
           >
-            Poster
+            {t('common.poster' as TranslationKey)}
           </button>
           {onReconfigure && (
             <button

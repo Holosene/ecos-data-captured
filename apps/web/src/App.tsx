@@ -176,7 +176,7 @@ function Topbar() {
           color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
           marginRight: '8px',
         }}
-        title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
+        title={theme === 'dark' ? t('common.themeLight') : t('common.themeDark')}
       >
         {theme === 'dark' ? <IconSun size={17} /> : <IconMoon size={17} />}
       </button>
