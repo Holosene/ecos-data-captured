@@ -781,57 +781,153 @@ export function VolumeViewer({
     }
   }, [volumeData, dimensions, extent]);
 
-  // ─── Mode B: sliding window temporal playback (buildWindowVolume) ────────
-  // Pre-compute windowed volumes ahead of current position (LRU-bounded)
-  const MAX_CACHE_ENTRIES = 20; // Hard limit: ~20 entries × ~1.4MB = ~28MB max per cache
+  // ─── Mode B + C: frame caches (LRU-bounded) ────────────────────────────
+  const MAX_CACHE_ENTRIES = 20;
   const frameCacheBRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
+  const frameCacheCRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
 
+  // Pre-allocated Float32Array buffer for buildWindowVolume (avoids 1.4MB alloc per frame)
+  const windowBufRef = useRef<{ buf: Float32Array; size: number }>({ buf: new Float32Array(0), size: 0 });
+
+  // Refs that track latest props for use in the RAF loop (avoids stale closures)
+  const framesRef = useRef(frames);
+  framesRef.current = frames;
+  const beamRef = useRef(beam);
+  beamRef.current = beam;
+  const gridRef = useRef(grid);
+  gridRef.current = grid;
+
+  /** Build window volume into a pre-allocated or cached Float32Array */
+  const buildWindowVolumePooled = useCallback((
+    allFrames: PreprocessedFrame[],
+    centerIndex: number,
+    windowSize: number,
+  ): { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } => {
+    const half = Math.floor(windowSize / 2);
+    const start = Math.max(0, centerIndex - half);
+    const end = Math.min(allFrames.length, start + windowSize);
+    const windowFrames = allFrames.slice(start, end);
+
+    if (windowFrames.length === 0 || windowFrames[0].width === 0 || windowFrames[0].height === 0) {
+      return { normalized: new Float32Array(1), dimensions: [1, 1, 1], extent: [1, 1, 1] };
+    }
+
+    const dimX = windowFrames[0].width;
+    const dimY = windowFrames.length;
+    const dimZ = windowFrames[0].height;
+    const totalSize = dimX * dimY * dimZ;
+
+    // Reuse pre-allocated buffer if large enough, otherwise grow it
+    if (windowBufRef.current.size < totalSize) {
+      windowBufRef.current = { buf: new Float32Array(totalSize), size: totalSize };
+    }
+    const data = windowBufRef.current.buf;
+
+    for (let yi = 0; yi < dimY; yi++) {
+      const frame = windowFrames[yi];
+      for (let zi = 0; zi < dimZ; zi++) {
+        for (let xi = 0; xi < dimX; xi++) {
+          const srcIdx = zi * dimX + xi;
+          const dstIdx = zi * dimY * dimX + yi * dimX + xi;
+          data[dstIdx] = frame.intensity[srcIdx] ?? 0;
+        }
+      }
+    }
+
+    const aspect = dimX / dimZ;
+    // Return a view/copy of just the needed portion (texture needs exact size)
+    const normalized = totalSize === windowBufRef.current.size
+      ? data
+      : data.subarray(0, totalSize);
+    return {
+      normalized,
+      dimensions: [dimX, dimY, dimZ],
+      extent: [aspect, 0.5, 1],
+    };
+  }, []);
+
+  /** Upload frame data to both B and C renderers for a given frame index */
+  const uploadFrameToRenderers = useCallback((frameIdx: number) => {
+    const frms = framesRef.current;
+    if (!frms || frms.length === 0) return;
+
+    // Mode B upload
+    if (rendererBRef.current) {
+      const cacheB = frameCacheBRef.current;
+      const cachedB = cacheB.get(frameIdx);
+      const volB = cachedB ?? buildWindowVolumePooled(frms, frameIdx, WINDOW_SIZE);
+      if (!cachedB) cacheB.set(frameIdx, volB);
+      rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+    }
+
+    // Mode C upload
+    const bm = beamRef.current;
+    const gd = gridRef.current;
+    if (rendererCRef.current && bm && gd) {
+      const cacheC = frameCacheCRef.current;
+      const cachedC = cacheC.get(frameIdx);
+      const volC = cachedC ?? projectFrameWindow(frms, frameIdx, WINDOW_SIZE, bm, gd);
+      if (!cachedC) cacheC.set(frameIdx, volC);
+      rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+    }
+  }, [buildWindowVolumePooled]);
+
+  /** Evict stale cache entries around a given frame index */
+  const evictCaches = useCallback((frameIdx: number) => {
+    const lookAhead = 8;
+    const minKeep = Math.max(0, frameIdx - 2);
+    const maxKeep = frameIdx + lookAhead;
+    for (const cache of [frameCacheBRef.current, frameCacheCRef.current]) {
+      for (const key of cache.keys()) {
+        if (key < minKeep || key > maxKeep) cache.delete(key);
+      }
+      if (cache.size > MAX_CACHE_ENTRIES) {
+        const keys = [...cache.keys()].sort((a, b) => a - b);
+        while (cache.size > MAX_CACHE_ENTRIES) {
+          cache.delete(keys.shift()!);
+        }
+      }
+    }
+  }, []);
+
+  // Prefetch ahead of current frame (runs when currentFrame changes via slider or on stop)
   useEffect(() => {
     if (!hasFrames || !frames || frames.length === 0) return;
-
-    const cache = frameCacheBRef.current;
-    const lookAhead = 8;
     let cancelled = false;
+    const lookAhead = 8;
+
     (async () => {
+      // Prefetch Mode B
+      const cacheB = frameCacheBRef.current;
       for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
         const idx = currentFrame + offset;
-        if (idx >= frames.length || cache.has(idx)) continue;
-        const result = buildWindowVolume(frames, idx, WINDOW_SIZE);
-        if (!cancelled) cache.set(idx, result);
+        if (idx >= frames.length || cacheB.has(idx)) continue;
+        cacheB.set(idx, buildWindowVolume(frames, idx, WINDOW_SIZE));
         if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
       }
 
-      if (!cancelled) {
-        // Evict entries outside the relevant window
-        const minKeep = Math.max(0, currentFrame - 2);
-        const maxKeep = currentFrame + lookAhead;
-        for (const key of cache.keys()) {
-          if (key < minKeep || key > maxKeep) cache.delete(key);
-        }
-        // Hard limit: if still too large, drop oldest entries
-        if (cache.size > MAX_CACHE_ENTRIES) {
-          const keys = [...cache.keys()].sort((a, b) => a - b);
-          while (cache.size > MAX_CACHE_ENTRIES) {
-            cache.delete(keys.shift()!);
-          }
+      // Prefetch Mode C
+      if (beam && grid) {
+        const cacheC = frameCacheCRef.current;
+        for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
+          const idx = currentFrame + offset;
+          if (idx >= frames.length || cacheC.has(idx)) continue;
+          cacheC.set(idx, projectFrameWindow(frames, idx, WINDOW_SIZE, beam, grid));
+          if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
         }
       }
+
+      if (!cancelled) evictCaches(currentFrame);
     })();
 
     return () => { cancelled = true; };
-  }, [currentFrame, frames, hasFrames]);
+  }, [currentFrame, frames, hasFrames, beam, grid, evictCaches]);
 
-  // Mode B: build windowed volume and upload to renderer
+  // Upload when currentFrame changes (slider interaction or initial load)
   useEffect(() => {
-    if (!rendererBRef.current || !hasFrames || !frames || frames.length === 0) return;
-
-    const cache = frameCacheBRef.current;
-    const cached = cache.get(currentFrame);
-    const vol = cached ?? buildWindowVolume(frames, currentFrame, WINDOW_SIZE);
-    if (!cached) cache.set(currentFrame, vol);
-
-    rendererBRef.current.uploadVolume(vol.normalized, vol.dimensions, vol.extent);
-  }, [currentFrame, frames, hasFrames]);
+    if (!hasFrames) return;
+    uploadFrameToRenderers(currentFrame);
+  }, [currentFrame, hasFrames, uploadFrameToRenderers]);
 
   // Slice data
   useEffect(() => {
@@ -844,64 +940,41 @@ export function VolumeViewer({
     }
   }, [fullSliceVolume, volumeData, dimensions]);
 
-  // ─── Mode C: temporal projection + cache (LRU-bounded) ────────────────────
-  const frameCacheCRef = useRef<Map<number, { normalized: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] }>>(new Map());
-
-  useEffect(() => {
-    if (!hasFrames || !beam || !grid) return;
-    const cache = frameCacheCRef.current;
-    const lookAhead = 8;
-    let cancelled = false;
-    (async () => {
-      for (let offset = 0; offset <= lookAhead && !cancelled; offset++) {
-        const idx = currentFrame + offset;
-        if (idx >= frames!.length || cache.has(idx)) continue;
-        const result = projectFrameWindow(frames!, idx, WINDOW_SIZE, beam!, grid!);
-        if (!cancelled) cache.set(idx, result);
-        if (offset % 4 === 3) await new Promise((r) => setTimeout(r, 0));
-      }
-      if (!cancelled) {
-        const minKeep = Math.max(0, currentFrame - 2);
-        const maxKeep = currentFrame + lookAhead;
-        for (const key of cache.keys()) {
-          if (key < minKeep || key > maxKeep) cache.delete(key);
-        }
-        if (cache.size > MAX_CACHE_ENTRIES) {
-          const keys = [...cache.keys()].sort((a, b) => a - b);
-          while (cache.size > MAX_CACHE_ENTRIES) {
-            cache.delete(keys.shift()!);
-          }
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [currentFrame, frames, beam, grid, hasFrames]);
-
-  useEffect(() => {
-    if (!rendererCRef.current || !hasFrames || !beam || !grid) return;
-    const cache = frameCacheCRef.current;
-    const cached = cache.get(currentFrame);
-    const vol = cached ?? projectFrameWindow(frames!, currentFrame, WINDOW_SIZE, beam!, grid!);
-    if (!cached) cache.set(currentFrame, vol);
-    rendererCRef.current.uploadVolume(vol.normalized, vol.dimensions, vol.extent);
-  }, [currentFrame, frames, beam, grid, hasFrames]);
-
-  // Playback loop — ref-driven to avoid re-mount on every frame
+  // ─── Playback loop — ref-driven, uploads directly to renderers ──────────
+  // During playback: RAF loop uploads directly to WebGL (no React state change per frame).
+  // React state only syncs every ~250ms for the UI slider display.
   useEffect(() => {
     if (!hasFrames || !playing) return;
     playingRef.current = true;
     const intervalMs = 1000 / playSpeed;
     let lastTime = 0;
+    let lastStateSync = 0;
+    const STATE_SYNC_INTERVAL = 250; // ms — sync React state for slider UI at 4Hz
     let rafId: number;
+
     const tick = (timestamp: number) => {
       if (!playingRef.current) return;
-      if (lastTime === 0) lastTime = timestamp;
+      if (lastTime === 0) { lastTime = timestamp; lastStateSync = timestamp; }
+
       if (timestamp - lastTime >= intervalMs) {
         lastTime = timestamp;
         const next = currentFrameRef.current + 1;
-        if (next >= frames!.length) { setPlaying(false); return; }
+        if (next >= framesRef.current!.length) {
+          // End of playback — sync final frame to React state
+          setCurrentFrame(currentFrameRef.current);
+          setPlaying(false);
+          return;
+        }
         currentFrameRef.current = next;
-        setCurrentFrame(next);
+
+        // Direct upload to WebGL renderers (bypasses React entirely)
+        uploadFrameToRenderers(next);
+
+        // Sync React state at reduced frequency for UI slider
+        if (timestamp - lastStateSync >= STATE_SYNC_INTERVAL) {
+          lastStateSync = timestamp;
+          setCurrentFrame(next);
+        }
       }
       rafId = requestAnimationFrame(tick);
     };
@@ -909,8 +982,10 @@ export function VolumeViewer({
     return () => {
       playingRef.current = false;
       cancelAnimationFrame(rafId);
+      // On stop: sync final frame position to React state
+      setCurrentFrame(currentFrameRef.current);
     };
-  }, [playing, playSpeed, hasFrames, frames]);
+  }, [playing, playSpeed, hasFrames, uploadFrameToRenderers]);
 
   // Settings update — per-mode
   const updateSetting = useCallback(

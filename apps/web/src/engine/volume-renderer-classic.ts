@@ -314,6 +314,26 @@ export class VolumeRendererClassic {
     this.dimensions = dimensions;
     this.extent = extent;
 
+    // FAST PATH: reuse existing texture when dimensions match (avoids GPU alloc/dealloc)
+    if (!dimsChanged && this.volumeTexture && this.meshCreated && this.material) {
+      (this.volumeTexture.image as { data: Float32Array }).data.set(data);
+      this.volumeTexture.needsUpdate = true;
+      if (!extentChanged) return;
+      const maxExtent = Math.max(...this.extent);
+      this._scaleVec.set(
+        (this.extent[0] / maxExtent) * this.calibration.scale.x,
+        (this.extent[1] / maxExtent) * this.calibration.scale.y,
+        (this.extent[2] / maxExtent) * this.calibration.scale.z,
+      );
+      this.volumeScale.copy(this._scaleVec);
+      this._halfScaleVec.copy(this._scaleVec).multiplyScalar(0.5);
+      this.material.uniforms.volumeScale.value.copy(this._scaleVec);
+      this.material.uniforms.uVolumeMin.value.copy(this._halfScaleVec).negate();
+      this.material.uniforms.uVolumeMax.value.copy(this._halfScaleVec);
+      return;
+    }
+
+    // SLOW PATH: dimensions changed — must recreate texture + mesh
     if (this.volumeTexture) {
       this.volumeTexture.dispose();
     }
@@ -329,7 +349,6 @@ export class VolumeRendererClassic {
     this.volumeTexture.wrapR = THREE.ClampToEdgeWrapping;
     this.volumeTexture.needsUpdate = true;
 
-    // If mesh exists and dimensions/extent haven't changed, just update the texture
     if (this.meshCreated && !dimsChanged && !extentChanged && this.material) {
       this.material.uniforms.uVolume.value = this.volumeTexture;
       return;
