@@ -50,9 +50,9 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
     dist: 2,
     fov: 30,
     orbit: {
-      posX: -0.5765262974359106,
-      posY: -0.04272521950918108,
-      posZ: 0.7341924572824136,
+      posX: -0.37062050378412215,
+      posY: -0.024429054191487606,
+      posZ: 0.5360077379367973,
       targetX: 0.13442521276099786,
       targetY: 0.02044777884473632,
       targetZ: 0.0499002719202334,
