@@ -40,11 +40,11 @@ export function DocsSection() {
 
       <div
         className="docs-grid"
-        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}
+        style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'stretch' }}
       >
         {/* Left column: User Guide + Privacy — stacked, never side-by-side */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <GlassPanel padding="24px">
+          <GlassPanel padding="24px" style={{ flex: 1 }}>
             <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px', color: colors.accent }}>
               {t('docs.userGuide')}
             </h3>
