@@ -244,13 +244,17 @@ export function ScanPage() {
         dispatch({ type: 'SET_ERROR', error: `Fichiers introuvables dans ${basePath}examples/ : ${missing.join(', ')}` });
         return;
       }
-      const mp4Blob = await mp4Resp.blob();
+      // Process video and GPX blobs in parallel
+      const [mp4Blob, gpxBlob] = await Promise.all([
+        mp4Resp.blob(),
+        gpxResp.blob(),
+      ]);
       const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
-      await handleVideoFile([mp4File]);
-
-      const gpxBlob = await gpxResp.blob();
       const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
-      await handleGpxFile([gpxFile]);
+      await Promise.all([
+        handleVideoFile([mp4File]),
+        handleGpxFile([gpxFile]),
+      ]);
     } catch (e) {
       dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
     } finally {
@@ -757,7 +761,7 @@ export function ScanPage() {
                     fontSize: '14px',
                     fontWeight: 600,
                     fontFamily: 'inherit',
-                    cursor: loadingTest ? 'wait' : 'pointer',
+                    cursor: 'pointer',
                     transition: 'all 150ms ease',
                     opacity: loadingTest ? 0.7 : 1,
                     position: 'relative',
