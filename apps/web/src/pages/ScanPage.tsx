@@ -230,7 +230,7 @@ export function ScanPage() {
     try {
       const videoName = 'exemple_video_2026-02-28_at_00.05.10.mp4';
       const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
-      const basePath = import.meta.env.BASE_URL ?? '/echos-data-capture/';
+      const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
       const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
       const gpxUrl = `${basePath}examples/${encodeURIComponent(gpxName)}`;
       const [mp4Resp, gpxResp] = await Promise.all([

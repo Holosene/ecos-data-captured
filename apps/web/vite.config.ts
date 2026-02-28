@@ -9,7 +9,7 @@ try {
 
 export default defineConfig({
   plugins: [react()],
-  base: '/echos-data-capture/',
+  base: '/ecos-data-captured/',
   define: {
     __COMMIT_HASH__: JSON.stringify(commitHash),
   },

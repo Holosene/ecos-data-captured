@@ -112,7 +112,7 @@ function Topbar() {
     <header className="echos-topbar">
       <div className="topbar-inner">
       <a
-        href="/"
+        href={import.meta.env.BASE_URL || '/ecos-data-captured/'}
         onClick={(e) => {
           e.preventDefault();
           if (location.pathname === '/') {
