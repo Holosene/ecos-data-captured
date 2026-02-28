@@ -76,7 +76,6 @@ function Topbar() {
   };
 
   const handleNavClick = useCallback((item: typeof navItems[0]) => {
-    setMobileMenuOpen(false);
     if (item.path === '/') {
       if (location.pathname === '/') {
         (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
