@@ -184,13 +184,6 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
   { key: 'free', labelKey: 'v2.camera.free', Icon: IconFree },
 ];
 
-// Mode definitions — clean labels, no color coding
-const MODE_DEFS = [
-  { key: 'classic' as const, label: 'Cône', desc: 'Projection conique glissante' },
-  { key: 'instrument' as const, label: 'Tracé', desc: 'Empilement statique' },
-  { key: 'spatial' as const, label: 'Bloc', desc: 'Projection cubique du parcours' },
-] as const;
-
 // ─── Leaflet Map component ─────────────────────────────────────────────────
 function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }>; theme: string }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -581,17 +574,17 @@ export function VolumeViewer({
           if (rendererARef.current) {
             cals.instrument = rendererARef.current.getCalibration();
             localStorage.setItem('echos-cal-instrument', JSON.stringify(cals.instrument));
-            names.push('Tracé');
+            names.push(t('v2.vol.trace' as TranslationKey));
           }
           if (rendererBRef.current) {
             cals.spatial = rendererBRef.current.getCalibration();
             localStorage.setItem('echos-cal-spatial', JSON.stringify(cals.spatial));
-            names.push('Bloc');
+            names.push(t('v2.vol.block' as TranslationKey));
           }
           if (rendererCRef.current) {
             cals.classic = rendererCRef.current.getCalibration();
             localStorage.setItem('echos-cal-classic', JSON.stringify(cals.classic));
-            names.push('Cône');
+            names.push(t('v2.vol.cone' as TranslationKey));
           }
           // Sync React state with renderer state
           setCalibrations(prev => ({ ...prev, ...cals }));
@@ -1149,34 +1142,38 @@ export function VolumeViewer({
           }}>
             {mode === 'instrument' ? (
               /* Tracé: position.z slider — left=0.75, right=-0.75, center=0 */
-              <div style={{
-                width: 'max(260px, 40%)',
-                padding: '10px 18px',
-                background: colors.surface,
-                borderRadius: '24px',
-                border: `1px solid ${colors.border}`,
-                backdropFilter: 'blur(12px)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-              }}>
-                <input
-                  type="range"
-                  min={-0.75}
-                  max={0.75}
-                  step={0.01}
-                  value={-tracePositionZ}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    handleTracePositionZ(-parseFloat(e.target.value));
-                  }}
-                  style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
-                />
-              </div>
+              <>
+                <div style={{
+                  width: 'max(280px, 44%)',
+                  padding: '10px 18px',
+                  background: colors.surface,
+                  borderRadius: '24px',
+                  border: `1px solid ${colors.border}`,
+                  backdropFilter: 'blur(12px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                }}>
+                  <input
+                    type="range"
+                    min={-0.75}
+                    max={0.75}
+                    step={0.01}
+                    value={-tracePositionZ}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      handleTracePositionZ(-parseFloat(e.target.value));
+                    }}
+                    style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
+                  />
+                </div>
+                {/* Invisible spacer — matches play button + gap height for equal section spacing */}
+                <div style={{ height: `${sliderPlayGap + 52}px` }} />
+              </>
             ) : (
               /* Temporal modes: frame slider + play button */
               <>
                 <div style={{
-                  width: 'max(260px, 40%)',
+                  width: 'max(280px, 44%)',
                   padding: '10px 18px',
                   background: colors.surface,
                   borderRadius: '24px',
@@ -1216,19 +1213,19 @@ export function VolumeViewer({
                     }
                   }}
                   style={{
-                    width: '48px', height: '48px', borderRadius: '50%',
+                    width: '52px', height: '52px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing && isTemporal ? colors.accentMuted : colors.surface,
                     color: colors.accent,
                     cursor: 'pointer',
-                    fontSize: '16px',
+                    fontSize: '18px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     paddingLeft: playing && isTemporal ? '0' : '2px',
                     transition: 'all 150ms ease',
                   }}
                 >
                   {playing && isTemporal ? (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
@@ -1390,9 +1387,9 @@ export function VolumeViewer({
                     settings={modeSettings[mode]}
                     cameraPreset={modeCamera[mode]}
                     autoThreshold={autoThreshold}
-                    showGhostSlider={mode === 'spatial'}
+                    showGhostSlider={mode === 'spatial' || mode === 'classic'}
                     showBeamToggle={mode === 'instrument'}
-                    showSpeedSlider={mode === 'classic' && hasFrames}
+                    showSpeedSlider={false}
                     playSpeed={playSpeed}
                     chromaticModes={chromaticModes}
                     lang={lang}
@@ -1584,9 +1581,7 @@ export function VolumeViewer({
               lineHeight: 1.3,
               textAlign: 'center',
             }}>
-              {lang === 'fr'
-                ? 'Importez un fichier GPX pour accéder à la carte.'
-                : 'Import a GPX file to access the map.'}
+              {t('v2.map.gpxHint' as TranslationKey)}
             </div>
           )}
         </div>
@@ -1595,9 +1590,9 @@ export function VolumeViewer({
       {/* ── Volume sections — 4-column grid, alternating layout ──── */}
       {(() => {
         const sections: Array<{ mode: 'instrument' | 'spatial' | 'classic'; ref: typeof containerARef; title: string; subtitle: string }> = [];
-        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: 'Cône', subtitle: 'Projection conique glissante' });
-        sections.push({ mode: 'instrument', ref: containerARef, title: 'Tracé', subtitle: 'Empilement statique' });
-        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: 'Bloc', subtitle: 'Projection cubique du parcours' });
+        if (showC) sections.push({ mode: 'classic', ref: containerCRef, title: t('v2.vol.cone' as TranslationKey), subtitle: t('v2.vol.coneDesc' as TranslationKey) });
+        sections.push({ mode: 'instrument', ref: containerARef, title: t('v2.vol.trace' as TranslationKey), subtitle: t('v2.vol.traceDesc' as TranslationKey) });
+        if (showB) sections.push({ mode: 'spatial', ref: containerBRef, title: t('v2.vol.block' as TranslationKey), subtitle: t('v2.vol.blockDesc' as TranslationKey) });
         return sections.map((s, i) => renderVolumeSection(s.mode, s.ref, s.title, s.subtitle, i));
       })()}
 
