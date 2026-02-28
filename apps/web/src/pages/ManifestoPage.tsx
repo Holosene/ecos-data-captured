@@ -101,11 +101,11 @@ export function ManifestoPage() {
           </GlassPanel>
 
           {/* Row 3, full width */}
-          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }}>
+          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }} className="manifesto-s5-panel">
             <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
               {t('manifesto.s5.title')}
             </h2>
-            <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
+            <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 32px' }}>
               {tArray('manifesto.s5.items').map((item, i) => (
                 <li key={i} style={{ display: 'flex', gap: '12px' }}>
                   <span style={{ color: colors.accent, flexShrink: 0 }}>+</span>

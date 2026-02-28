@@ -683,7 +683,7 @@ export function ScanPage() {
               {t('v2.scan.desc')}
             </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div className="scan-import-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               <GlassPanel style={{ padding: '24px' }}>
                 <h3 style={{ color: colors.text1, fontSize: '14px', marginBottom: '12px' }}>
                   {t('import.dropVideo')}
@@ -981,7 +981,7 @@ export function ScanPage() {
 
             {/* Quality preset selector — big centered titles, minimal info */}
             <GlassPanel style={{ padding: '16px', marginBottom: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+              <div className="scan-quality-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                 {(['minimal', 'medium', 'complete'] as const).map((q) => {
                   const selected = quality === q;
                   const cfg = QUALITY_PRESETS[q];
@@ -1026,7 +1026,7 @@ export function ScanPage() {
                 {t('v2.sync.title')}
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+              <div className="scan-sync-stats" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ padding: '8px 12px', borderRadius: '8px', background: colors.surface }}>
                   <div style={{ fontSize: '11px', color: colors.text3, marginBottom: '2px' }}>{t('v2.sync.videoDuration')}</div>
                   <div style={{ fontSize: '16px', fontWeight: 600, color: colors.text1 }}>{state.videoDurationS.toFixed(1)}s</div>

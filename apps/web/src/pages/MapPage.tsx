@@ -41,7 +41,7 @@ export function MapPage() {
           </span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', minHeight: '500px' }}>
+        <div className="map-page-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', minHeight: '500px' }}>
           {/* Map */}
           <MapView
             sessions={state.sessions}

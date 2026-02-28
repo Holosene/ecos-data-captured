@@ -352,7 +352,7 @@ export function HomePage() {
           </span>
         </div>
 
-        <div style={{
+        <div className="map-outer-container" style={{
           height: 'clamp(600px, 75vh, 900px)',
           borderRadius: '12px',
           overflow: 'hidden',
@@ -361,7 +361,7 @@ export function HomePage() {
           transition: 'all 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}>
           {/* Map — shrinks to 1/4 when a trace is focused */}
-          <div style={{
+          <div className="map-main-area" style={{
             flex: focusedSessionId ? '0 0 25%' : '1 1 100%',
             height: '100%',
             transition: 'flex 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
@@ -385,7 +385,7 @@ export function HomePage() {
             const session = state.sessions.find((s) => s.id === focusedSessionId);
             if (!session) return null;
             return (
-              <div style={{
+              <div className="map-info-panel" style={{
                 flex: '0 0 75%',
                 height: '100%',
                 padding: '40px',
@@ -438,7 +438,7 @@ export function HomePage() {
                   </p>
                 </div>
 
-                <div style={{
+                <div className="map-info-stats" style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(3, 1fr)',
                   gap: '16px',
@@ -595,7 +595,7 @@ export function HomePage() {
           <h3 style={{ fontSize: '26px', fontWeight: 700, marginBottom: '24px', color: colors.text1, letterSpacing: '-0.01em' }}>
             {t('manifesto.s5.title')}
           </h3>
-          <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px' }}>
+          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px' }}>
             {tArray('manifesto.s5.items').map((item, i) => (
               <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
                 <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>+</span>
@@ -636,34 +636,41 @@ export function HomePage() {
       </div>
 
       {/* Floating scan CTA — accent bg, frosted, appears when hero CTA scrolls out */}
-      <button
-        onClick={() => navigate('/scan')}
-        className="floating-scan-cta"
+      <div
+        className="floating-scan-cta-wrap"
         style={{
           position: 'fixed',
           bottom: '32px',
           right: '32px',
           zIndex: 90,
-          padding: '20px 48px 22px',
-          fontSize: '20px',
-          fontWeight: 600,
-          letterSpacing: '-0.01em',
-          fontFamily: 'inherit',
-          color: '#FFFFFF',
-          background: 'var(--cta-bg-soft)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.15)',
-          borderRadius: 'var(--radius-full)',
-          cursor: 'pointer',
-          boxShadow: 'none',
           opacity: showFloatingCta ? 1 : 0,
           transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
           pointerEvents: showFloatingCta ? 'auto' : 'none',
+          transition: 'opacity 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
       >
-        {t('home.cta')}
-      </button>
+        <button
+          onClick={() => navigate('/scan')}
+          className="floating-scan-cta"
+          style={{
+            padding: '20px 48px 22px',
+            fontSize: '20px',
+            fontWeight: 600,
+            letterSpacing: '-0.01em',
+            fontFamily: 'inherit',
+            color: '#FFFFFF',
+            background: 'var(--cta-bg-soft)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: '1px solid rgba(255, 255, 255, 0.15)',
+            borderRadius: 'var(--radius-full)',
+            cursor: 'pointer',
+            boxShadow: 'none',
+          }}
+        >
+          {t('home.cta')}
+        </button>
+      </div>
 
       {/* Lightbox */}
       {lightboxOpen && (
