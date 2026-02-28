@@ -118,6 +118,7 @@ body {
     0 1px 0 0 var(--topbar-glass-highlight),
     0 4px 24px -4px rgba(0, 0, 0, 0.18);
   transition: background 350ms ease, border-color 350ms ease, box-shadow 350ms ease;
+  isolation: isolate;
 }
 .topbar-inner {
   width: 100%;
@@ -131,7 +132,7 @@ body {
 
 html {
   font-size: 16px;
-  zoom: 0.9;
+  /* zoom removed — causes scroll coordinate mismatches and scrollbar jitter */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
@@ -152,10 +153,16 @@ body {
 
 /* Scrollbar — accent 70% opacity, no arrows, transparent track.
    Only #main-content scrolls (topbar stays above, no scrollbar next to it). */
-#main-content::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
+#main-content::-webkit-scrollbar { width: 10px; height: 10px; background: transparent; }
 #main-content::-webkit-scrollbar-track { background: transparent; }
-#main-content::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.7); border-radius: 3px; }
-#main-content::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+#main-content::-webkit-scrollbar-thumb {
+  background: rgba(var(--cta-glow), 0.55);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+#main-content::-webkit-scrollbar-thumb:hover { background: rgba(var(--cta-glow), 0.85); border: 2px solid transparent; background-clip: padding-box; }
+#main-content::-webkit-scrollbar-thumb:active { background: var(--c-accent); border: 2px solid transparent; background-clip: padding-box; }
 #main-content::-webkit-scrollbar-button,
 #main-content::-webkit-scrollbar-button:start:decrement,
 #main-content::-webkit-scrollbar-button:end:increment,
@@ -504,18 +511,25 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   transition-duration: 80ms;
 }
 
-/* Firefox scrollbar — only on main content */
+/* Scroll performance — GPU compositing + containment */
 #main-content {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(var(--cta-glow), 0.7) transparent;
+  will-change: scroll-position;
+  contain: paint;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(var(--cta-glow), 0.55) transparent;
 }
 
-/* Controls panel — half-size scrollbar */
-.echos-controls-panel::-webkit-scrollbar { width: 3px; height: 3px; background: transparent; }
+/* Controls panel — compact scrollbar */
+.echos-controls-panel::-webkit-scrollbar { width: 6px; height: 6px; background: transparent; }
 .echos-controls-panel::-webkit-scrollbar-track { background: transparent; }
-.echos-controls-panel::-webkit-scrollbar-thumb { background: var(--c-accent); border-radius: 2px; opacity: 0.7; }
-.echos-controls-panel::-webkit-scrollbar-thumb:hover { background: var(--c-accent-hover); }
+.echos-controls-panel::-webkit-scrollbar-thumb { background: rgba(var(--cta-glow), 0.5); border-radius: 3px; }
+.echos-controls-panel::-webkit-scrollbar-thumb:hover { background: var(--c-accent); }
+.echos-controls-panel::-webkit-scrollbar-thumb:active { background: var(--c-accent-hover); }
 .echos-controls-panel {
   scrollbar-width: thin;
-  scrollbar-color: var(--c-border-hover) transparent;
+  scrollbar-color: rgba(var(--cta-glow), 0.5) transparent;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }

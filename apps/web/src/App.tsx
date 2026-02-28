@@ -28,12 +28,14 @@ function Topbar() {
   }, [theme]);
 
   // Multi-section scroll-spy for homepage sections
+  // Uses a single observer with rootMargin to reduce callback frequency
   useEffect(() => {
     if (location.pathname !== '/') {
       setActiveSection(null);
       return;
     }
     const sectionIds = ['map-section', 'docs-section', 'manifesto-section'];
+    const mainContent = document.getElementById('main-content');
     const observers: IntersectionObserver[] = [];
 
     for (const id of sectionIds) {
@@ -47,7 +49,7 @@ function Topbar() {
             setActiveSection((prev) => (prev === id ? null : prev));
           }
         },
-        { threshold: 0.15 },
+        { threshold: 0.15, root: mainContent },
       );
       observer.observe(el);
       observers.push(observer);

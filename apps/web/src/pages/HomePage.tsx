@@ -27,9 +27,10 @@ export function HomePage() {
   useEffect(() => {
     const el = heroCtaRef.current;
     if (!el) return;
+    const mainContent = document.getElementById('main-content');
     const observer = new IntersectionObserver(
       ([entry]) => setShowFloatingCta(!entry.isIntersecting),
-      { threshold: 0 },
+      { threshold: 0, root: mainContent },
     );
     observer.observe(el);
     return () => observer.disconnect();
