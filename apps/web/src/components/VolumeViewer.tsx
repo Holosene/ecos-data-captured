@@ -344,7 +344,7 @@ function SettingsControls({
       )}
 
       {showSpeedSlider && (
-        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={5} step={1} onChange={(v: number) => onPlaySpeed(v)} />
+        <Slider label={t('v2.controls.playSpeed') || 'Vitesse'} value={playSpeed} min={1} max={16} step={1} onChange={(v: number) => onPlaySpeed(v)} />
       )}
     </>
   );
@@ -938,11 +938,12 @@ export function VolumeViewer({
     return () => { cancelled = true; };
   }, [currentFrame, frames, hasFrames, beam, grid, playing, evictCaches]);
 
-  // Upload when currentFrame changes (slider interaction or initial load)
+  // Upload when currentFrame changes (slider interaction or initial load).
+  // Skip during playback — the RAF loop uploads directly.
   useEffect(() => {
-    if (!hasFrames) return;
+    if (!hasFrames || playing) return;
     uploadFrameToRenderers(currentFrame);
-  }, [currentFrame, hasFrames, uploadFrameToRenderers]);
+  }, [currentFrame, hasFrames, playing, uploadFrameToRenderers]);
 
   // Slice data
   useEffect(() => {
@@ -955,25 +956,29 @@ export function VolumeViewer({
     }
   }, [fullSliceVolume, volumeData, dimensions]);
 
-  // ─── Playback loop — ref-driven, uploads directly to renderers ──────────
-  // During playback: setTimeout-based loop for consistent frame timing.
-  // Mode B is updated every frame; Mode C is throttled to every Nth frame
-  // (projectFrameWindow is heavy — cone projection per pixel).
-  // React state only syncs at 4Hz for the UI slider display.
+  // ─── Playback loop — RAF-driven, uploads directly to renderers ──────────
+  // Uses requestAnimationFrame for vsync-aligned smooth playback.
+  // Frame timing is controlled by playSpeed (elapsed time gating).
+  // Mode B is updated every frame; Mode C is throttled to every Nth frame.
+  // React state syncs every frame for smooth slider tracking.
   useEffect(() => {
     if (!hasFrames || !playing) return;
     playingRef.current = true;
-    // Sync ref from React state so playback starts from the current slider position
     currentFrameRef.current = currentFrame;
     const intervalMs = 1000 / playSpeed;
-    let lastStateSync = performance.now();
-    const STATE_SYNC_INTERVAL = 250; // ms — sync React state for slider UI at 4Hz
-    const MODE_C_EVERY = 3; // update Mode C only every 3rd frame
+    const MODE_C_EVERY = 3;
     let frameCounter = 0;
-    let timerId: ReturnType<typeof setTimeout>;
+    let lastFrameTime = 0;
+    let rafId: number;
 
-    const tick = () => {
+    const tick = (timestamp: number) => {
       if (!playingRef.current) return;
+      rafId = requestAnimationFrame(tick);
+
+      // Gating: only advance when enough time has elapsed
+      if (lastFrameTime === 0) { lastFrameTime = timestamp; return; }
+      if (timestamp - lastFrameTime < intervalMs) return;
+      lastFrameTime = timestamp;
 
       const next = currentFrameRef.current + 1;
       if (next >= framesRef.current!.length) {
@@ -1006,23 +1011,14 @@ export function VolumeViewer({
         }
       }
 
-      // Sync React state at reduced frequency for UI slider
-      const now = performance.now();
-      if (now - lastStateSync >= STATE_SYNC_INTERVAL) {
-        lastStateSync = now;
-        setCurrentFrame(next);
-      }
-
-      // Schedule next frame with setTimeout for consistent timing
-      timerId = setTimeout(tick, intervalMs);
+      // Sync React state every frame for smooth slider
+      setCurrentFrame(next);
     };
 
-    // Start first frame after a short delay
-    timerId = setTimeout(tick, intervalMs);
+    rafId = requestAnimationFrame(tick);
     return () => {
       playingRef.current = false;
-      clearTimeout(timerId);
-      // On stop: sync final frame position to React state
+      cancelAnimationFrame(rafId);
       setCurrentFrame(currentFrameRef.current);
     };
   }, [playing, playSpeed, hasFrames, buildWindowVolumePooled]);

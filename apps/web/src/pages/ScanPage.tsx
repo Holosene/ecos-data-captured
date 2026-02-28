@@ -153,6 +153,7 @@ export function ScanPage() {
   // Step bar animation state
   const [stepBarVisible, setStepBarVisible] = useState(true);
   const [stepBarAnimating, setStepBarAnimating] = useState(false);
+  const [loadingTest, setLoadingTest] = useState(false);
 
   // Sync: distance-over-time chart
   const enriched = useMemo(
@@ -225,8 +226,9 @@ export function ScanPage() {
   const noFilesYet = !state.videoFile && !state.gpxFile;
 
   const handleLoadTest = useCallback(async () => {
+    setLoadingTest(true);
     try {
-      const videoName = 'exmple_video_2026-02-28_at_00.05.10.mp4';
+      const videoName = 'exemple_video_2026-02-28_at_00.05.10.mp4';
       const gpxName = 'exemple_22_févr._2026_15_35_50.gpx';
       const basePath = import.meta.env.BASE_URL ?? '/echos-data-capture/';
       const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
@@ -251,6 +253,8 @@ export function ScanPage() {
       await handleGpxFile([gpxFile]);
     } catch (e) {
       dispatch({ type: 'SET_ERROR', error: `Erreur chargement test: ${(e as Error).message}` });
+    } finally {
+      setLoadingTest(false);
     }
   }, [dispatch, handleVideoFile, handleGpxFile]);
 
@@ -743,6 +747,7 @@ export function ScanPage() {
                 </span>
                 <button
                   onClick={handleLoadTest}
+                  disabled={loadingTest}
                   style={{
                     padding: '8px 20px',
                     borderRadius: '9999px',
@@ -752,12 +757,27 @@ export function ScanPage() {
                     fontSize: '14px',
                     fontWeight: 600,
                     fontFamily: 'inherit',
-                    cursor: 'pointer',
+                    cursor: loadingTest ? 'wait' : 'pointer',
                     transition: 'all 150ms ease',
+                    opacity: loadingTest ? 0.7 : 1,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
                   }}
                   className="echos-action-btn"
                 >
-                  test
+                  {loadingTest && (
+                    <span style={{
+                      display: 'inline-block',
+                      width: '14px',
+                      height: '14px',
+                      border: `2px solid ${colors.accent}33`,
+                      borderTopColor: colors.accent,
+                      borderRadius: '50%',
+                      animation: 'echos-spin 0.8s linear infinite',
+                    }} />
+                  )}
+                  {loadingTest ? 'chargement…' : 'test'}
                 </button>
               </div>
             )}
