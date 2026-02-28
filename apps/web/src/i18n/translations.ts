@@ -354,6 +354,10 @@ export const translations = {
     'common.back': 'Retour',
     'common.next': 'Suivant',
     'common.optional': 'optionnel',
+    'common.noFiles': 'Pas de fichiers ?',
+    'common.themeLight': 'Mode clair',
+    'common.themeDark': 'Mode sombre',
+    'common.poster': 'Poster',
   },
 
   en: {
@@ -709,6 +713,10 @@ export const translations = {
     'common.back': 'Back',
     'common.next': 'Next',
     'common.optional': 'optional',
+    'common.noFiles': 'No files?',
+    'common.themeLight': 'Light mode',
+    'common.themeDark': 'Dark mode',
+    'common.poster': 'Poster',
   },
 } as const;
 
