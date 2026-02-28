@@ -100,8 +100,10 @@ export function ImportStep() {
       const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
       const videoUrl = `${basePath}examples/${encodeURIComponent(videoName)}`;
       const gpxUrl = `${basePath}examples/${encodeURIComponent(gpxName)}`;
+
+      // HEAD for video (no download), full fetch for GPX (6KB)
       const [mp4Resp, gpxResp] = await Promise.all([
-        fetch(videoUrl),
+        fetch(videoUrl, { method: 'HEAD' }),
         fetch(gpxUrl),
       ]);
       const missing: string[] = [];
@@ -111,10 +113,26 @@ export function ImportStep() {
         dispatch({ type: 'SET_ERROR', error: `Fichiers introuvables dans ${basePath}examples/ : ${missing.join(', ')}` });
         return;
       }
-      const mp4Blob = await mp4Resp.blob();
-      const mp4File = new File([mp4Blob], videoName, { type: 'video/mp4' });
-      await handleVideoFile(mp4File);
 
+      // Load video metadata directly from URL (no download)
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      await new Promise<void>((resolve, reject) => {
+        video.onloadedmetadata = () => resolve();
+        video.onerror = () => reject(new Error('Failed to read video metadata'));
+        video.src = videoUrl;
+      });
+      dispatch({
+        type: 'SET_VIDEO',
+        file: new File([], videoName, { type: 'video/mp4' }),
+        url: videoUrl,
+        durationS: video.duration,
+        width: video.videoWidth,
+        height: video.videoHeight,
+      });
+      dispatch({ type: 'ADD_LOG', message: `Video loaded: ${videoName} (${video.videoWidth}x${video.videoHeight}, ${video.duration.toFixed(1)}s)` });
+
+      // GPX is tiny, process normally
       const gpxBlob = await gpxResp.blob();
       const gpxFile = new File([gpxBlob], gpxName, { type: 'application/gpx+xml' });
       await handleGpxFile(gpxFile);
@@ -123,7 +141,7 @@ export function ImportStep() {
     } finally {
       setLoadingTest(false);
     }
-  }, [dispatch, handleVideoFile, handleGpxFile]);
+  }, [dispatch, handleGpxFile]);
 
   return (
     <div style={{ display: 'grid', gap: '32px' }}>

@@ -28,20 +28,20 @@ export function GenerateStep() {
 
   const extractFramesFromVideo = useCallback(
     async (
-      videoFile: File,
+      videoSrc: string,
       fps: number,
       maxDurationS: number | null,
       onProgress: (p: number, msg: string) => void,
     ): Promise<FrameData[]> => {
-      const url = URL.createObjectURL(videoFile);
       const video = document.createElement('video');
       video.preload = 'auto';
       video.muted = true;
+      video.crossOrigin = 'anonymous';
 
       await new Promise<void>((resolve, reject) => {
         video.onloadeddata = () => resolve();
         video.onerror = () => reject(new Error('Failed to load video'));
-        video.src = url;
+        video.src = videoSrc;
       });
 
       const duration = maxDurationS ?? video.duration;
@@ -118,8 +118,9 @@ export function GenerateStep() {
           progress: { stage: 'extracting', progress: 0, message: 'Preparing video...' },
         });
 
+        const videoSrc = state.videoUrl ?? URL.createObjectURL(state.videoFile!);
         const frames = await extractFramesFromVideo(
-          state.videoFile,
+          videoSrc,
           state.calibration.fpsExtraction,
           maxDurationS,
           (p, msg) => {

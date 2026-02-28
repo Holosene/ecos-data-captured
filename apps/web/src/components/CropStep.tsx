@@ -44,10 +44,12 @@ export function CropStep() {
   useEffect(() => {
     if (!state.videoFile) return;
 
-    const url = URL.createObjectURL(state.videoFile);
+    const isBlobUrl = !state.videoUrl;
+    const url = state.videoUrl ?? URL.createObjectURL(state.videoFile);
     const video = document.createElement('video');
     video.preload = 'auto';
     video.muted = true;
+    video.crossOrigin = 'anonymous';
     let disposed = false;
 
     video.onloadeddata = () => {
@@ -84,7 +86,7 @@ export function CropStep() {
       }
 
       // Revoke blob URL — video element is no longer needed
-      URL.revokeObjectURL(url);
+      if (isBlobUrl) URL.revokeObjectURL(url);
 
       if (!disposed) {
         setFrameReady(true);
@@ -95,9 +97,9 @@ export function CropStep() {
 
     return () => {
       disposed = true;
-      URL.revokeObjectURL(url);
+      if (isBlobUrl) URL.revokeObjectURL(url);
     };
-  }, [state.videoFile]);
+  }, [state.videoFile, state.videoUrl]);
 
   // ─── Draw overlay using cached bitmap — zero blob URLs ─────────────
   const drawOverlay = useCallback(() => {
