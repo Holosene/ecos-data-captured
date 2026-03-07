@@ -11,6 +11,59 @@ import { DocsSection } from '../components/DocsSection.js';
 import { MapView } from '../components/MapView.js';
 import { useAppState } from '../store/app-state.js';
 
+/* Tiny blur placeholders (base64 ~20px WebP, <200 bytes each) */
+const BLUR: Record<string, string> = {
+  'hero-main': 'data:image/webp;base64,UklGRj4AAABXRUJQVlA4IDIAAADQAgCdASoUAAwAPzmGulQvKSWjMAgB4CcJYwAAifQAAP7uSHyMP8eXjMR8tdIBzvNQAA==',
+  'hero-side': 'data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADQAwCdASoUABAAPzmGu1QvKSYjMAgB4CcJZgC7AB6Wg9jO6qDlZMAA/ulDC88wAs55bgyrfkyO7hGzsuR1tjJZjibJVLxMAAA=',
+  'gallery-01': 'data:image/webp;base64,UklGRlAAAABXRUJQVlA4IEQAAACwAwCdASoUABIAPzGCtVOuqKUisAwB0CYJZwAAW+yZCjjvMbLLQAD+3NSu6DibBjaOtn2Gvi4ob74DVzuC5ZwoafAAAA==',
+  'gallery-03': 'data:image/webp;base64,UklGRkgAAABXRUJQVlA4IDwAAAAQBACdASoUABQAPyV+s1OuKKSit/qoAcAkiWUAAFu1mHilvtuzup8MAAD+7ndBkDHnwLLPZW2L50AAAAA=',
+  'gallery-04': 'data:image/webp;base64,UklGRkIAAABXRUJQVlA4IDYAAAAwAwCdASoUABIAPzmUwVmvKicqqAgB4CcJaQAALmXZ8sDwAP7r2Lwm7Yx29Zuv8Ko++CYAAAA=',
+  'gallery-05': 'data:image/webp;base64,UklGRkoAAABXRUJQVlA4ID4AAACwAwCdASoUABAAPzmEuVOvKKWisAgB4CcJYwCAAAh1f86Vnr7iMAD+6+MgEa9aQRq0T/XxWpnnHgfgOjAAAA==',
+  'gallery-06': 'data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAABwBACdASoUABQAPzWAtlOvKCUit/VYAeAmiUAYmwIcecO8wkkr/9g5/NUSUAD+6+s0j0j577ocOx6UXXN69CtFOA3e5YWQ8R1F1IhBwAA=',
+};
+
+/** Progressive image: blur placeholder -> WebP with PNG fallback */
+function ProgressiveImg({ name, alt, loading, style, onError }: {
+  name: string; alt: string; loading?: 'eager' | 'lazy';
+  style?: React.CSSProperties; onError?: React.ReactEventHandler<HTMLImageElement>;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const base = import.meta.env.BASE_URL;
+  const blur = BLUR[name];
+  return (
+    <>
+      {blur && !loaded && (
+        <img
+          src={blur}
+          alt=""
+          aria-hidden
+          style={{
+            ...style,
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', filter: 'blur(20px)', transform: 'scale(1.1)',
+            zIndex: 1, pointerEvents: 'none',
+          }}
+        />
+      )}
+      <picture>
+        <source srcSet={`${base}${name}.webp`} type="image/webp" />
+        <img
+          src={`${base}${name}.png`}
+          alt={alt}
+          loading={loading ?? 'lazy'}
+          onLoad={() => setLoaded(true)}
+          onError={onError}
+          style={{
+            ...style,
+            opacity: loaded ? 1 : 0,
+            transition: (style?.transition ? style.transition + ', ' : '') + 'opacity 400ms ease',
+          }}
+        />
+      </picture>
+    </>
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const { t, tArray } = useTranslation();
@@ -48,23 +101,21 @@ export function HomePage() {
     setLightboxOpen(true);
   };
 
-  const heroImages = [
-    `${import.meta.env.BASE_URL}hero-main.png`,
-    `${import.meta.env.BASE_URL}hero-side.png`,
-  ];
+  const heroImageNames = ['hero-main', 'hero-side'];
+  const heroImages = heroImageNames.map((n) => `${import.meta.env.BASE_URL}${n}.png`);
 
   const galleryRow1 = [
-    { file: 'gallery-01.png', baseFlex: 2, index: 0 },
-    { file: 'gallery-03.png', baseFlex: 1, index: 1 },
+    { name: 'gallery-01', baseFlex: 2, index: 0 },
+    { name: 'gallery-03', baseFlex: 1, index: 1 },
   ];
   const galleryRow2 = [
-    { file: 'gallery-04.png', baseFlex: 1, index: 2 },
-    { file: 'gallery-05.png', baseFlex: 1, index: 3 },
-    { file: 'gallery-06.png', baseFlex: 1, index: 4 },
+    { name: 'gallery-04', baseFlex: 1, index: 2 },
+    { name: 'gallery-05', baseFlex: 1, index: 3 },
+    { name: 'gallery-06', baseFlex: 1, index: 4 },
   ];
 
-  const allGalleryFiles = [...galleryRow1, ...galleryRow2];
-  const galleryImages = allGalleryFiles.map((item) => `${import.meta.env.BASE_URL}${item.file}`);
+  const allGalleryItems = [...galleryRow1, ...galleryRow2];
+  const galleryImages = allGalleryItems.map((item) => `${import.meta.env.BASE_URL}${item.name}.png`);
 
   return (
     <div style={{ background: colors.black }}>
@@ -119,25 +170,25 @@ export function HomePage() {
             gap: '12px',
           }}
         >
-          {heroImages.map((src, i) => (
+          {heroImageNames.map((name, i) => (
             <div
-              key={src}
+              key={name}
               className="visual-placeholder"
               style={{ minHeight: '240px', cursor: 'pointer', position: 'relative', overflow: 'hidden', border: `2px solid transparent`, borderRadius: '12px', transition: 'border-color 300ms ease' }}
               onClick={() => openLightbox(heroImages, i)}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = colors.accent;
-                const img = e.currentTarget.querySelector('img');
+                const img = e.currentTarget.querySelector('picture img') as HTMLImageElement;
                 if (img) { img.style.transform = 'scale(1.05)'; img.style.filter = 'brightness(1.1)'; }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'transparent';
-                const img = e.currentTarget.querySelector('img');
+                const img = e.currentTarget.querySelector('picture img') as HTMLImageElement;
                 if (img) { img.style.transform = 'scale(1)'; img.style.filter = 'brightness(1)'; }
               }}
             >
-              <img
-                src={src}
+              <ProgressiveImg
+                name={name}
                 alt=""
                 loading={i === 0 ? 'eager' : 'lazy'}
                 style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease' }}
@@ -145,7 +196,7 @@ export function HomePage() {
               />
               <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
                 <IconImage size={32} color={colors.text3} />
-                <span style={{ fontSize: '13px' }}>{i === 0 ? 'hero-main.png' : 'hero-side.png'}</span>
+                <span style={{ fontSize: '13px' }}>{name}.png</span>
               </div>
             </div>
           ))}
@@ -221,32 +272,31 @@ export function HomePage() {
           <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '300px', marginBottom: '12px' }}>
             {galleryRow1.map((item) => (
               <div
-                key={item.file}
+                key={item.name}
                 className="gallery-card visual-placeholder"
                 data-baseflex={item.baseFlex}
                 style={{
-                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
-                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
                   transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseEnter={() => setHoveredImage(item.name)}
                 onMouseLeave={() => setHoveredImage(null)}
               >
-                <img
-                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                <ProgressiveImg
+                  name={item.name}
                   alt=""
-                  loading="lazy"
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
                   <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
               </div>
             ))}
@@ -256,32 +306,31 @@ export function HomePage() {
           <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '260px' }}>
             {galleryRow2.map((item) => (
               <div
-                key={item.file}
+                key={item.name}
                 className="gallery-card visual-placeholder"
                 data-baseflex={item.baseFlex}
                 style={{
-                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
-                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
                   transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseEnter={() => setHoveredImage(item.name)}
                 onMouseLeave={() => setHoveredImage(null)}
               >
-                <img
-                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                <ProgressiveImg
+                  name={item.name}
                   alt=""
-                  loading="lazy"
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
                   <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
               </div>
             ))}
