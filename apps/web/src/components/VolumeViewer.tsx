@@ -1176,7 +1176,7 @@ export function VolumeViewer({
                   />
                 </div>
                 {/* Invisible spacer — matches play button + gap height for equal section spacing */}
-                <div style={{ height: `${sliderPlayGap + 52}px` }} />
+                <div style={{ height: `${sliderPlayGap + 56}px` }} />
               </>
             ) : (
               /* Temporal modes: frame slider + play button */
@@ -1222,23 +1222,25 @@ export function VolumeViewer({
                     }
                   }}
                   style={{
-                    width: '52px', height: '52px', borderRadius: '50%',
+                    width: '56px', height: '56px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing && isTemporal ? colors.accentMuted : colors.surface,
                     color: colors.accent,
                     cursor: 'pointer',
-                    fontSize: '18px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    paddingLeft: playing && isTemporal ? '0' : '2px',
                     transition: 'all 150ms ease',
                   }}
                 >
                   {playing && isTemporal ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
-                  ) : '\u25B6'}
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}>
+                      <path d="M6 4l15 8-15 8V4z" />
+                    </svg>
+                  )}
                 </button>
               </>
             )}
@@ -1550,9 +1552,9 @@ export function VolumeViewer({
           {isTemporal && (
             <button
               onClick={() => { if (isTemporal && hasFrames) { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); } }}
-              style={{ width: '36px', height: '36px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, paddingLeft: playing ? '0' : '2px' }}
+              style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             >
-              {playing && isTemporal ? (<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : '\u25B6'}
+              {playing && isTemporal ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
             </button>
           )}
         </div>

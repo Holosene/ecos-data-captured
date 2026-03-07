@@ -105,7 +105,7 @@ function depthToSliderIndex(depth: number): number {
 
 export function ScanPage() {
   const { state, dispatch } = useAppState();
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
   // All 3 modes generated simultaneously — no mode selection needed
@@ -1026,11 +1026,19 @@ export function ScanPage() {
                   const cfg = QUALITY_PRESETS[q];
                   const accentMap = { minimal: '#22c55e', medium: colors.accent, complete: '#f59e0b' };
                   const color = accentMap[q];
-                  const titleMap = { minimal: 'Rapide', medium: 'Équilibré', complete: 'Complet' };
-                  const hintMap = {
+                  const titleMap = {
+                    minimal: t('v2.quality.minimal' as any),
+                    medium: t('v2.quality.medium' as any),
+                    complete: t('v2.quality.complete' as any),
+                  };
+                  const hintMap = lang === 'fr' ? {
                     minimal: `${cfg.fps} image/s, aperçu en quelques secondes`,
                     medium: `${cfg.fps} images/s, bon compromis`,
                     complete: `${cfg.fps} images/s, qualité maximale`,
+                  } : {
+                    minimal: `${cfg.fps} fps, preview in seconds`,
+                    medium: `${cfg.fps} fps, good trade-off`,
+                    complete: `${cfg.fps} fps, max quality`,
                   };
                   return (
                     <button

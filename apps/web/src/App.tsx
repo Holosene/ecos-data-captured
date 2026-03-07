@@ -76,7 +76,6 @@ function Topbar() {
   };
 
   const handleNavClick = useCallback((item: typeof navItems[0]) => {
-    setMobileMenuOpen(false);
     if (item.path === '/') {
       if (location.pathname === '/') {
         (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
@@ -143,11 +142,11 @@ function Topbar() {
                 className="nav-item"
                 style={{
                   position: 'relative',
-                  padding: '24px 20px',
+                  padding: '20px 16px',
                   background: 'none',
                   border: 'none',
                   color: active ? 'var(--c-text-1)' : 'var(--c-text-2)',
-                  fontSize: '16px',
+                  fontSize: '13px',
                   fontWeight: active ? 600 : 450,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -167,29 +166,29 @@ function Topbar() {
           onClick={toggleTheme}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: '36px', height: '36px', borderRadius: '9999px',
+            width: '30px', height: '30px', borderRadius: '9999px',
             border: '1px solid var(--c-border)', background: 'transparent',
             color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
-            marginRight: '8px',
+            marginRight: '6px',
           }}
           title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
         >
-          {theme === 'dark' ? <IconSun size={17} /> : <IconMoon size={17} />}
+          {theme === 'dark' ? <IconSun size={14} /> : <IconMoon size={14} />}
         </button>
 
         <button
           onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
           style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '7px 14px', borderRadius: '9999px',
+            display: 'flex', alignItems: 'center', gap: '4px',
+            padding: '5px 11px', borderRadius: '9999px',
             border: '1px solid var(--c-border)', background: 'transparent',
-            color: 'var(--c-text-2)', fontSize: '14px', fontWeight: 500,
+            color: 'var(--c-text-2)', fontSize: '12px', fontWeight: 500,
             cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms ease',
-            marginRight: '12px',
+            marginRight: '8px',
           }}
           title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
         >
-          <IconGlobe size={16} />
+          <IconGlobe size={13} />
           {lang === 'fr' ? 'EN' : 'FR'}
         </button>
 

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
@@ -21,18 +21,17 @@ export function HomePage() {
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
   const [showFloatingCta, setShowFloatingCta] = useState(false);
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
-  const heroCtaRef = useRef<HTMLDivElement>(null);
 
-  // Show floating CTA when hero button scrolls out of view
+  // Show floating CTA when user scrolls past the hero section
   useEffect(() => {
-    const el = heroCtaRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowFloatingCta(!entry.isIntersecting),
-      { threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    const scroller = document.getElementById('main-content');
+    if (!scroller) return;
+    const onScroll = () => {
+      setShowFloatingCta(scroller.scrollTop > 300);
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    onScroll(); // check initial position
+    return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
 
   const FEATURES = [
@@ -71,35 +70,35 @@ export function HomePage() {
       {/* Hero */}
       <section
         style={{
-          padding: 'clamp(48px, 8vw, 100px) var(--content-gutter) clamp(32px, 4vw, 64px)',
+          padding: 'clamp(36px, 6vw, 80px) var(--content-gutter) clamp(24px, 3vw, 48px)',
         }}
       >
         <div style={{ marginBottom: '12px' }}>
           <img
             src={getBrandingForTheme(theme).texteTitle}
             alt="ecos"
-            style={{ width: 'clamp(280px, 35vw, 480px)', height: 'auto', display: 'block' }}
+            style={{ width: 'clamp(220px, 28vw, 380px)', height: 'auto', display: 'block' }}
           />
         </div>
 
         <p
           className="hero-desc"
           style={{
-            fontSize: 'clamp(15px, 1.2vw, 17px)',
+            fontSize: 'clamp(13px, 1vw, 14px)',
             color: colors.text3,
-            maxWidth: '560px',
+            maxWidth: '480px',
             lineHeight: 1.7,
-            marginBottom: '48px',
+            marginBottom: '36px',
           }}
         >
           {t('home.description')}
         </p>
 
-        <div ref={heroCtaRef} className="hero-cta-row" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+        <div ref={heroCtaRef} className="hero-cta-row" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Button variant="primary" size="md" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
-          <Button variant="secondary" size="lg" onClick={() => {
+          <Button variant="secondary" size="md" onClick={() => {
             const el = document.getElementById('manifesto-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}>
@@ -109,14 +108,14 @@ export function HomePage() {
       </section>
 
       {/* Hero visual zone */}
-      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 5vw, 80px)` }}>
+      <section style={{ padding: `0 var(--content-gutter) clamp(36px, 4vw, 64px)` }}>
         <div
           className="hero-visual-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: '2fr 1fr',
-            gridTemplateRows: 'minmax(324px, 486px)',
-            gap: '16px',
+            gridTemplateRows: 'minmax(260px, 390px)',
+            gap: '12px',
           }}
         >
           {heroImages.map((src, i) => (
@@ -152,72 +151,72 @@ export function HomePage() {
       </section>
 
       {/* How it works */}
-      <section style={{ padding: `clamp(40px, 4vw, 64px) var(--content-gutter)` }}>
+      <section style={{ padding: `clamp(28px, 3vw, 48px) var(--content-gutter)` }}>
         <h2
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 600",
-            fontSize: 'clamp(28px, 3vw, 36px)',
+            fontSize: 'clamp(22px, 2.4vw, 29px)',
             lineHeight: 1.1,
             letterSpacing: '-0.02em',
             color: colors.text1,
-            marginBottom: '32px',
+            marginBottom: '24px',
           }}
         >
           {t('home.howItWorks')}
         </h2>
         <div
           className="grid-4-cols"
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}
         >
           {FEATURES.map((f) => (
-            <GlassPanel key={f.title} padding="28px">
+            <GlassPanel key={f.title} padding="22px">
               <div
                 style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   color: colors.accent,
                   fontVariantNumeric: 'tabular-nums',
-                  marginBottom: '16px',
+                  marginBottom: '12px',
                   letterSpacing: '0.5px',
                 }}
               >
                 {f.num}
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, color: colors.text1, marginBottom: '10px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: colors.text1, marginBottom: '8px' }}>
                 {f.title}
               </h3>
-              <p style={{ fontSize: '15px', color: colors.text2, lineHeight: 1.6 }}>{f.desc}</p>
+              <p style={{ fontSize: '13px', color: colors.text2, lineHeight: 1.6 }}>{f.desc}</p>
             </GlassPanel>
           ))}
         </div>
       </section>
 
       {/* Gallery — flex rows with hover zoom on desktop, horizontal scroll on mobile */}
-      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 6vw, 100px)` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
+      <section style={{ padding: `0 var(--content-gutter) clamp(36px, 5vw, 80px)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '18px' }}>
           <div>
             <h2
               style={{
                 fontFamily: fonts.display,
                 fontVariationSettings: "'wght' 600",
-                fontSize: 'clamp(28px, 3vw, 36px)',
+                fontSize: 'clamp(22px, 2.4vw, 29px)',
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
                 color: colors.text1,
-                marginBottom: '8px',
+                marginBottom: '6px',
               }}
             >
               {t('home.gallery.title')}
             </h2>
-            <p style={{ fontSize: '15px', color: colors.text3 }}>{t('home.gallery.subtitle')}</p>
+            <p style={{ fontSize: '13px', color: colors.text3 }}>{t('home.gallery.subtitle')}</p>
           </div>
         </div>
 
         {/* Gallery container — single horizontal scroll block on mobile */}
         <div className="gallery-container">
           {/* Row 1: gallery-01 (wide) + gallery-03 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '378px', marginBottom: '16px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '300px', marginBottom: '12px' }}>
             {galleryRow1.map((item) => (
               <div
                 key={item.file}
@@ -251,7 +250,7 @@ export function HomePage() {
           </div>
 
           {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '324px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '260px' }}>
             {galleryRow2.map((item) => (
               <div
                 key={item.file}
@@ -290,15 +289,15 @@ export function HomePage() {
       <section
         id="map-section"
         style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+          padding: `clamp(36px, 4vw, 64px) var(--content-gutter) clamp(48px, 5vw, 96px)`,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2
             style={{
               fontFamily: fonts.display,
               fontVariationSettings: "'wght' 600",
-              fontSize: 'clamp(28px, 3vw, 36px)',
+              fontSize: 'clamp(22px, 2.4vw, 29px)',
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
               color: colors.text1,
@@ -307,7 +306,7 @@ export function HomePage() {
           >
             {t('v2.map.title')}
           </h2>
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>
+          <span style={{ fontSize: '12px', fontWeight: 500 }}>
             <span style={{ color: colors.accent, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{state.sessions.length}</span>
             {' '}
             <span style={{ color: colors.text2 }}>{t('v2.map.sessions')}</span>
@@ -315,7 +314,7 @@ export function HomePage() {
         </div>
 
         <div className="map-outer-container" style={{
-          height: 'clamp(600px, 75vh, 900px)',
+          height: 'clamp(480px, 60vh, 720px)',
           borderRadius: '12px',
           overflow: 'hidden',
           border: `1px solid ${colors.border}`,
@@ -459,7 +458,7 @@ export function HomePage() {
       <section
         id="docs-section"
         style={{
-          padding: `clamp(32px, 3vw, 48px) var(--content-gutter) clamp(32px, 3vw, 48px)`,
+          padding: `clamp(24px, 2.5vw, 40px) var(--content-gutter) clamp(24px, 2.5vw, 40px)`,
         }}
       >
         <DocsSection />
@@ -469,14 +468,14 @@ export function HomePage() {
       <section
         id="manifesto-section"
         style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+          padding: `clamp(36px, 4vw, 64px) var(--content-gutter) clamp(48px, 5vw, 96px)`,
         }}
       >
         <h2
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(36px, 4vw, 56px)',
+            fontSize: 'clamp(28px, 3.2vw, 44px)',
             lineHeight: 1,
             letterSpacing: '-0.02em',
             color: colors.text1,
@@ -490,10 +489,10 @@ export function HomePage() {
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(18px, 2vw, 24px)',
+            fontSize: 'clamp(15px, 1.6vw, 19px)',
             lineHeight: 1.2,
             color: colors.accent,
-            marginBottom: '56px',
+            marginBottom: '40px',
           }}
         >
           {t('manifesto.subtitle')}
@@ -504,47 +503,47 @@ export function HomePage() {
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '28px',
+            gap: '20px',
             alignItems: 'start',
           }}
         >
           {/* Column 1: S1 + S3 — vertical reading order */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s1.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s1.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s1.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s1.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s1.p2')}</p>
             </GlassPanel>
 
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s3.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s3.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s3.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s3.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s3.p2')}</p>
             </GlassPanel>
           </div>
 
           {/* Column 2: S2 + S4 — vertical reading order */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s2.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s2.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s2.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s2.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s2.p2')}</p>
             </GlassPanel>
 
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s4.title')}
               </h3>
-              <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '10px' }}>
+              <ul style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
                 {tArray('manifesto.s4.items').map((item, i) => (
-                  <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
-                    <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>-</span>
+                  <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                    <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>-</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -554,14 +553,14 @@ export function HomePage() {
         </div>
 
         {/* S5 — Roadmap, full width below the two columns */}
-        <GlassPanel padding="40px 36px" style={{ marginTop: '28px' }}>
-          <h3 style={{ fontSize: '26px', fontWeight: 700, marginBottom: '24px', color: colors.text1, letterSpacing: '-0.01em' }}>
+        <GlassPanel padding="28px" style={{ marginTop: '20px' }}>
+          <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '18px', color: colors.text1, letterSpacing: '-0.01em' }}>
             {t('manifesto.s5.title')}
           </h3>
-          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px' }}>
+          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px' }}>
             {tArray('manifesto.s5.items').map((item, i) => (
-              <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
-                <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>+</span>
+              <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>+</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -607,8 +606,8 @@ export function HomePage() {
           bottom: '32px',
           right: '32px',
           zIndex: 90,
-          padding: '20px 48px 22px',
-          fontSize: '20px',
+          padding: '16px 38px 17px',
+          fontSize: '16px',
           fontWeight: 600,
           letterSpacing: '-0.01em',
           fontFamily: 'inherit',
