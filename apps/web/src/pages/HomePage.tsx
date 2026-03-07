@@ -27,7 +27,7 @@ export function HomePage() {
     const scroller = document.getElementById('main-content');
     if (!scroller) return;
     const onScroll = () => {
-      setShowFloatingCta(scroller.scrollTop > 300);
+      setShowFloatingCta(scroller.scrollTop > 150);
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
     onScroll(); // check initial position
@@ -138,6 +138,7 @@ export function HomePage() {
               <img
                 src={src}
                 alt=""
+                loading={i === 0 ? 'eager' : 'lazy'}
                 style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
@@ -238,6 +239,7 @@ export function HomePage() {
                 <img
                   src={`${import.meta.env.BASE_URL}${item.file}`}
                   alt=""
+                  loading="lazy"
                   style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
@@ -272,6 +274,7 @@ export function HomePage() {
                 <img
                   src={`${import.meta.env.BASE_URL}${item.file}`}
                   alt=""
+                  loading="lazy"
                   style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
