@@ -21,6 +21,7 @@ import type {
   RendererSettings,
   ViewMode,
   RecordingSession,
+  SessionManifestEntry,
 } from '@echos/core';
 import {
   DEFAULT_CALIBRATION,
@@ -109,6 +110,10 @@ export interface AppState {
   // Map
   gpxTracks: Map<string, Array<{ lat: number; lon: number }>>;
 
+  // Session manifest (pre-generated sessions registry)
+  manifestEntries: SessionManifestEntry[];
+  manifestLoaded: boolean;
+
   // Errors
   error: string | null;
 }
@@ -158,6 +163,9 @@ export const INITIAL_STATE: AppState = {
   activeSessionId: null,
   gpxTracks: new Map(),
 
+  manifestEntries: [],
+  manifestLoaded: false,
+
   error: null,
 };
 
@@ -199,6 +207,8 @@ export type AppAction =
   // Sessions
   | { type: 'ADD_SESSION'; session: RecordingSession; gpxTrack?: Array<{ lat: number; lon: number }> }
   | { type: 'SET_ACTIVE_SESSION'; id: string | null }
+  // Manifest (pre-generated sessions)
+  | { type: 'LOAD_MANIFEST'; entries: SessionManifestEntry[]; sessions: RecordingSession[]; gpxTracks: Map<string, Array<{ lat: number; lon: number }>> }
   // General
   | { type: 'SET_ERROR'; error: string | null }
   | { type: 'RESET' }
@@ -285,6 +295,19 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_ACTIVE_SESSION':
       return { ...state, activeSessionId: action.id };
+    case 'LOAD_MANIFEST': {
+      const mergedTracks = new Map(state.gpxTracks);
+      action.gpxTracks.forEach((track, id) => mergedTracks.set(id, track));
+      return {
+        ...state,
+        manifestEntries: action.entries,
+        manifestLoaded: true,
+        sessions: [...action.sessions, ...state.sessions.filter(
+          (s) => !action.sessions.some((ms) => ms.id === s.id),
+        )],
+        gpxTracks: mergedTracks,
+      };
+    }
     case 'SET_ERROR':
       return { ...state, error: action.error, processing: false, v2Processing: false };
     case 'RESET':

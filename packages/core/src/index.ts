@@ -110,3 +110,14 @@ export { computeAutoThreshold, computeVolumeStats } from './adaptive-threshold.j
 
 export { serializeVolume, deserializeVolume, volumeSnapshotToBlob } from './volume-snapshot.js';
 export type { VolumeSnapshot } from './volume-snapshot.js';
+
+// ─── Session Manifest ──────────────────────────────────────────────────────
+
+export {
+  manifestEntryToSession,
+  fetchSessionManifest,
+  fetchSessionGpxTrack,
+  fetchSessionVolume,
+  getSessionVolumeUrl,
+} from './session-manifest.js';
+export type { SessionManifestEntry } from './session-manifest.js';

@@ -13,3 +13,7 @@ packages/core/__tests__/**/*.js
 packages/core/__tests__/**/*.js.map
 packages/core/__tests__/**/*.d.ts
 packages/core/__tests__/**/*.d.ts.map
+
+# Large session binaries (use Git LFS or generate locally)
+apps/web/public/sessions/**/*.echos-vol
+apps/web/public/sessions/**/*.mp4

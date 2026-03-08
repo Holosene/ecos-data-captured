@@ -497,7 +497,7 @@ export function HomePage() {
                   </p>
                 )}
 
-                <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+                <Button variant="primary" size="lg" onClick={() => navigate(`/session/${session.id}`)}>
                   Explorer
                 </Button>
               </div>

@@ -74,6 +74,7 @@ export function MapPage() {
                 session={session}
                 isSelected={session.id === selectedId}
                 onClick={() => handleSessionSelect(session.id)}
+                onOpen={() => navigate(`/session/${session.id}`)}
               />
             ))}
           </div>
@@ -87,10 +88,12 @@ function SessionCard({
   session,
   isSelected,
   onClick,
+  onOpen,
 }: {
   session: RecordingSession;
   isSelected: boolean;
   onClick: () => void;
+  onOpen: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -104,8 +107,15 @@ function SessionCard({
       }}
       onClick={onClick}
     >
-      <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px', marginBottom: '4px' }}>
-        {session.name}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+        <div style={{ color: colors.text1, fontWeight: 600, fontSize: '14px' }}>
+          {session.name}
+        </div>
+        {isSelected && (
+          <Button variant="primary" size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpen(); }}>
+            Ouvrir
+          </Button>
+        )}
       </div>
       <div style={{ display: 'flex', gap: '12px', color: colors.text3, fontSize: '12px' }}>
         <span>{session.totalDistanceM.toFixed(0)} m</span>

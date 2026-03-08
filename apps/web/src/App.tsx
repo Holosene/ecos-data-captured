@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect, useState, useCallback } from 'react';
+import React, { useReducer, useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { colors } from '@echos/ui';
 import { useTranslation } from './i18n/index.js';
@@ -11,6 +11,14 @@ import { ScanPage } from './pages/ScanPage.js';
 import { MapPage } from './pages/MapPage.js';
 import { ManifestoPage } from './pages/ManifestoPage.js';
 import { DocsPage } from './pages/DocsPage.js';
+import {
+  fetchSessionManifest,
+  fetchSessionGpxTrack,
+  manifestEntryToSession,
+  parseGpx,
+} from '@echos/core';
+
+const SessionViewerPage = lazy(() => import('./pages/SessionViewerPage.js'));
 
 function Topbar() {
   const navigate = useNavigate();
@@ -200,19 +208,54 @@ function Topbar() {
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE);
 
+  // Load pre-generated sessions manifest at boot
+  useEffect(() => {
+    const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
+    fetchSessionManifest(basePath)
+      .then(async (entries) => {
+        const sessions = entries.map(manifestEntryToSession);
+        const gpxTracks = new Map<string, Array<{ lat: number; lon: number }>>();
+
+        // Fetch all GPX tracks in parallel (lightweight, few KB each)
+        await Promise.allSettled(
+          entries.map(async (entry) => {
+            try {
+              const track = await fetchSessionGpxTrack(
+                basePath,
+                entry.id,
+                entry.files.gpx,
+                parseGpx,
+              );
+              gpxTracks.set(entry.id, track);
+            } catch {
+              // GPX fetch failed — session still shows on map via bounds
+            }
+          }),
+        );
+
+        dispatch({ type: 'LOAD_MANIFEST', entries, sessions, gpxTracks });
+      })
+      .catch(() => {
+        // Manifest not found — app works normally without pre-generated sessions
+      });
+  }, []);
+
   return (
     <AppContext.Provider value={{ state, dispatch }}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease', overflow: 'hidden' }}>
         <Topbar />
         <main id="main-content" style={{ flex: 1, overflowY: 'auto' }}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/scan" element={<ScanPage />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/manifesto" element={<ManifestoPage />} />
-            <Route path="/docs" element={<DocsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<div style={{ color: colors.text3, padding: '48px', textAlign: 'center' }}>Chargement...</div>}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/scan" element={<ScanPage />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/session/:sessionId" element={<SessionViewerPage />} />
+              <Route path="/manifesto" element={<ManifestoPage />} />
+              <Route path="/docs" element={<DocsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </AppContext.Provider>
