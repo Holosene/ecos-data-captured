@@ -376,6 +376,50 @@ export function VolumeViewer({
   const containerBRef = useRef<HTMLDivElement>(null);
   const containerCRef = useRef<HTMLDivElement>(null);
 
+  // ─── Ambient Music ──────────────────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicStarted, setMusicStarted] = useState(false);
+
+  useEffect(() => {
+    const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
+    const audio = new Audio(`${basePath}audio/ambient.mp3`);
+    audio.loop = true;
+    // PC gets 20% more volume (0.36 vs 0.30 on mobile)
+    const baseVolume = 0.30;
+    const pcBoost = 1.2;
+    audio.volume = isMobile ? baseVolume : baseVolume * pcBoost;
+    // Preload to avoid cutting off on PC
+    audio.preload = 'auto';
+    audioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      audioRef.current = null;
+    };
+  }, [isMobile]);
+
+  // Start music on first user interaction (required by autoplay policies)
+  useEffect(() => {
+    if (musicStarted) return;
+    const startMusic = () => {
+      if (audioRef.current && !musicStarted) {
+        audioRef.current.play().catch(() => {});
+        setMusicStarted(true);
+      }
+    };
+    document.addEventListener('pointerdown', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
+    // Also try immediate play (works on mobile more often)
+    if (audioRef.current) {
+      audioRef.current.play().then(() => setMusicStarted(true)).catch(() => {});
+    }
+    return () => {
+      document.removeEventListener('pointerdown', startMusic);
+      document.removeEventListener('keydown', startMusic);
+    };
+  }, [musicStarted]);
+
   // Renderers
   const rendererARef = useRef<VolumeRenderer | null>(null);
   const rendererBRef = useRef<VolumeRenderer | null>(null);
@@ -708,6 +752,9 @@ export function VolumeViewer({
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
+    // Mobile speed multiplier — reduced max speed on mobile
+    const mobileSpeedMul = isMobile ? 0.15 : 1;
+
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
     // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
     if (containerARef.current && !rendererARef.current) {
@@ -716,6 +763,7 @@ export function VolumeViewer({
       );
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
+      if (isMobile) rendererARef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
@@ -725,6 +773,7 @@ export function VolumeViewer({
       );
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
+      if (isMobile) rendererBRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
@@ -734,6 +783,7 @@ export function VolumeViewer({
       );
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
+      if (isMobile) rendererCRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     return () => {
@@ -1624,6 +1674,18 @@ export function VolumeViewer({
         {/* Volume sections — stacked */}
         {mobileSections.map((s, i) => renderMobileVolumeSection(s.mode, s.ref, s.title, s.subtitle, i))}
 
+        {/* Credits */}
+        <div style={{
+          textAlign: 'center',
+          padding: '24px 16px',
+          color: colors.text3,
+          fontSize: '11px',
+          lineHeight: 1.6,
+        }}>
+          <p style={{ margin: 0 }}>Musique : Teimo (schluss) par Thomas Köner</p>
+          <p style={{ margin: '4px 0 0' }}>Images issues principalement des archives du Schmidt Ocean Institut</p>
+        </div>
+
         {/* Bottom actions */}
         {(onReconfigure || onNewScan) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
@@ -1808,6 +1870,18 @@ export function VolumeViewer({
         extent={extent}
         onCaptureScreenshot={handleCaptureScreenshot}
       />
+
+      {/* Credits */}
+      <div style={{
+        textAlign: 'center',
+        padding: '32px 24px',
+        color: colors.text3,
+        fontSize: '13px',
+        lineHeight: 1.7,
+      }}>
+        <p style={{ margin: 0 }}>Musique : Teimo (schluss) par Thomas Köner</p>
+        <p style={{ margin: '4px 0 0' }}>Images issues principalement des archives du Schmidt Ocean Institut</p>
+      </div>
 
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
