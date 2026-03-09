@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Button, GlassPanel, colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
@@ -9,6 +10,59 @@ import { ImageLightbox } from '../components/ImageLightbox.js';
 import { DocsSection } from '../components/DocsSection.js';
 import { MapView } from '../components/MapView.js';
 import { useAppState } from '../store/app-state.js';
+
+/* Tiny blur placeholders (base64 ~20px WebP, <200 bytes each) */
+const BLUR: Record<string, string> = {
+  'hero-main': 'data:image/webp;base64,UklGRj4AAABXRUJQVlA4IDIAAADQAgCdASoUAAwAPzmGulQvKSWjMAgB4CcJYwAAifQAAP7uSHyMP8eXjMR8tdIBzvNQAA==',
+  'hero-side': 'data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADQAwCdASoUABAAPzmGu1QvKSYjMAgB4CcJZgC7AB6Wg9jO6qDlZMAA/ulDC88wAs55bgyrfkyO7hGzsuR1tjJZjibJVLxMAAA=',
+  'gallery-01': 'data:image/webp;base64,UklGRlAAAABXRUJQVlA4IEQAAACwAwCdASoUABIAPzGCtVOuqKUisAwB0CYJZwAAW+yZCjjvMbLLQAD+3NSu6DibBjaOtn2Gvi4ob74DVzuC5ZwoafAAAA==',
+  'gallery-03': 'data:image/webp;base64,UklGRkgAAABXRUJQVlA4IDwAAAAQBACdASoUABQAPyV+s1OuKKSit/qoAcAkiWUAAFu1mHilvtuzup8MAAD+7ndBkDHnwLLPZW2L50AAAAA=',
+  'gallery-04': 'data:image/webp;base64,UklGRkIAAABXRUJQVlA4IDYAAAAwAwCdASoUABIAPzmUwVmvKicqqAgB4CcJaQAALmXZ8sDwAP7r2Lwm7Yx29Zuv8Ko++CYAAAA=',
+  'gallery-05': 'data:image/webp;base64,UklGRkoAAABXRUJQVlA4ID4AAACwAwCdASoUABAAPzmEuVOvKKWisAgB4CcJYwCAAAh1f86Vnr7iMAD+6+MgEa9aQRq0T/XxWpnnHgfgOjAAAA==',
+  'gallery-06': 'data:image/webp;base64,UklGRloAAABXRUJQVlA4IE4AAABwBACdASoUABQAPzWAtlOvKCUit/VYAeAmiUAYmwIcecO8wkkr/9g5/NUSUAD+6+s0j0j577ocOx6UXXN69CtFOA3e5YWQ8R1F1IhBwAA=',
+};
+
+/** Progressive image: blur placeholder -> WebP with PNG fallback */
+function ProgressiveImg({ name, alt, loading, style, onError }: {
+  name: string; alt: string; loading?: 'eager' | 'lazy';
+  style?: React.CSSProperties; onError?: React.ReactEventHandler<HTMLImageElement>;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const base = import.meta.env.BASE_URL;
+  const blur = BLUR[name];
+  return (
+    <>
+      {blur && !loaded && (
+        <img
+          src={blur}
+          alt=""
+          aria-hidden
+          style={{
+            ...style,
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', filter: 'blur(20px)', transform: 'scale(1.1)',
+            zIndex: 1, pointerEvents: 'none',
+          }}
+        />
+      )}
+      <picture>
+        <source srcSet={`${base}${name}.webp`} type="image/webp" />
+        <img
+          src={`${base}${name}.png`}
+          alt={alt}
+          loading={loading ?? 'lazy'}
+          onLoad={() => setLoaded(true)}
+          onError={onError}
+          style={{
+            ...style,
+            opacity: loaded ? 1 : 0,
+            transition: (style?.transition ? style.transition + ', ' : '') + 'opacity 400ms ease',
+          }}
+        />
+      </picture>
+    </>
+  );
+}
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -21,19 +75,17 @@ export function HomePage() {
   const [hoveredImage, setHoveredImage] = useState<string | null>(null);
   const [showFloatingCta, setShowFloatingCta] = useState(false);
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
-  const heroCtaRef = useRef<HTMLDivElement>(null);
 
-  // Show floating CTA when hero button scrolls out of view
+  // Show floating CTA when user scrolls past the hero section
   useEffect(() => {
-    const el = heroCtaRef.current;
-    if (!el) return;
-    const mainContent = document.getElementById('main-content');
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowFloatingCta(!entry.isIntersecting),
-      { threshold: 0, root: mainContent },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
+    const scroller = document.getElementById('main-content');
+    if (!scroller) return;
+    const onScroll = () => {
+      setShowFloatingCta(scroller.scrollTop > 150);
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => scroller.removeEventListener('scroll', onScroll);
   }, []);
 
   const FEATURES = [
@@ -49,58 +101,56 @@ export function HomePage() {
     setLightboxOpen(true);
   };
 
-  const heroImages = [
-    `${import.meta.env.BASE_URL}hero-main.png`,
-    `${import.meta.env.BASE_URL}hero-side.png`,
-  ];
+  const heroImageNames = ['hero-main', 'hero-side'];
+  const heroImages = heroImageNames.map((n) => `${import.meta.env.BASE_URL}${n}.png`);
 
   const galleryRow1 = [
-    { file: 'gallery-01.png', baseFlex: 2, index: 0 },
-    { file: 'gallery-03.png', baseFlex: 1, index: 1 },
+    { name: 'gallery-01', baseFlex: 2, index: 0 },
+    { name: 'gallery-03', baseFlex: 1, index: 1 },
   ];
   const galleryRow2 = [
-    { file: 'gallery-04.png', baseFlex: 1, index: 2 },
-    { file: 'gallery-05.png', baseFlex: 1, index: 3 },
-    { file: 'gallery-06.png', baseFlex: 1, index: 4 },
+    { name: 'gallery-04', baseFlex: 1, index: 2 },
+    { name: 'gallery-05', baseFlex: 1, index: 3 },
+    { name: 'gallery-06', baseFlex: 1, index: 4 },
   ];
 
-  const allGalleryFiles = [...galleryRow1, ...galleryRow2];
-  const galleryImages = allGalleryFiles.map((item) => `${import.meta.env.BASE_URL}${item.file}`);
+  const allGalleryItems = [...galleryRow1, ...galleryRow2];
+  const galleryImages = allGalleryItems.map((item) => `${import.meta.env.BASE_URL}${item.name}.png`);
 
   return (
     <div style={{ background: colors.black }}>
       {/* Hero */}
       <section
         style={{
-          padding: 'clamp(48px, 8vw, 100px) var(--content-gutter) clamp(32px, 4vw, 64px)',
+          padding: 'clamp(36px, 6vw, 80px) var(--content-gutter) clamp(24px, 3vw, 48px)',
         }}
       >
         <div style={{ marginBottom: '12px' }}>
           <img
             src={getBrandingForTheme(theme).texteTitle}
             alt="ecos"
-            style={{ width: 'clamp(170px, 22vw, 290px)', height: 'auto', display: 'block' }}
+            style={{ width: 'clamp(220px, 28vw, 380px)', height: 'auto', display: 'block' }}
           />
         </div>
 
         <p
           className="hero-desc"
           style={{
-            fontSize: 'clamp(15px, 1.2vw, 17px)',
+            fontSize: 'clamp(13px, 1vw, 14px)',
             color: colors.text3,
-            maxWidth: '560px',
+            maxWidth: '480px',
             lineHeight: 1.7,
-            marginBottom: '48px',
+            marginBottom: '36px',
           }}
         >
           {t('home.description')}
         </p>
 
-        <div ref={heroCtaRef} className="hero-cta-row" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+        <div className="hero-cta-row" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <Button variant="primary" size="md" onClick={() => navigate('/scan')}>
             {t('home.cta')}
           </Button>
-          <Button variant="secondary" size="lg" onClick={() => {
+          <Button variant="secondary" size="md" onClick={() => {
             const el = document.getElementById('manifesto-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
           }}>
@@ -110,42 +160,43 @@ export function HomePage() {
       </section>
 
       {/* Hero visual zone */}
-      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 5vw, 80px)` }}>
+      <section style={{ padding: `0 var(--content-gutter) clamp(36px, 4vw, 64px)` }}>
         <div
           className="hero-visual-grid"
           style={{
             display: 'grid',
             gridTemplateColumns: '2fr 1fr',
-            gridTemplateRows: 'minmax(324px, 486px)',
-            gap: '16px',
+            gridTemplateRows: 'minmax(260px, 390px)',
+            gap: '12px',
           }}
         >
-          {heroImages.map((src, i) => (
+          {heroImageNames.map((name, i) => (
             <div
-              key={src}
+              key={name}
               className="visual-placeholder"
               style={{ minHeight: '240px', cursor: 'pointer', position: 'relative', overflow: 'hidden', border: `2px solid transparent`, borderRadius: '12px', transition: 'border-color 300ms ease' }}
               onClick={() => openLightbox(heroImages, i)}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = colors.accent;
-                const img = e.currentTarget.querySelector('img');
+                const img = e.currentTarget.querySelector('picture img') as HTMLImageElement;
                 if (img) { img.style.transform = 'scale(1.05)'; img.style.filter = 'brightness(1.1)'; }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'transparent';
-                const img = e.currentTarget.querySelector('img');
+                const img = e.currentTarget.querySelector('picture img') as HTMLImageElement;
                 if (img) { img.style.transform = 'scale(1)'; img.style.filter = 'brightness(1)'; }
               }}
             >
-              <img
-                src={src}
+              <ProgressiveImg
+                name={name}
                 alt=""
+                loading={i === 0 ? 'eager' : 'lazy'}
                 style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
               <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
                 <IconImage size={32} color={colors.text3} />
-                <span style={{ fontSize: '13px' }}>{i === 0 ? 'hero-main.png' : 'hero-side.png'}</span>
+                <span style={{ fontSize: '13px' }}>{name}.png</span>
               </div>
             </div>
           ))}
@@ -153,133 +204,133 @@ export function HomePage() {
       </section>
 
       {/* How it works */}
-      <section style={{ padding: `clamp(40px, 4vw, 64px) var(--content-gutter)` }}>
+      <section style={{ padding: `clamp(28px, 3vw, 48px) var(--content-gutter)` }}>
         <h2
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 600",
-            fontSize: 'clamp(28px, 3vw, 36px)',
+            fontSize: 'clamp(22px, 2.4vw, 29px)',
             lineHeight: 1.1,
             letterSpacing: '-0.02em',
             color: colors.text1,
-            marginBottom: '32px',
+            marginBottom: '24px',
           }}
         >
           {t('home.howItWorks')}
         </h2>
         <div
           className="grid-4-cols"
-          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}
         >
           {FEATURES.map((f) => (
-            <GlassPanel key={f.title} padding="28px">
+            <GlassPanel key={f.title} padding="22px">
               <div
                 style={{
-                  fontSize: '12px',
+                  fontSize: '11px',
                   fontWeight: 600,
                   color: colors.accent,
                   fontVariantNumeric: 'tabular-nums',
-                  marginBottom: '16px',
+                  marginBottom: '12px',
                   letterSpacing: '0.5px',
                 }}
               >
                 {f.num}
               </div>
-              <h3 style={{ fontSize: '18px', fontWeight: 600, color: colors.text1, marginBottom: '10px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: 600, color: colors.text1, marginBottom: '8px' }}>
                 {f.title}
               </h3>
-              <p style={{ fontSize: '15px', color: colors.text2, lineHeight: 1.6 }}>{f.desc}</p>
+              <p style={{ fontSize: '13px', color: colors.text2, lineHeight: 1.6 }}>{f.desc}</p>
             </GlassPanel>
           ))}
         </div>
       </section>
 
       {/* Gallery — flex rows with hover zoom on desktop, horizontal scroll on mobile */}
-      <section style={{ padding: `0 var(--content-gutter) clamp(48px, 6vw, 100px)` }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
+      <section style={{ padding: `0 var(--content-gutter) clamp(36px, 5vw, 80px)` }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '18px' }}>
           <div>
             <h2
               style={{
                 fontFamily: fonts.display,
                 fontVariationSettings: "'wght' 600",
-                fontSize: 'clamp(28px, 3vw, 36px)',
+                fontSize: 'clamp(22px, 2.4vw, 29px)',
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
                 color: colors.text1,
-                marginBottom: '8px',
+                marginBottom: '6px',
               }}
             >
               {t('home.gallery.title')}
             </h2>
-            <p style={{ fontSize: '15px', color: colors.text3 }}>{t('home.gallery.subtitle')}</p>
+            <p style={{ fontSize: '13px', color: colors.text3 }}>{t('home.gallery.subtitle')}</p>
           </div>
         </div>
 
         {/* Gallery container — single horizontal scroll block on mobile */}
         <div className="gallery-container">
           {/* Row 1: gallery-01 (wide) + gallery-03 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '378px', marginBottom: '16px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '300px', marginBottom: '12px' }}>
             {galleryRow1.map((item) => (
               <div
-                key={item.file}
+                key={item.name}
                 className="gallery-card visual-placeholder"
                 data-baseflex={item.baseFlex}
                 style={{
-                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
-                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
                   transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseEnter={() => setHoveredImage(item.name)}
                 onMouseLeave={() => setHoveredImage(null)}
               >
-                <img
-                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                <ProgressiveImg
+                  name={item.name}
                   alt=""
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
                   <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
               </div>
             ))}
           </div>
 
           {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '16px', height: '324px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '260px' }}>
             {galleryRow2.map((item) => (
               <div
-                key={item.file}
+                key={item.name}
                 className="gallery-card visual-placeholder"
                 data-baseflex={item.baseFlex}
                 style={{
-                  flex: hoveredImage === item.file ? item.baseFlex * 1.8 : item.baseFlex,
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
                   cursor: 'pointer',
                   position: 'relative',
                   overflow: 'hidden',
                   borderRadius: '12px',
-                  border: hoveredImage === item.file ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
                   transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.file)}
+                onMouseEnter={() => setHoveredImage(item.name)}
                 onMouseLeave={() => setHoveredImage(null)}
               >
-                <img
-                  src={`${import.meta.env.BASE_URL}${item.file}`}
+                <ProgressiveImg
+                  name={item.name}
                   alt=""
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.file ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
                   <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.file}</span>
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
               </div>
             ))}
@@ -291,15 +342,15 @@ export function HomePage() {
       <section
         id="map-section"
         style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+          padding: `clamp(36px, 4vw, 64px) var(--content-gutter) clamp(48px, 5vw, 96px)`,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <h2
             style={{
               fontFamily: fonts.display,
               fontVariationSettings: "'wght' 600",
-              fontSize: 'clamp(28px, 3vw, 36px)',
+              fontSize: 'clamp(22px, 2.4vw, 29px)',
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
               color: colors.text1,
@@ -308,7 +359,7 @@ export function HomePage() {
           >
             {t('v2.map.title')}
           </h2>
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>
+          <span style={{ fontSize: '12px', fontWeight: 500 }}>
             <span style={{ color: colors.accent, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{state.sessions.length}</span>
             {' '}
             <span style={{ color: colors.text2 }}>{t('v2.map.sessions')}</span>
@@ -316,7 +367,7 @@ export function HomePage() {
         </div>
 
         <div className="map-outer-container" style={{
-          height: 'clamp(600px, 75vh, 900px)',
+          height: 'clamp(480px, 60vh, 720px)',
           borderRadius: '12px',
           overflow: 'hidden',
           border: `1px solid ${colors.border}`,
@@ -446,7 +497,7 @@ export function HomePage() {
                   </p>
                 )}
 
-                <Button variant="primary" size="lg" onClick={() => navigate('/scan')}>
+                <Button variant="primary" size="lg" onClick={() => navigate(`/session/${session.id}`)}>
                   Explorer
                 </Button>
               </div>
@@ -460,7 +511,7 @@ export function HomePage() {
       <section
         id="docs-section"
         style={{
-          padding: `clamp(32px, 3vw, 48px) var(--content-gutter) clamp(32px, 3vw, 48px)`,
+          padding: `clamp(24px, 2.5vw, 40px) var(--content-gutter) clamp(24px, 2.5vw, 40px)`,
         }}
       >
         <DocsSection />
@@ -470,14 +521,14 @@ export function HomePage() {
       <section
         id="manifesto-section"
         style={{
-          padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
+          padding: `clamp(36px, 4vw, 64px) var(--content-gutter) clamp(48px, 5vw, 96px)`,
         }}
       >
         <h2
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(36px, 4vw, 56px)',
+            fontSize: 'clamp(28px, 3.2vw, 44px)',
             lineHeight: 1,
             letterSpacing: '-0.02em',
             color: colors.text1,
@@ -491,10 +542,10 @@ export function HomePage() {
           style={{
             fontFamily: fonts.display,
             fontVariationSettings: "'wght' 500",
-            fontSize: 'clamp(18px, 2vw, 24px)',
+            fontSize: 'clamp(15px, 1.6vw, 19px)',
             lineHeight: 1.2,
             color: colors.accent,
-            marginBottom: '56px',
+            marginBottom: '40px',
           }}
         >
           {t('manifesto.subtitle')}
@@ -505,47 +556,47 @@ export function HomePage() {
           style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
-            gap: '28px',
+            gap: '20px',
             alignItems: 'start',
           }}
         >
           {/* Column 1: S1 + S3 — vertical reading order */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s1.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s1.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s1.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s1.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s1.p2')}</p>
             </GlassPanel>
 
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s3.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s3.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s3.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s3.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s3.p2')}</p>
             </GlassPanel>
           </div>
 
           {/* Column 2: S2 + S4 — vertical reading order */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s2.title')}
               </h3>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>{t('manifesto.s2.p1')}</p>
-              <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', marginTop: '14px' }}>{t('manifesto.s2.p2')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s2.p1')}</p>
+              <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s2.p2')}</p>
             </GlassPanel>
 
-            <GlassPanel padding="32px">
-              <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
+            <GlassPanel padding="24px">
+              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s4.title')}
               </h3>
-              <ul style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '10px' }}>
+              <ul style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
                 {tArray('manifesto.s4.items').map((item, i) => (
-                  <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
-                    <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>-</span>
+                  <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                    <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>-</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -555,14 +606,14 @@ export function HomePage() {
         </div>
 
         {/* S5 — Roadmap, full width below the two columns */}
-        <GlassPanel padding="40px 36px" style={{ marginTop: '28px' }}>
-          <h3 style={{ fontSize: '26px', fontWeight: 700, marginBottom: '24px', color: colors.text1, letterSpacing: '-0.01em' }}>
+        <GlassPanel padding="28px" style={{ marginTop: '20px' }}>
+          <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '18px', color: colors.text1, letterSpacing: '-0.01em' }}>
             {t('manifesto.s5.title')}
           </h3>
-          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px' }}>
+          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px' }}>
             {tArray('manifesto.s5.items').map((item, i) => (
-              <li key={i} style={{ display: 'flex', gap: '14px', alignItems: 'baseline' }}>
-                <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '18px', lineHeight: 1 }}>+</span>
+              <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
+                <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>+</span>
                 <span>{item}</span>
               </li>
             ))}
@@ -599,24 +650,26 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Floating scan CTA — accent bg, frosted, appears when hero CTA scrolls out */}
-      <div
-        className="floating-scan-cta-wrap"
-        style={{
-          position: 'fixed',
-          bottom: '32px',
-          right: '32px',
-          zIndex: 90,
-          opacity: showFloatingCta ? 1 : 0,
-          transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
-          pointerEvents: showFloatingCta ? 'auto' : 'none',
-          transition: 'opacity 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-        }}
-      >
+      {/* Lightbox */}
+      {lightboxOpen && (
+        <ImageLightbox
+          images={lightboxImages}
+          currentIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          onNavigate={(index) => setLightboxIndex(index)}
+        />
+      )}
+
+      {/* Floating scan CTA — rendered via portal to bypass overflow/transform containing block issues */}
+      {ReactDOM.createPortal(
         <button
           onClick={() => navigate('/scan')}
           className="floating-scan-cta"
           style={{
+            position: 'fixed',
+            bottom: '32px',
+            right: '32px',
+            zIndex: 9999,
             padding: '20px 48px 22px',
             fontSize: '20px',
             fontWeight: 600,
@@ -630,20 +683,15 @@ export function HomePage() {
             borderRadius: 'var(--radius-full)',
             cursor: 'pointer',
             boxShadow: 'none',
+            opacity: showFloatingCta ? 1 : 0,
+            transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
+            pointerEvents: showFloatingCta ? 'auto' : 'none',
+            transition: 'opacity 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), background 200ms ease, filter 200ms ease',
           }}
         >
           {t('home.cta')}
-        </button>
-      </div>
-
-      {/* Lightbox */}
-      {lightboxOpen && (
-        <ImageLightbox
-          images={lightboxImages}
-          currentIndex={lightboxIndex}
-          onClose={() => setLightboxOpen(false)}
-          onNavigate={(index) => setLightboxIndex(index)}
-        />
+        </button>,
+        document.body,
       )}
     </div>
   );

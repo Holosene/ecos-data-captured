@@ -28,11 +28,11 @@ export function DocsSection() {
         style={{
           fontFamily: fonts.display,
           fontVariationSettings: "'wght' 600",
-          fontSize: 'clamp(28px, 3vw, 36px)',
+          fontSize: 'clamp(22px, 2.4vw, 29px)',
           lineHeight: 1.1,
           letterSpacing: '-0.02em',
           color: colors.text1,
-          marginBottom: '20px',
+          marginBottom: '16px',
         }}
       >
         {t('docs.title')}
@@ -43,15 +43,15 @@ export function DocsSection() {
         style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'stretch' }}
       >
         {/* Left column: User Guide + Privacy — stacked, never side-by-side */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <GlassPanel padding="24px" style={{ flex: 1 }}>
-            <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '20px', color: colors.accent }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <GlassPanel padding="20px" style={{ flex: 1 }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '14px', color: colors.accent }}>
               {t('docs.userGuide')}
             </h3>
             {guideSteps.map(({ title, body }, i) => (
               <div key={title} style={{ marginBottom: i < guideSteps.length - 1 ? '16px' : 0 }}>
-                <h4 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '4px', color: colors.text1 }}>{title}</h4>
-                <p style={{ color: colors.text2, lineHeight: '1.6', fontSize: '14px', margin: 0 }}>{body}</p>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, marginBottom: '3px', color: colors.text1 }}>{title}</h4>
+                <p style={{ color: colors.text2, lineHeight: '1.6', fontSize: '12px', margin: 0 }}>{body}</p>
               </div>
             ))}
           </GlassPanel>

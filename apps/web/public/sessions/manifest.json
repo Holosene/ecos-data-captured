@@ -1,0 +1,33 @@
+[
+  {
+    "id": "exemple-lac-bourget",
+    "name": "Lac du Bourget — Exemple",
+    "createdAt": "2026-02-22T15:35:50Z",
+    "videoFileName": "exemple_video_2026-02-28_at_00.05.10.mp4",
+    "gpxFileName": "track.gpx",
+    "bounds": [45.72, 5.85, 45.75, 5.88],
+    "totalDistanceM": 1250,
+    "durationS": 480,
+    "frameCount": 960,
+    "gridDimensions": [96, 128, 96],
+    "preprocessing": {
+      "upscaleFactor": 1,
+      "denoiseStrength": 0.15,
+      "gamma": 0.9,
+      "gaussianSigma": 0.3,
+      "deblockStrength": 0.1
+    },
+    "beam": {
+      "beamAngleDeg": 20,
+      "lateralFalloffSigma": 0.5,
+      "depthMaxM": 30,
+      "nearFieldM": 0.3
+    },
+    "files": {
+      "gpx": "track.gpx",
+      "volumeInstrument": "volume-instrument.echos-vol",
+      "volumeSpatial": "volume-spatial.echos-vol",
+      "thumbnail": "thumbnail.webp"
+    }
+  }
+]

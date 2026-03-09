@@ -376,6 +376,50 @@ export function VolumeViewer({
   const containerBRef = useRef<HTMLDivElement>(null);
   const containerCRef = useRef<HTMLDivElement>(null);
 
+  // ─── Ambient Music ──────────────────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicStarted, setMusicStarted] = useState(false);
+
+  useEffect(() => {
+    const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
+    const audio = new Audio(`${basePath}audio/ambient.mp3`);
+    audio.loop = true;
+    // PC gets 20% more volume (0.36 vs 0.30 on mobile)
+    const baseVolume = 0.30;
+    const pcBoost = 1.2;
+    audio.volume = isMobile ? baseVolume : baseVolume * pcBoost;
+    // Preload to avoid cutting off on PC
+    audio.preload = 'auto';
+    audioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      audioRef.current = null;
+    };
+  }, [isMobile]);
+
+  // Start music on first user interaction (required by autoplay policies)
+  useEffect(() => {
+    if (musicStarted) return;
+    const startMusic = () => {
+      if (audioRef.current && !musicStarted) {
+        audioRef.current.play().catch(() => {});
+        setMusicStarted(true);
+      }
+    };
+    document.addEventListener('pointerdown', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
+    // Also try immediate play (works on mobile more often)
+    if (audioRef.current) {
+      audioRef.current.play().then(() => setMusicStarted(true)).catch(() => {});
+    }
+    return () => {
+      document.removeEventListener('pointerdown', startMusic);
+      document.removeEventListener('keydown', startMusic);
+    };
+  }, [musicStarted]);
+
   // Renderers
   const rendererARef = useRef<VolumeRenderer | null>(null);
   const rendererBRef = useRef<VolumeRenderer | null>(null);
@@ -426,7 +470,6 @@ export function VolumeViewer({
     classic: 'frontal',
   });
   const [autoThreshold, setAutoThreshold] = useState(false);
-  const [contextLostModes, setContextLostModes] = useState<Set<string>>(new Set());
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
 
@@ -709,19 +752,8 @@ export function VolumeViewer({
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
-    // Helper to wire context loss/restore callbacks
-    const wireContextCallbacks = (renderer: VolumeRenderer | VolumeRendererClassic, mode: string) => {
-      renderer.onContextLostCallback = () => {
-        setContextLostModes(prev => new Set(prev).add(mode));
-      };
-      renderer.onContextRestoredCallback = () => {
-        setContextLostModes(prev => {
-          const next = new Set(prev);
-          next.delete(mode);
-          return next;
-        });
-      };
-    };
+    // Mobile speed multiplier — reduced max speed on mobile
+    const mobileSpeedMul = isMobile ? 0.15 : 1;
 
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
     // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
@@ -731,7 +763,7 @@ export function VolumeViewer({
       );
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
-      wireContextCallbacks(rendererARef.current, 'instrument');
+      if (isMobile) rendererARef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
@@ -741,7 +773,7 @@ export function VolumeViewer({
       );
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
-      wireContextCallbacks(rendererBRef.current, 'spatial');
+      if (isMobile) rendererBRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
@@ -751,7 +783,7 @@ export function VolumeViewer({
       );
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
-      wireContextCallbacks(rendererCRef.current, 'classic');
+      if (isMobile) rendererCRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
     }
 
     return () => {
@@ -1093,25 +1125,6 @@ export function VolumeViewer({
     return rendererARef.current?.captureScreenshot() ?? null;
   }, []);
 
-  const handleExportSession = useCallback(() => {
-    const sessionData = {
-      timestamp: new Date().toISOString(),
-      gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
-      dimensions,
-      extent,
-      beam,
-      grid,
-      settings: modeSettings,
-    };
-    const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ecos-session-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [gpxTrack, dimensions, extent, beam, grid, modeSettings]);
-
   const chromaticModes = getChromaticModes();
   const totalFrames = frames?.length ?? 0;
   const currentTimeS = hasFrames && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
@@ -1153,39 +1166,29 @@ export function VolumeViewer({
           gridTemplateRows: `${volumeHeight} auto`,
         }}>
           {/* ── Volume viewport: 3 columns, row 1 ──────────────── */}
-          <div style={{
-            gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
-            gridRow: '1',
-            position: 'relative',
-          }}>
-            <div
-              ref={containerRef}
-              onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
-              onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
-              style={{
-                width: '100%',
-                height: '100%',
-                minWidth: 0,
-                borderRadius: '16px',
-                overflow: 'hidden',
-                background: isExpanded ? viewportBgEditing : viewportBg,
-                cursor: 'grab',
-                transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
-                border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
-                boxShadow: isExpanded
-                  ? `0 8px 32px rgba(0,0,0,0.2)`
-                  : theme === 'light'
-                    ? '0 2px 20px rgba(0,0,0,0.06)'
-                    : '0 2px 20px rgba(0,0,0,0.3)',
-              }}
-            />
-            {contextLostModes.has(mode) && (
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '16px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, gap: '8px' }}>
-                <div style={{ color: colors.warning, fontSize: '16px', fontWeight: 600 }}>GPU context lost</div>
-                <div style={{ color: colors.text2, fontSize: '13px' }}>Recovering...</div>
-              </div>
-            )}
-          </div>
+          <div
+            ref={containerRef}
+            onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+            onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+            style={{
+              gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+              gridRow: '1',
+              width: '100%',
+              height: '100%',
+              minWidth: 0,
+              borderRadius: '16px',
+              overflow: 'hidden',
+              background: isExpanded ? viewportBgEditing : viewportBg,
+              cursor: 'grab',
+              transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
+              border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+              boxShadow: isExpanded
+                ? `0 8px 32px rgba(0,0,0,0.2)`
+                : theme === 'light'
+                  ? '0 2px 20px rgba(0,0,0,0.06)'
+                  : '0 2px 20px rgba(0,0,0,0.3)',
+            }}
+          />
 
           {/* ── Slider + Play — row 2, under volume columns ── */}
           <div style={{
@@ -1223,7 +1226,7 @@ export function VolumeViewer({
                   />
                 </div>
                 {/* Invisible spacer — matches play button + gap height for equal section spacing */}
-                <div style={{ height: `${sliderPlayGap + 52}px` }} />
+                <div style={{ height: `${sliderPlayGap + 56}px` }} />
               </>
             ) : (
               /* Temporal modes: frame slider + play button */
@@ -1269,23 +1272,25 @@ export function VolumeViewer({
                     }
                   }}
                   style={{
-                    width: '52px', height: '52px', borderRadius: '50%',
+                    width: '56px', height: '56px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing && isTemporal ? colors.accentMuted : colors.surface,
                     color: colors.accent,
                     cursor: 'pointer',
-                    fontSize: '18px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    paddingLeft: playing && isTemporal ? '0' : '2px',
                     transition: 'all 150ms ease',
                   }}
                 >
                   {playing && isTemporal ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
-                  ) : '\u25B6'}
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}>
+                      <path d="M6 4l15 8-15 8V4z" />
+                    </svg>
+                  )}
                 </button>
               </>
             )}
@@ -1561,29 +1566,22 @@ export function VolumeViewer({
         </div>
 
         {/* 3D Volume viewport — square, full width */}
-        <div style={{ position: 'relative', marginBottom: '8px' }}>
-          <div
-            ref={containerRef}
-            onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
-            onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
-            style={{
-              width: '100%',
-              height: '52vw',
-              maxHeight: '320px',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              background: isExpanded ? viewportBgEditing : viewportBg,
-              cursor: 'grab',
-              border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
-            }}
-          />
-          {contextLostModes.has(mode) && (
-            <div style={{ position: 'absolute', inset: 0, borderRadius: '12px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, gap: '8px' }}>
-              <div style={{ color: colors.warning, fontSize: '14px', fontWeight: 600 }}>GPU context lost</div>
-              <div style={{ color: colors.text2, fontSize: '11px' }}>Recovering...</div>
-            </div>
-          )}
-        </div>
+        <div
+          ref={containerRef}
+          onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+          onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+          style={{
+            width: '100%',
+            height: '52vw',
+            maxHeight: '320px',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            background: isExpanded ? viewportBgEditing : viewportBg,
+            cursor: 'grab',
+            border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+            marginBottom: '8px',
+          }}
+        />
 
         {/* Slider + play controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
@@ -1604,9 +1602,9 @@ export function VolumeViewer({
           {isTemporal && (
             <button
               onClick={() => { if (isTemporal && hasFrames) { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); } }}
-              style={{ width: '36px', height: '36px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, paddingLeft: playing ? '0' : '2px' }}
+              style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             >
-              {playing && isTemporal ? (<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : '\u25B6'}
+              {playing && isTemporal ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
             </button>
           )}
         </div>
@@ -1676,18 +1674,33 @@ export function VolumeViewer({
         {/* Volume sections — stacked */}
         {mobileSections.map((s, i) => renderMobileVolumeSection(s.mode, s.ref, s.title, s.subtitle, i))}
 
-        {/* Export — mobile */}
-        <ExportPanel
-          volumeData={sliceVolumeData}
-          dimensions={sliceDimensions}
-          extent={extent}
-          onCaptureScreenshot={handleCaptureScreenshot}
-          onExportSession={handleExportSession}
-        />
+        {/* Credits */}
+        <div style={{
+          textAlign: 'center',
+          padding: '24px 16px',
+          color: colors.text3,
+          fontSize: '11px',
+          lineHeight: 1.6,
+        }}>
+          <p style={{ margin: 0 }}>Musique : Teimo (schluss) par Thomas Köner</p>
+          <p style={{ margin: '4px 0 0' }}>Images issues principalement des archives du Schmidt Ocean Institut</p>
+        </div>
 
         {/* Bottom actions */}
         {(onReconfigure || onNewScan) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
+            <button
+              className="echos-action-btn"
+              onClick={() => {
+                const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
+                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+              }}
+              style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
+            >
+              {t('common.poster' as TranslationKey)}
+            </button>
             {onReconfigure && (
               <button className="echos-action-btn" onClick={onReconfigure} style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}>
                 {t('v2.viewer.reconfigure')}
@@ -1856,13 +1869,55 @@ export function VolumeViewer({
         dimensions={sliceDimensions}
         extent={extent}
         onCaptureScreenshot={handleCaptureScreenshot}
-        onExportSession={handleExportSession}
       />
+
+      {/* Credits */}
+      <div style={{
+        textAlign: 'center',
+        padding: '32px 24px',
+        color: colors.text3,
+        fontSize: '13px',
+        lineHeight: 1.7,
+      }}>
+        <p style={{ margin: 0 }}>Musique : Teimo (schluss) par Thomas Köner</p>
+        <p style={{ margin: '4px 0 0' }}>Images issues principalement des archives du Schmidt Ocean Institut</p>
+      </div>
 
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
+          {/* Poster button — accent outline */}
+          <button
+            className="echos-action-btn"
+            onClick={() => {
+              const sessionData = {
+                timestamp: new Date().toISOString(),
+                gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
+                dimensions,
+                extent,
+                beam,
+                grid,
+                settings: modeSettings,
+              };
+              const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `ecos-session-${Date.now()}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            style={{
+              padding: '12px 32px', borderRadius: '9999px',
+              border: `1.5px solid ${colors.accent}`,
+              background: 'transparent', color: colors.accent,
+              fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
+              cursor: 'pointer', transition: 'all 150ms ease',
+            }}
+          >
+            {t('common.poster' as TranslationKey)}
+          </button>
           {onReconfigure && (
             <button
               className="echos-action-btn"

@@ -101,8 +101,8 @@ export class VolumeRendererClassic {
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.08;
-    this.controls.rotateSpeed = 0.8;
+    this.controls.dampingFactor = 0.15;
+    this.controls.rotateSpeed = 0.3;
     this.controls.addEventListener('change', () => { this._needsRender = true; });
 
     // Transfer function texture (1D: 256x1 RGBA)
@@ -803,6 +803,10 @@ void main() {
 
   setScrollZoom(enabled: boolean): void {
     this.controls.enableZoom = enabled;
+  }
+
+  setRotateSpeed(speed: number): void {
+    this.controls.rotateSpeed = speed;
   }
 
   setSceneBg(color: string): void {

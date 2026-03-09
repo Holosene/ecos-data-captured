@@ -1,9 +1,9 @@
-import React, { useReducer, useEffect, useState, useCallback } from 'react';
+import React, { useReducer, useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { colors } from '@echos/ui';
 import { useTranslation } from './i18n/index.js';
 import { useTheme } from './theme/index.js';
-import { IconGlobe, IconSun, IconMoon, IconMenu, IconX } from './components/Icons.js';
+import { IconGlobe, IconSun, IconMoon } from './components/Icons.js';
 import { AppContext, appReducer, INITIAL_STATE } from './store/app-state.js';
 import { getBrandingForTheme } from './branding.js';
 import { HomePage } from './pages/HomePage.js';
@@ -11,7 +11,16 @@ import { ScanPage } from './pages/ScanPage.js';
 import { MapPage } from './pages/MapPage.js';
 import { ManifestoPage } from './pages/ManifestoPage.js';
 import { DocsPage } from './pages/DocsPage.js';
-import { SessionPage } from './pages/SessionPage.js';
+import {
+  fetchSessionManifest,
+  fetchSessionGpxTrack,
+  manifestEntryToSession,
+  parseGpx,
+} from '@echos/core';
+import type { SessionManifestEntry, RecordingSession } from '@echos/core';
+import { loadAllSessions } from './store/session-db.js';
+
+const SessionViewerPage = lazy(() => import('./pages/SessionViewerPage.js'));
 
 function Topbar() {
   const navigate = useNavigate();
@@ -19,22 +28,6 @@ function Topbar() {
   const { t, lang, setLang } = useTranslation();
   const { theme, toggleTheme } = useTheme();
   const [activeSection, setActiveSection] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Close mobile menu on route change
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  // Prevent body scroll when mobile menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
-  }, [mobileMenuOpen]);
 
   // Dynamic favicon based on theme
   useEffect(() => {
@@ -93,7 +86,6 @@ function Topbar() {
   };
 
   const handleNavClick = useCallback((item: typeof navItems[0]) => {
-    setMobileMenuOpen(false);
     if (item.path === '/') {
       if (location.pathname === '/') {
         (document.getElementById('main-content') ?? window).scrollTo({ top: 0, behavior: 'smooth' });
@@ -122,7 +114,6 @@ function Topbar() {
   const logoSrc = branding.logotype;
 
   return (
-    <>
       <header className="echos-topbar">
         <div className="topbar-inner">
         <a
@@ -161,11 +152,11 @@ function Topbar() {
                 className="nav-item"
                 style={{
                   position: 'relative',
-                  padding: '24px 20px',
+                  padding: '20px 16px',
                   background: 'none',
                   border: 'none',
                   color: active ? 'var(--c-text-1)' : 'var(--c-text-2)',
-                  fontSize: '16px',
+                  fontSize: '13px',
                   fontWeight: active ? 600 : 450,
                   cursor: 'pointer',
                   fontFamily: 'inherit',
@@ -181,135 +172,107 @@ function Topbar() {
 
         <div style={{ flex: 1 }} />
 
-        {/* Desktop action buttons */}
-        <div className="topbar-actions">
-          <button
-            onClick={toggleTheme}
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: '36px', height: '36px', borderRadius: '9999px',
-              border: '1px solid var(--c-border)', background: 'transparent',
-              color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
-              marginRight: '8px',
-            }}
-            title={theme === 'dark' ? t('common.themeLight') : t('common.themeDark')}
-          >
-            {theme === 'dark' ? <IconSun size={17} /> : <IconMoon size={17} />}
-          </button>
-
-          <button
-            onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '7px 14px', borderRadius: '9999px',
-              border: '1px solid var(--c-border)', background: 'transparent',
-              color: 'var(--c-text-2)', fontSize: '14px', fontWeight: 500,
-              cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms ease',
-              marginRight: '12px',
-            }}
-            title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
-          >
-            <IconGlobe size={16} />
-            {lang === 'fr' ? 'EN' : 'FR'}
-          </button>
-        </div>
-
-        {/* Mobile hamburger button */}
         <button
-          className="mobile-menu-btn"
-          onClick={() => setMobileMenuOpen(true)}
-          aria-label="Menu"
+          onClick={toggleTheme}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: '30px', height: '30px', borderRadius: '9999px',
+            border: '1px solid var(--c-border)', background: 'transparent',
+            color: 'var(--c-text-2)', cursor: 'pointer', transition: 'all 150ms ease',
+            marginRight: '6px',
+          }}
+          title={theme === 'dark' ? 'Mode clair' : 'Mode sombre'}
         >
-          <IconMenu size={20} />
+          {theme === 'dark' ? <IconSun size={14} /> : <IconMoon size={14} />}
+        </button>
+
+        <button
+          onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '4px',
+            padding: '5px 11px', borderRadius: '9999px',
+            border: '1px solid var(--c-border)', background: 'transparent',
+            color: 'var(--c-text-2)', fontSize: '12px', fontWeight: 500,
+            cursor: 'pointer', fontFamily: 'inherit', transition: 'all 150ms ease',
+            marginRight: '8px',
+          }}
+          title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
+        >
+          <IconGlobe size={13} />
+          {lang === 'fr' ? 'EN' : 'FR'}
         </button>
 
         </div>
       </header>
-
-      {/* Mobile nav drawer + backdrop — only rendered when open */}
-      {mobileMenuOpen && (
-        <>
-          <div
-            className="mobile-nav-backdrop open"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          <div className="mobile-nav-drawer open">
-            <div className="mobile-nav-header">
-              <img src={logoSrc} alt="echos" style={{ height: '22px', width: 'auto' }} />
-              <button
-                onClick={() => setMobileMenuOpen(false)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '36px', height: '36px', borderRadius: '9999px',
-                  border: '1px solid var(--c-border)', background: 'transparent',
-                  color: 'var(--c-text-2)', cursor: 'pointer',
-                }}
-                aria-label="Close"
-              >
-                <IconX size={18} />
-              </button>
-            </div>
-
-            {navItems.map((item) => (
-              <button
-                key={item.path}
-                className={`mobile-nav-link${isNavActive(item) ? ' active' : ''}`}
-                onClick={() => handleNavClick(item)}
-              >
-                {item.label}
-              </button>
-            ))}
-
-            <div className="mobile-nav-footer">
-              <button
-                onClick={toggleTheme}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: '40px', height: '40px', borderRadius: '9999px',
-                  border: '1px solid var(--c-border)', background: 'transparent',
-                  color: 'var(--c-text-2)', cursor: 'pointer',
-                }}
-              >
-                {theme === 'dark' ? <IconSun size={18} /> : <IconMoon size={18} />}
-              </button>
-              <button
-                onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '6px',
-                  padding: '8px 16px', borderRadius: '9999px',
-                  border: '1px solid var(--c-border)', background: 'transparent',
-                  color: 'var(--c-text-2)', fontSize: '14px', fontWeight: 500,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                <IconGlobe size={16} />
-                {lang === 'fr' ? 'EN' : 'FR'}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </>
   );
 }
 
 export function App() {
   const [state, dispatch] = useReducer(appReducer, INITIAL_STATE);
 
+  // Load sessions at boot: static manifest + IndexedDB (user-published)
+  useEffect(() => {
+    const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
+
+    // 1. Load static manifest
+    const staticPromise = fetchSessionManifest(basePath)
+      .then(async (entries) => {
+        const sessions = entries.map(manifestEntryToSession);
+        const gpxTracks = new Map<string, Array<{ lat: number; lon: number }>>();
+        await Promise.allSettled(
+          entries.map(async (entry) => {
+            try {
+              const track = await fetchSessionGpxTrack(basePath, entry.id, entry.files.gpx, parseGpx);
+              gpxTracks.set(entry.id, track);
+            } catch { /* bounds fallback */ }
+          }),
+        );
+        return { entries, sessions, gpxTracks };
+      })
+      .catch(() => ({
+        entries: [] as SessionManifestEntry[],
+        sessions: [] as RecordingSession[],
+        gpxTracks: new Map<string, Array<{ lat: number; lon: number }>>(),
+      }));
+
+    // 2. Load user-published sessions from IndexedDB
+    const idbPromise = loadAllSessions().catch(() => []);
+
+    Promise.all([staticPromise, idbPromise]).then(([staticData, idbSessions]) => {
+      const allEntries = [...staticData.entries];
+      const allSessions = [...staticData.sessions];
+      const allTracks = new Map(staticData.gpxTracks);
+
+      // Merge IndexedDB sessions (avoid duplicates with static)
+      for (const stored of idbSessions) {
+        if (allEntries.some((e) => e.id === stored.id)) continue;
+        allEntries.push(stored.manifest);
+        allSessions.push(manifestEntryToSession(stored.manifest));
+        if (stored.gpxTrack.length > 0) {
+          allTracks.set(stored.id, stored.gpxTrack);
+        }
+      }
+
+      dispatch({ type: 'LOAD_MANIFEST', entries: allEntries, sessions: allSessions, gpxTracks: allTracks });
+    });
+  }, []);
+
   return (
     <AppContext.Provider value={{ state, dispatch }}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--c-black)', transition: 'background 350ms ease', overflow: 'hidden' }}>
         <Topbar />
         <main id="main-content" style={{ flex: 1, overflowY: 'auto' }}>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/scan" element={<ScanPage />} />
-            <Route path="/map" element={<MapPage />} />
-            <Route path="/manifesto" element={<ManifestoPage />} />
-            <Route path="/docs" element={<DocsPage />} />
-            <Route path="/session/:slug" element={<SessionPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<div style={{ color: colors.text3, padding: '48px', textAlign: 'center' }}>Chargement...</div>}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/scan" element={<ScanPage />} />
+              <Route path="/map" element={<MapPage />} />
+              <Route path="/session/:sessionId" element={<SessionViewerPage />} />
+              <Route path="/manifesto" element={<ManifestoPage />} />
+              <Route path="/docs" element={<DocsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </AppContext.Provider>
