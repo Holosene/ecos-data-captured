@@ -238,7 +238,8 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   position: relative;
 }
 .visual-placeholder img {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 1;
   width: 100%;
   height: 100%;

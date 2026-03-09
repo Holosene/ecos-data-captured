@@ -294,21 +294,24 @@ export function HomePage() {
           padding: `clamp(48px, 5vw, 80px) var(--content-gutter) clamp(64px, 6vw, 120px)`,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2
-            style={{
-              fontFamily: fonts.display,
-              fontVariationSettings: "'wght' 600",
-              fontSize: 'clamp(28px, 3vw, 36px)',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-              color: colors.text1,
-              margin: 0,
-            }}
-          >
-            {t('v2.map.title')}
-          </h2>
-          <span style={{ fontSize: '14px', fontWeight: 500 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '24px' }}>
+          <div>
+            <h2
+              style={{
+                fontFamily: fonts.display,
+                fontVariationSettings: "'wght' 600",
+                fontSize: 'clamp(28px, 3vw, 36px)',
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+                color: colors.text1,
+                marginBottom: '8px',
+              }}
+            >
+              {t('v2.map.title')}
+            </h2>
+            <p style={{ fontSize: '15px', color: colors.text3 }}>{t('v2.map.subtitle')}</p>
+          </div>
+          <span style={{ fontSize: '14px', fontWeight: 500, flexShrink: 0 }}>
             <span style={{ color: colors.accent, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{state.sessions.length}</span>
             {' '}
             <span style={{ color: colors.text2 }}>{t('v2.map.sessions')}</span>

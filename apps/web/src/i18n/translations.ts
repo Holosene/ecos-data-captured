@@ -344,6 +344,7 @@ export const translations = {
 
     // V2 Map
     'v2.map.title': 'Sessions d\u2019enregistrement',
+    'v2.map.subtitle': 'Visualisez les volumes générés lors de diverses sessions d\u2019observation',
     'v2.map.sessions': 'sessions',
     'v2.map.empty': 'Importez un scan pour voir les traces GPS sur la carte.',
     'v2.map.gpxHint': 'Importez un fichier GPX pour accéder à la carte.',
@@ -714,6 +715,7 @@ export const translations = {
 
     // V2 Map
     'v2.map.title': 'Recording Sessions',
+    'v2.map.subtitle': 'Explore the volumes generated across various observation sessions',
     'v2.map.sessions': 'sessions',
     'v2.map.empty': 'Import a scan to see GPS traces on the map.',
     'v2.map.gpxHint': 'Import a GPX file to access the map.',
