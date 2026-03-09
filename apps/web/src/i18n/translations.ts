@@ -351,6 +351,16 @@ export const translations = {
     'v2.map.newScan': 'Nouveau scan',
     'v2.map.twoFingerHint': 'Utilisez deux doigts pour déplacer la carte',
 
+    // Session
+    'session.loading': 'Chargement de la session\u2026',
+    'session.noVolumeTitle': 'Volume non disponible',
+    'session.noVolumeDesc': 'Le fichier volume (.echos-vol) n\u2019a pas encore \u00e9t\u00e9 g\u00e9n\u00e9r\u00e9 pour cette session. Vous pouvez le g\u00e9n\u00e9rer maintenant \u00e0 partir des fichiers d\u2019exemple.',
+    'session.generateNow': 'G\u00e9n\u00e9rer maintenant',
+    'session.errorTitle': 'Erreur de chargement',
+    'session.fetchError': '\u00c9chec du chargement',
+    'session.retry': 'R\u00e9essayer',
+    'session.unknownSession': 'Session inconnue : {slug}',
+
     // Common
     'common.back': 'Retour',
     'common.next': 'Suivant',
@@ -710,6 +720,16 @@ export const translations = {
     'v2.map.noSessions': 'No sessions recorded yet.',
     'v2.map.newScan': 'New Scan',
     'v2.map.twoFingerHint': 'Use two fingers to move the map',
+
+    // Session
+    'session.loading': 'Loading session\u2026',
+    'session.noVolumeTitle': 'Volume not available',
+    'session.noVolumeDesc': 'The volume file (.echos-vol) has not been generated for this session yet. You can generate it now from the example files.',
+    'session.generateNow': 'Generate now',
+    'session.errorTitle': 'Loading error',
+    'session.fetchError': 'Failed to load',
+    'session.retry': 'Retry',
+    'session.unknownSession': 'Unknown session: {slug}',
 
     // Common
     'common.back': 'Back',

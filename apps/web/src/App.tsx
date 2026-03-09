@@ -11,6 +11,7 @@ import { ScanPage } from './pages/ScanPage.js';
 import { MapPage } from './pages/MapPage.js';
 import { ManifestoPage } from './pages/ManifestoPage.js';
 import { DocsPage } from './pages/DocsPage.js';
+import { SessionPage } from './pages/SessionPage.js';
 
 function Topbar() {
   const navigate = useNavigate();
@@ -302,6 +303,7 @@ export function App() {
             <Route path="/map" element={<MapPage />} />
             <Route path="/manifesto" element={<ManifestoPage />} />
             <Route path="/docs" element={<DocsPage />} />
+            <Route path="/session/:slug" element={<SessionPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
