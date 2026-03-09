@@ -22,8 +22,8 @@ const variantStyles: Record<ButtonVariant, { base: React.CSSProperties; hover: R
     hover: { background: colors.accentHover },
   },
   secondary: {
-    base: { background: 'transparent', color: colors.text1, border: `1px solid ${colors.borderHover}` },
-    hover: { background: colors.surface, borderColor: colors.borderActive },
+    base: { background: 'transparent', color: colors.text1, border: `1px solid ${colors.accent}40` },
+    hover: { background: colors.accentMuted, borderColor: colors.accent },
   },
   ghost: {
     base: { background: 'transparent', color: colors.text2, border: '1px solid transparent' },

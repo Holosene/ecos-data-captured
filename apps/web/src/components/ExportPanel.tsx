@@ -28,9 +28,10 @@ interface ExportPanelProps {
   dimensions: [number, number, number];
   extent: [number, number, number];
   onCaptureScreenshot?: () => string | null;
+  onExportSession?: () => void;
 }
 
-export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreenshot }: ExportPanelProps) {
+export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreenshot, onExportSession }: ExportPanelProps) {
   const { t } = useTranslation();
 
   const handleExportNrrd = useCallback(() => {
@@ -118,6 +119,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
     { label: 'NRRD', onClick: handleExportNrrd, disabled: !hasVolume },
     { label: 'PNG', onClick: handleExportPng, disabled: !onCaptureScreenshot },
     { label: 'CSV', onClick: handleExportCsv, disabled: !hasVolume },
+    ...(onExportSession ? [{ label: t('common.poster' as never), onClick: onExportSession, disabled: false }] : []),
   ];
 
   return (

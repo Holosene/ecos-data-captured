@@ -1075,6 +1075,25 @@ export function VolumeViewer({
     return rendererARef.current?.captureScreenshot() ?? null;
   }, []);
 
+  const handleExportSession = useCallback(() => {
+    const sessionData = {
+      timestamp: new Date().toISOString(),
+      gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
+      dimensions,
+      extent,
+      beam,
+      grid,
+      settings: modeSettings,
+    };
+    const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ecos-session-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [gpxTrack, dimensions, extent, beam, grid, modeSettings]);
+
   const chromaticModes = getChromaticModes();
   const totalFrames = frames?.length ?? 0;
   const currentTimeS = hasFrames && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
@@ -1622,21 +1641,18 @@ export function VolumeViewer({
         {/* Volume sections — stacked */}
         {mobileSections.map((s, i) => renderMobileVolumeSection(s.mode, s.ref, s.title, s.subtitle, i))}
 
+        {/* Export — mobile */}
+        <ExportPanel
+          volumeData={sliceVolumeData}
+          dimensions={sliceDimensions}
+          extent={extent}
+          onCaptureScreenshot={handleCaptureScreenshot}
+          onExportSession={handleExportSession}
+        />
+
         {/* Bottom actions */}
         {(onReconfigure || onNewScan) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
-            <button
-              className="echos-action-btn"
-              onClick={() => {
-                const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
-                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
-              }}
-              style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
-            >
-              {t('common.poster' as TranslationKey)}
-            </button>
             {onReconfigure && (
               <button className="echos-action-btn" onClick={onReconfigure} style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}>
                 {t('v2.viewer.reconfigure')}
@@ -1805,43 +1821,13 @@ export function VolumeViewer({
         dimensions={sliceDimensions}
         extent={extent}
         onCaptureScreenshot={handleCaptureScreenshot}
+        onExportSession={handleExportSession}
       />
 
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
       {(onReconfigure || onNewScan) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
-          {/* Poster button — accent outline */}
-          <button
-            className="echos-action-btn"
-            onClick={() => {
-              const sessionData = {
-                timestamp: new Date().toISOString(),
-                gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
-                dimensions,
-                extent,
-                beam,
-                grid,
-                settings: modeSettings,
-              };
-              const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `ecos-session-${Date.now()}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            style={{
-              padding: '12px 32px', borderRadius: '9999px',
-              border: `1.5px solid ${colors.accent}`,
-              background: 'transparent', color: colors.accent,
-              fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
-              cursor: 'pointer', transition: 'all 150ms ease',
-            }}
-          >
-            {t('common.poster' as TranslationKey)}
-          </button>
           {onReconfigure && (
             <button
               className="echos-action-btn"
