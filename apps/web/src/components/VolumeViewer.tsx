@@ -812,7 +812,7 @@ export function VolumeViewer({
       }
 
       // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
-      if (containerBRef.current && !rendererBRef.current && hasFrames) {
+      if (containerBRef.current && !rendererBRef.current && (hasFrames || hasSpatialData)) {
         rendererBRef.current = new VolumeRenderer(
           containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor },
         );
@@ -849,7 +849,7 @@ export function VolumeViewer({
       frameCacheCRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasFrames]);
+  }, [hasFrames, hasSpatialData]);
 
   // Initialize presentation poses after renderers are created
   useEffect(() => {
@@ -888,6 +888,14 @@ export function VolumeViewer({
       rendererARef.current?.updateSettings({ threshold });
     }
   }, [volumeData, dimensions, extent]);
+
+  // Upload pre-computed spatial data to Mode B (for pre-generated sessions without frames)
+  useEffect(() => {
+    if (!rendererBRef.current || !spatialData || spatialData.length === 0 || hasFrames) return;
+    const sDims = spatialDimensions ?? dimensions;
+    const sExt = spatialExtent ?? extent;
+    rendererBRef.current.uploadVolume(spatialData, sDims, sExt);
+  }, [spatialData, spatialDimensions, spatialExtent, dimensions, extent, hasFrames]);
 
   // ─── Mode B + C: frame caches (LRU-bounded) ────────────────────────────
   const MAX_CACHE_ENTRIES = 20;
@@ -1180,7 +1188,8 @@ export function VolumeViewer({
   const totalFrames = frames?.length ?? 0;
   const currentTimeS = hasFrames && frames!.length > 0 ? frames![currentFrame]?.timeS ?? 0 : 0;
 
-  const showB = hasFrames;
+  const hasSpatialData = !!(spatialData && spatialData.length > 0);
+  const showB = hasFrames || hasSpatialData;
   const showC = hasFrames && !!beam && !!grid;
 
   // Background matches the renderer scene background for seamless 3D
