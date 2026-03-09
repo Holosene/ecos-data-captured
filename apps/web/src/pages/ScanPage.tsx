@@ -68,35 +68,29 @@ interface QualityConfig {
 
 const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
   minimal: {
-    fps: 2,
-    grid: { resX: 64, resY: 64, resZ: 64 },
+    fps: 1,
+    grid: { resX: 48, resY: 48, resZ: 48 },
     preprocessing: {
       upscaleFactor: 1,
       denoiseStrength: 0,
       gamma: 0.9,
       gaussianSigma: 0,
       deblockStrength: 0,
-      claheClipLimit: 0,
-      sharpenAmount: 0,
-      sharpenSigma: 1.5,
     },
   },
   medium: {
-    fps: 4,
-    grid: { resX: 96, resY: 96, resZ: 96 },
+    fps: 3,
+    grid: { resX: 80, resY: 80, resZ: 80 },
     preprocessing: {
       upscaleFactor: 1,
-      denoiseStrength: 0.12,
-      gamma: 0.85,
-      gaussianSigma: 0.2,
+      denoiseStrength: 0,
+      gamma: 0.9,
+      gaussianSigma: 0,
       deblockStrength: 0,
-      claheClipLimit: 2.0,
-      sharpenAmount: 0.3,
-      sharpenSigma: 1.5,
     },
   },
   complete: {
-    fps: 8,
+    fps: 6,
     grid: { resX: 128, resY: 128, resZ: 128 },
     preprocessing: {
       ...DEFAULT_PREPROCESSING,
