@@ -128,6 +128,7 @@ export class VolumeRenderer {
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
+  private contextLost = false;
   private currentPreset: CameraPreset = 'frontal';
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
@@ -145,6 +146,16 @@ export class VolumeRenderer {
   // Shared geometry singleton (avoids re-creation per mesh)
   private static _sharedBoxGeometry: THREE.BoxGeometry | null = null;
   private static _sharedBoxRefCount = 0;
+  // Last uploaded volume data — needed for context restore
+  private _lastVolumeData: Float32Array | null = null;
+  private _lastVolumeDimensions: [number, number, number] = [1, 1, 1];
+  private _lastVolumeExtent: [number, number, number] = [1, 1, 1];
+  // Context loss/restore handlers
+  private _onContextLost: ((e: Event) => void) | null = null;
+  private _onContextRestored: ((e: Event) => void) | null = null;
+  // External callback for context loss notification
+  onContextLostCallback: (() => void) | null = null;
+  onContextRestoredCallback: (() => void) | null = null;
 
   constructor(
     container: HTMLElement,
@@ -229,6 +240,33 @@ export class VolumeRenderer {
       this.controls.target.set(o.targetX, o.targetY, o.targetZ);
       this.controls.update();
     }
+
+    // WebGL context loss/restore handling
+    const canvas = this.renderer.domElement;
+    this._onContextLost = (e: Event) => {
+      e.preventDefault(); // allow browser to restore the context later
+      this.contextLost = true;
+      cancelAnimationFrame(this.animationId);
+      this.onContextLostCallback?.();
+    };
+    this._onContextRestored = () => {
+      if (this.disposed) return;
+      this.contextLost = false;
+      // Re-mark textures for upload
+      this.tfTexture.needsUpdate = true;
+      // Re-upload volume data if we had any
+      if (this._lastVolumeData) {
+        this.meshCreated = false; // force full re-creation
+        this.volumeTexture = null;
+        this.material = null;
+        this.uploadVolume(this._lastVolumeData, this._lastVolumeDimensions, this._lastVolumeExtent);
+      }
+      this._needsRender = true;
+      this.animate();
+      this.onContextRestoredCallback?.();
+    };
+    canvas.addEventListener('webglcontextlost', this._onContextLost);
+    canvas.addEventListener('webglcontextrestored', this._onContextRestored);
 
     // Start render loop
     this.animate();
@@ -402,6 +440,11 @@ export class VolumeRenderer {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
+    // Store for context restore
+    this._lastVolumeData = data;
+    this._lastVolumeDimensions = dimensions;
+    this._lastVolumeExtent = extent;
+
     const dimsChanged =
       this.dimensions[0] !== dimensions[0] ||
       this.dimensions[1] !== dimensions[1] ||
@@ -825,7 +868,7 @@ void main() {
   // ─── Render loop ──────────────────────────────────────────────────────
 
   private animate = (): void => {
-    if (this.disposed) return;
+    if (this.disposed || this.contextLost) return;
     this.animationId = requestAnimationFrame(this.animate);
 
     // controls.update() returns true when damping moves the camera
@@ -845,6 +888,12 @@ void main() {
     this.renderer.render(this.scene, this.camera);
   };
 
+  // ─── Context state ──────────────────────────────────────────────────
+
+  isContextLost(): boolean {
+    return this.contextLost;
+  }
+
   // ─── Resize handling ──────────────────────────────────────────────────
 
   private onResize(container: HTMLElement): void {
@@ -863,6 +912,15 @@ void main() {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.animationId);
+    // Remove context loss listeners
+    const canvas = this.renderer.domElement;
+    if (this._onContextLost) canvas.removeEventListener('webglcontextlost', this._onContextLost);
+    if (this._onContextRestored) canvas.removeEventListener('webglcontextrestored', this._onContextRestored);
+    this._onContextLost = null;
+    this._onContextRestored = null;
+    this.onContextLostCallback = null;
+    this.onContextRestoredCallback = null;
+    this._lastVolumeData = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.controls.dispose();
@@ -881,7 +939,7 @@ void main() {
     // forceContextLoss BEFORE dispose — releases GPU memory immediately
     this.renderer.forceContextLoss();
     this.renderer.dispose();
-    this.renderer.domElement.remove();
+    canvas.remove();
   }
 
   setScrollZoom(enabled: boolean): void {

@@ -426,6 +426,7 @@ export function VolumeViewer({
     classic: 'frontal',
   });
   const [autoThreshold, setAutoThreshold] = useState(false);
+  const [contextLostModes, setContextLostModes] = useState<Set<string>>(new Set());
   const { t, lang } = useTranslation();
   const { theme } = useTheme();
 
@@ -708,6 +709,20 @@ export function VolumeViewer({
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
+    // Helper to wire context loss/restore callbacks
+    const wireContextCallbacks = (renderer: VolumeRenderer | VolumeRendererClassic, mode: string) => {
+      renderer.onContextLostCallback = () => {
+        setContextLostModes(prev => new Set(prev).add(mode));
+      };
+      renderer.onContextRestoredCallback = () => {
+        setContextLostModes(prev => {
+          const next = new Set(prev);
+          next.delete(mode);
+          return next;
+        });
+      };
+    };
+
     // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
     // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
     if (containerARef.current && !rendererARef.current) {
@@ -716,6 +731,7 @@ export function VolumeViewer({
       );
       rendererARef.current.setGridAxesVisible(false);
       rendererARef.current.setScrollZoom(false);
+      wireContextCallbacks(rendererARef.current, 'instrument');
     }
 
     // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
@@ -725,6 +741,7 @@ export function VolumeViewer({
       );
       rendererBRef.current.setGridAxesVisible(false);
       rendererBRef.current.setScrollZoom(false);
+      wireContextCallbacks(rendererBRef.current, 'spatial');
     }
 
     // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
@@ -734,6 +751,7 @@ export function VolumeViewer({
       );
       rendererCRef.current.setGridAxesVisible(false);
       rendererCRef.current.setScrollZoom(false);
+      wireContextCallbacks(rendererCRef.current, 'classic');
     }
 
     return () => {
@@ -1135,29 +1153,39 @@ export function VolumeViewer({
           gridTemplateRows: `${volumeHeight} auto`,
         }}>
           {/* ── Volume viewport: 3 columns, row 1 ──────────────── */}
-          <div
-            ref={containerRef}
-            onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
-            onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
-            style={{
-              gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
-              gridRow: '1',
-              width: '100%',
-              height: '100%',
-              minWidth: 0,
-              borderRadius: '16px',
-              overflow: 'hidden',
-              background: isExpanded ? viewportBgEditing : viewportBg,
-              cursor: 'grab',
-              transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
-              border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
-              boxShadow: isExpanded
-                ? `0 8px 32px rgba(0,0,0,0.2)`
-                : theme === 'light'
-                  ? '0 2px 20px rgba(0,0,0,0.06)'
-                  : '0 2px 20px rgba(0,0,0,0.3)',
-            }}
-          />
+          <div style={{
+            gridColumn: volumeOnLeft ? '1 / 4' : '2 / 5',
+            gridRow: '1',
+            position: 'relative',
+          }}>
+            <div
+              ref={containerRef}
+              onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+              onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+              style={{
+                width: '100%',
+                height: '100%',
+                minWidth: 0,
+                borderRadius: '16px',
+                overflow: 'hidden',
+                background: isExpanded ? viewportBgEditing : viewportBg,
+                cursor: 'grab',
+                transition: 'box-shadow 400ms ease, background 400ms ease, border-color 400ms ease',
+                border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+                boxShadow: isExpanded
+                  ? `0 8px 32px rgba(0,0,0,0.2)`
+                  : theme === 'light'
+                    ? '0 2px 20px rgba(0,0,0,0.06)'
+                    : '0 2px 20px rgba(0,0,0,0.3)',
+              }}
+            />
+            {contextLostModes.has(mode) && (
+              <div style={{ position: 'absolute', inset: 0, borderRadius: '16px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, gap: '8px' }}>
+                <div style={{ color: colors.warning, fontSize: '16px', fontWeight: 600 }}>GPU context lost</div>
+                <div style={{ color: colors.text2, fontSize: '13px' }}>Recovering...</div>
+              </div>
+            )}
+          </div>
 
           {/* ── Slider + Play — row 2, under volume columns ── */}
           <div style={{
@@ -1533,22 +1561,29 @@ export function VolumeViewer({
         </div>
 
         {/* 3D Volume viewport — square, full width */}
-        <div
-          ref={containerRef}
-          onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
-          onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
-          style={{
-            width: '100%',
-            height: '52vw',
-            maxHeight: '320px',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            background: isExpanded ? viewportBgEditing : viewportBg,
-            cursor: 'grab',
-            border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
-            marginBottom: '8px',
-          }}
-        />
+        <div style={{ position: 'relative', marginBottom: '8px' }}>
+          <div
+            ref={containerRef}
+            onPointerDown={() => { if (!isExpanded) handleStage1PointerDown(mode); }}
+            onPointerUp={() => { if (!isExpanded) handleStage1PointerUp(mode); }}
+            style={{
+              width: '100%',
+              height: '52vw',
+              maxHeight: '320px',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              background: isExpanded ? viewportBgEditing : viewportBg,
+              cursor: 'grab',
+              border: `1.5px solid ${isExpanded ? colors.accent : colors.border}`,
+            }}
+          />
+          {contextLostModes.has(mode) && (
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '12px', background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, gap: '8px' }}>
+              <div style={{ color: colors.warning, fontSize: '14px', fontWeight: 600 }}>GPU context lost</div>
+              <div style={{ color: colors.text2, fontSize: '11px' }}>Recovering...</div>
+            </div>
+          )}
+        </div>
 
         {/* Slider + play controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
