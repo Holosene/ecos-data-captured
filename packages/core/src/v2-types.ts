@@ -22,12 +22,6 @@ export interface PreprocessingSettings {
   gaussianSigma: number;
   /** Block artifact removal strength (0 = off, 1 = max) */
   deblockStrength: number;
-  /** CLAHE clip limit (0 = off, 2-4 = typical). Enhances local contrast. */
-  claheClipLimit: number;
-  /** Unsharp mask sharpening amount (0 = off, 0.3-1.0 = typical) */
-  sharpenAmount: number;
-  /** Unsharp mask sigma in pixels (1-3 typical) */
-  sharpenSigma: number;
 }
 
 export const DEFAULT_PREPROCESSING: PreprocessingSettings = {
@@ -36,9 +30,6 @@ export const DEFAULT_PREPROCESSING: PreprocessingSettings = {
   gamma: 0.9,
   gaussianSigma: 0.3,
   deblockStrength: 0.1,
-  claheClipLimit: 2.5,
-  sharpenAmount: 0.4,
-  sharpenSigma: 1.5,
 };
 
 // ─── Conic Projection ───────────────────────────────────────────────────────
@@ -149,9 +140,7 @@ export type ChromaticMode =
   | 'sonar-original'
   | 'water-off'
   | 'high-contrast'
-  | 'grayscale'
-  | 'thermal'
-  | 'bathymetry';
+  | 'grayscale';
 
 // ─── Pipeline V2 ────────────────────────────────────────────────────────────
 
@@ -196,11 +185,11 @@ export interface RendererSettings {
 export const DEFAULT_RENDERER: RendererSettings = {
   opacityScale: 1.0,
   threshold: 0.02,
-  densityScale: 1.2,
-  smoothing: 0.4,
+  densityScale: 1.0,
+  smoothing: 0.15,
   showBeam: false,
   ghostEnhancement: 0.0,
-  stepCount: 256,
+  stepCount: 192,
   chromaticMode: 'sonar-original',
 };
 

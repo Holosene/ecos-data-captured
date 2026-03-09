@@ -55,33 +55,6 @@ const PALETTES: Record<ChromaticMode, ColorStop[]> = {
     { pos: 0.8, r: 210, g: 210, b: 210, a: 220 },
     { pos: 1.0, r: 255, g: 255, b: 255, a: 255 },
   ],
-  // Thermal: black → deep purple → red → orange → yellow → white
-  // Inspired by scientific thermal imaging — excellent for echo intensity
-  'thermal': [
-    { pos: 0.0, r: 0, g: 0, b: 0, a: 0 },
-    { pos: 0.08, r: 20, g: 0, b: 40, a: 15 },
-    { pos: 0.2, r: 80, g: 0, b: 120, a: 60 },
-    { pos: 0.35, r: 160, g: 20, b: 60, a: 120 },
-    { pos: 0.5, r: 220, g: 60, b: 10, a: 170 },
-    { pos: 0.65, r: 250, g: 130, b: 0, a: 210 },
-    { pos: 0.8, r: 255, g: 210, b: 50, a: 235 },
-    { pos: 0.92, r: 255, g: 250, b: 180, a: 250 },
-    { pos: 1.0, r: 255, g: 255, b: 255, a: 255 },
-  ],
-  // Bathymetry: dark ocean blue → teal → green → sand → warm highlights
-  // Mimics hydrographic chart coloring — natural underwater feel
-  'bathymetry': [
-    { pos: 0.0, r: 0, g: 4, b: 20, a: 0 },
-    { pos: 0.08, r: 5, g: 15, b: 50, a: 15 },
-    { pos: 0.18, r: 10, g: 40, b: 100, a: 50 },
-    { pos: 0.3, r: 15, g: 80, b: 130, a: 100 },
-    { pos: 0.42, r: 30, g: 140, b: 140, a: 150 },
-    { pos: 0.55, r: 60, g: 170, b: 100, a: 180 },
-    { pos: 0.68, r: 130, g: 190, b: 70, a: 210 },
-    { pos: 0.8, r: 200, g: 190, b: 100, a: 230 },
-    { pos: 0.9, r: 240, g: 210, b: 160, a: 245 },
-    { pos: 1.0, r: 255, g: 240, b: 220, a: 255 },
-  ],
 };
 
 // ─── LUT generation ─────────────────────────────────────────────────────────
@@ -140,6 +113,4 @@ export const CHROMATIC_LABELS: Record<ChromaticMode, { en: string; fr: string }>
   'water-off': { en: 'Water Off', fr: 'Water Off' },
   'high-contrast': { en: 'High Contrast', fr: 'Haut contraste' },
   'grayscale': { en: 'Grayscale', fr: 'Niveaux de gris' },
-  'thermal': { en: 'Thermal', fr: 'Thermique' },
-  'bathymetry': { en: 'Bathymetry', fr: 'Bathymétrie' },
 };

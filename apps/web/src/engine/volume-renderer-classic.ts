@@ -36,10 +36,13 @@ export class VolumeRendererClassic {
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
+
+  /** Optional callbacks for WebGL context loss/restore */
+  public onContextLostCallback: (() => void) | null = null;
+  public onContextRestoredCallback: (() => void) | null = null;
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
-  private contextLost = false;
   private currentPreset: CameraPreset = 'frontal';
   private volumeScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private meshCreated = false;
@@ -57,16 +60,6 @@ export class VolumeRendererClassic {
   // Shared geometry singleton
   private static _sharedBoxGeometry: THREE.BoxGeometry | null = null;
   private static _sharedBoxRefCount = 0;
-  // Last uploaded volume data — needed for context restore
-  private _lastVolumeData: Float32Array | null = null;
-  private _lastVolumeDimensions: [number, number, number] = [1, 1, 1];
-  private _lastVolumeExtent: [number, number, number] = [1, 1, 1];
-  // Context loss/restore handlers
-  private _onContextLost: ((e: Event) => void) | null = null;
-  private _onContextRestored: ((e: Event) => void) | null = null;
-  // External callback for context loss notification
-  onContextLostCallback: (() => void) | null = null;
-  onContextRestoredCallback: (() => void) | null = null;
 
   constructor(
     container: HTMLElement,
@@ -151,33 +144,6 @@ export class VolumeRendererClassic {
       this.controls.target.set(o.targetX, o.targetY, o.targetZ);
       this.controls.update();
     }
-
-    // WebGL context loss/restore handling
-    const canvas = this.renderer.domElement;
-    this._onContextLost = (e: Event) => {
-      e.preventDefault(); // allow browser to restore the context later
-      this.contextLost = true;
-      cancelAnimationFrame(this.animationId);
-      this.onContextLostCallback?.();
-    };
-    this._onContextRestored = () => {
-      if (this.disposed) return;
-      this.contextLost = false;
-      // Re-mark textures for upload
-      this.tfTexture.needsUpdate = true;
-      // Re-upload volume data if we had any
-      if (this._lastVolumeData) {
-        this.meshCreated = false; // force full re-creation
-        this.volumeTexture = null;
-        this.material = null;
-        this.uploadVolume(this._lastVolumeData, this._lastVolumeDimensions, this._lastVolumeExtent);
-      }
-      this._needsRender = true;
-      this.animate();
-      this.onContextRestoredCallback?.();
-    };
-    canvas.addEventListener('webglcontextlost', this._onContextLost);
-    canvas.addEventListener('webglcontextrestored', this._onContextRestored);
 
     // Start render loop
     this.animate();
@@ -346,11 +312,6 @@ export class VolumeRendererClassic {
     dimensions: [number, number, number],
     extent: [number, number, number],
   ): void {
-    // Store for context restore
-    this._lastVolumeData = data;
-    this._lastVolumeDimensions = dimensions;
-    this._lastVolumeExtent = extent;
-
     const dimsChanged =
       this.dimensions[0] !== dimensions[0] ||
       this.dimensions[1] !== dimensions[1] ||
@@ -552,65 +513,20 @@ vec2 intersectBox(vec3 origin, vec3 dir, vec3 bmin, vec3 bmax) {
   return vec2(tNear, tFar);
 }
 
-// Tricubic interpolation (Catmull-Rom)
-float cubicWeight(float x) {
-  float ax = abs(x);
-  if (ax <= 1.0) return (1.5 * ax - 2.5) * ax * ax + 1.0;
-  if (ax < 2.0) return ((-0.5 * ax + 2.5) * ax - 4.0) * ax + 2.0;
-  return 0.0;
-}
-
-float sampleTricubic(vec3 pos) {
-  vec3 texSize = uVolumeSize;
-  vec3 coord = pos * texSize - 0.5;
-  vec3 index = floor(coord);
-  vec3 frac = coord - index;
-
-  float result = 0.0;
-  for (int z = -1; z <= 2; z++) {
-    float wz = cubicWeight(float(z) - frac.z);
-    for (int y = -1; y <= 2; y++) {
-      float wy = cubicWeight(float(y) - frac.y);
-      float wyz = wy * wz;
-      for (int x = -1; x <= 2; x++) {
-        float wx = cubicWeight(float(x) - frac.x);
-        vec3 sampleCoord = (index + vec3(float(x), float(y), float(z)) + 0.5) / texSize;
-        sampleCoord = clamp(sampleCoord, 0.0, 1.0);
-        result += texture(uVolume, sampleCoord).r * wx * wyz;
-      }
-    }
-  }
-  return max(result, 0.0);
-}
-
 float sampleVolume(vec3 pos) {
-  float val;
-  if (uSmoothing > 0.3) {
-    val = sampleTricubic(pos);
-  } else {
-    val = texture(uVolume, pos).r;
-    if (uSmoothing > 0.0) {
-      vec3 ts = 1.0 / uVolumeSize;
-      float avg = 0.0;
-      avg += texture(uVolume, pos + vec3(ts.x, 0, 0)).r;
-      avg += texture(uVolume, pos - vec3(ts.x, 0, 0)).r;
-      avg += texture(uVolume, pos + vec3(0, ts.y, 0)).r;
-      avg += texture(uVolume, pos - vec3(0, ts.y, 0)).r;
-      avg += texture(uVolume, pos + vec3(0, 0, ts.z)).r;
-      avg += texture(uVolume, pos - vec3(0, 0, ts.z)).r;
-      val = mix(val, avg / 6.0, uSmoothing * 0.5);
-    }
+  float val = texture(uVolume, pos).r;
+  if (uSmoothing > 0.0) {
+    vec3 ts = 1.0 / uVolumeSize;
+    float avg = 0.0;
+    avg += texture(uVolume, pos + vec3(ts.x, 0, 0)).r;
+    avg += texture(uVolume, pos - vec3(ts.x, 0, 0)).r;
+    avg += texture(uVolume, pos + vec3(0, ts.y, 0)).r;
+    avg += texture(uVolume, pos - vec3(0, ts.y, 0)).r;
+    avg += texture(uVolume, pos + vec3(0, 0, ts.z)).r;
+    avg += texture(uVolume, pos - vec3(0, 0, ts.z)).r;
+    val = mix(val, avg / 6.0, uSmoothing * 0.5);
   }
   return val;
-}
-
-// Gradient-based lighting
-vec3 computeGradient(vec3 pos) {
-  vec3 ts = 1.5 / uVolumeSize;
-  float dx = texture(uVolume, pos + vec3(ts.x, 0, 0)).r - texture(uVolume, pos - vec3(ts.x, 0, 0)).r;
-  float dy = texture(uVolume, pos + vec3(0, ts.y, 0)).r - texture(uVolume, pos - vec3(0, ts.y, 0)).r;
-  float dz = texture(uVolume, pos + vec3(0, 0, ts.z)).r - texture(uVolume, pos - vec3(0, 0, ts.z)).r;
-  return vec3(dx, dy, dz);
 }
 
 void main() {
@@ -627,8 +543,6 @@ void main() {
   vec4 accum = vec4(0.0);
   float t = tNear;
 
-  vec3 lightDir = normalize(-rayDir);
-
   for (int i = 0; i < 512; i++) {
     if (i >= uStepCount) break;
     if (accum.a >= 0.98) break;
@@ -644,19 +558,6 @@ void main() {
       if (density > uThreshold) {
         float lookupVal = clamp(density, 0.0, 1.0);
         vec4 tfColor = texture(uTransferFunction, vec2(lookupVal, 0.5));
-
-        // Gradient-based shading
-        vec3 grad = computeGradient(uvw);
-        float gradMag = length(grad);
-        if (gradMag > 0.01) {
-          vec3 normal = normalize(grad);
-          float diffuse = max(dot(normal, lightDir), 0.0);
-          vec3 halfVec = normalize(lightDir - rayDir);
-          float specular = pow(max(dot(normal, halfVec), 0.0), 40.0);
-          float shade = mix(1.0, 0.3 + 0.6 * diffuse + 0.25 * specular, min(gradMag * 5.0, 1.0));
-          tfColor.rgb *= shade;
-        }
-
         tfColor.a *= uOpacityScale * stepSize * 100.0;
         tfColor.a = clamp(tfColor.a, 0.0, 1.0);
         tfColor.rgb *= tfColor.a;
@@ -729,7 +630,7 @@ void main() {
   // ─── Render loop ──────────────────────────────────────────────────────
 
   private animate = (): void => {
-    if (this.disposed || this.contextLost) return;
+    if (this.disposed) return;
     this.animationId = requestAnimationFrame(this.animate);
 
     const controlsMoved = this.controls.update();
@@ -746,12 +647,6 @@ void main() {
 
     this.renderer.render(this.scene, this.camera);
   };
-
-  // ─── Context state ──────────────────────────────────────────────────
-
-  isContextLost(): boolean {
-    return this.contextLost;
-  }
 
   // ─── Resize handling ──────────────────────────────────────────────────
 
@@ -771,15 +666,6 @@ void main() {
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.animationId);
-    // Remove context loss listeners
-    const canvas = this.renderer.domElement;
-    if (this._onContextLost) canvas.removeEventListener('webglcontextlost', this._onContextLost);
-    if (this._onContextRestored) canvas.removeEventListener('webglcontextrestored', this._onContextRestored);
-    this._onContextLost = null;
-    this._onContextRestored = null;
-    this.onContextLostCallback = null;
-    this.onContextRestoredCallback = null;
-    this._lastVolumeData = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.controls.dispose();
@@ -798,7 +684,7 @@ void main() {
     // forceContextLoss BEFORE dispose — releases GPU memory immediately
     this.renderer.forceContextLoss();
     this.renderer.dispose();
-    canvas.remove();
+    this.renderer.domElement.remove();
   }
 
   setScrollZoom(enabled: boolean): void {

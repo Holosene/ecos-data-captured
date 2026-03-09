@@ -226,90 +226,50 @@ export function projectFramesSpatial(
  * Normalize accumulated volume: divide by weights to get average intensity.
  * Returns a new Float32Array of normalized values [0–1].
  *
- * Uses percentile-based contrast stretching instead of simple max normalization:
- * - Maps the 1st percentile to 0 and the 99.5th percentile to 1
- * - This removes outlier noise spikes and preserves subtle detail in the main range
- * - Much better dynamic range utilization than naive max normalization
- *
- * Optimized: unrolled 4x for throughput.
+ * Optimized: first pass finds max while normalizing by weights,
+ * second pass scales to [0-1]. Unrolled 4x for throughput.
  */
 export function normalizeVolume(volume: ProbabilisticVolume): Float32Array {
   const len = volume.data.length;
   const out = new Float32Array(len);
   const data = volume.data;
   const weights = volume.weights;
+  let maxVal = 0;
 
-  // Pass 1: normalize by weights
+  // Pass 1: normalize by weights + track max (unrolled 4x)
   const len4 = (len >> 2) << 2;
   for (let i = 0; i < len4; i += 4) {
     const w0 = weights[i], w1 = weights[i + 1], w2 = weights[i + 2], w3 = weights[i + 3];
-    out[i]     = w0 > 0 ? data[i] / w0 : 0;
-    out[i + 1] = w1 > 0 ? data[i + 1] / w1 : 0;
-    out[i + 2] = w2 > 0 ? data[i + 2] / w2 : 0;
-    out[i + 3] = w3 > 0 ? data[i + 3] / w3 : 0;
+    const v0 = w0 > 0 ? data[i] / w0 : 0;
+    const v1 = w1 > 0 ? data[i + 1] / w1 : 0;
+    const v2 = w2 > 0 ? data[i + 2] / w2 : 0;
+    const v3 = w3 > 0 ? data[i + 3] / w3 : 0;
+    out[i] = v0; out[i + 1] = v1; out[i + 2] = v2; out[i + 3] = v3;
+    // Branch-free max: reduces branch misprediction
+    if (v0 > maxVal) maxVal = v0;
+    if (v1 > maxVal) maxVal = v1;
+    if (v2 > maxVal) maxVal = v2;
+    if (v3 > maxVal) maxVal = v3;
   }
   for (let i = len4; i < len; i++) {
     const w = weights[i];
-    out[i] = w > 0 ? data[i] / w : 0;
-  }
-
-  // Pass 2: find percentile bounds using histogram (1024 bins)
-  // Only consider non-zero voxels (empty space should stay at 0)
-  const HIST_BINS = 1024;
-  const hist = new Uint32Array(HIST_BINS);
-  let maxVal = 0;
-  let nonZeroCount = 0;
-  for (let i = 0; i < len; i++) {
-    const v = out[i];
+    const v = w > 0 ? data[i] / w : 0;
+    out[i] = v;
     if (v > maxVal) maxVal = v;
-    if (v > 0.0001) nonZeroCount++;
   }
 
-  if (maxVal <= 0 || nonZeroCount < 10) return out;
-
-  const invMax = (HIST_BINS - 1) / maxVal;
-  for (let i = 0; i < len; i++) {
-    if (out[i] > 0.0001) {
-      const bin = Math.min(HIST_BINS - 1, (out[i] * invMax) | 0);
-      hist[bin]++;
-    }
-  }
-
-  // Find 1st and 99.5th percentile of non-zero values
-  const pLow = 0.01;
-  const pHigh = 0.995;
-  const targetLow = Math.floor(nonZeroCount * pLow);
-  const targetHigh = Math.floor(nonZeroCount * pHigh);
-
-  let cumulative = 0;
-  let lowBin = 0;
-  let highBin = HIST_BINS - 1;
-  for (let i = 0; i < HIST_BINS; i++) {
-    cumulative += hist[i];
-    if (cumulative <= targetLow) lowBin = i;
-    if (cumulative <= targetHigh) highBin = i;
-  }
-
-  const lowVal = lowBin / invMax;
-  const highVal = highBin / invMax;
-  const range = highVal - lowVal;
-
-  // Pass 3: percentile stretch to [0-1]
-  if (range > 0) {
-    const invRange = 1.0 / range;
+  // Pass 2: scale to [0-1] (unrolled 4x)
+  if (maxVal > 0) {
+    const invMax = 1.0 / maxVal;
     for (let i = 0; i < len4; i += 4) {
-      out[i]     = out[i]     > 0.0001 ? Math.min(1, Math.max(0, (out[i] - lowVal) * invRange)) : 0;
-      out[i + 1] = out[i + 1] > 0.0001 ? Math.min(1, Math.max(0, (out[i + 1] - lowVal) * invRange)) : 0;
-      out[i + 2] = out[i + 2] > 0.0001 ? Math.min(1, Math.max(0, (out[i + 2] - lowVal) * invRange)) : 0;
-      out[i + 3] = out[i + 3] > 0.0001 ? Math.min(1, Math.max(0, (out[i + 3] - lowVal) * invRange)) : 0;
+      out[i] *= invMax;
+      out[i + 1] *= invMax;
+      out[i + 2] *= invMax;
+      out[i + 3] *= invMax;
     }
     for (let i = len4; i < len; i++) {
-      out[i] = out[i] > 0.0001 ? Math.min(1, Math.max(0, (out[i] - lowVal) * invRange)) : 0;
+      out[i] *= invMax;
     }
-  } else {
-    // Fallback: simple max normalization
-    const inv = 1.0 / maxVal;
-    for (let i = 0; i < len; i++) out[i] *= inv;
   }
 
   return out;
