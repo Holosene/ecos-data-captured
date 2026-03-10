@@ -232,10 +232,14 @@ export async function publishToRepo(): Promise<void> {
   const r = state.result;
   if (!r) throw new Error('No pipeline result to publish');
 
-  // Build spatial volume from frames — NO downsampling so the session page
-  // can reconstruct the exact original frames and use the same code paths
-  // (buildWindowVolume, projectFrameWindow) as the scan page.
-  const spatialVol = buildSpatialVolumeFromFrames(r.instrumentFrames);
+  // Build spatial volume from frames — downsample to [128, 256, 128] like IDB
+  // to keep file size manageable for git/static hosting (~30 MB vs 1.8 GB).
+  // The session page reconstructs frames from this volume; downsampled frames
+  // are visually equivalent for the volume renderer.
+  const spatialRaw = buildSpatialVolumeFromFrames(r.instrumentFrames);
+  const spatialVol = spatialRaw
+    ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
+    : null;
 
   // Build classic cone-projected volume snapshot at middle frame (for Mode C on session page)
   const WINDOW_SIZE = 12;
