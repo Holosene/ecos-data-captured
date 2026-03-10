@@ -220,12 +220,10 @@ function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     let cancelled = false;
 
-    // Lazy-load Leaflet + CSS only when the map is actually rendered
+    // Lazy-load Leaflet only when the map is actually rendered
+    // (leaflet CSS is statically imported by MapView)
     (async () => {
-      const [L, _css] = await Promise.all([
-        import('leaflet').then(m => m.default),
-        import('leaflet/dist/leaflet.css'),
-      ]);
+      const L = await import('leaflet').then(m => m.default);
       if (cancelled) return;
       leafletRef.current = L;
 

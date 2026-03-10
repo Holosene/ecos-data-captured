@@ -36,9 +36,9 @@ describe('buildVolume', () => {
 
     const volume = buildVolume({ frames, mappings, calibration });
 
-    expect(volume.metadata.dimensions[0]).toBeGreaterThan(0); // track (X)
-    expect(volume.metadata.dimensions[1]).toBe(width);   // lateral (Y)
-    expect(volume.metadata.dimensions[2]).toBe(height);  // depth (Z)
+    expect(volume.metadata.dimensions[0]).toBe(width);    // lateral (X = cropWidth)
+    expect(volume.metadata.dimensions[1]).toBe(5);        // track (Y = totalDist/yStep + 1)
+    expect(volume.metadata.dimensions[2]).toBe(height);   // depth (Z = cropHeight)
     expect(volume.data.length).toBe(
       volume.metadata.dimensions[0] *
       volume.metadata.dimensions[1] *
@@ -84,17 +84,17 @@ describe('buildVolume', () => {
 describe('estimateVolume', () => {
   it('estimates dimensions correctly', () => {
     const result = estimateVolume(200, 100, 50, 0.1, 1.0);
-    expect(result.dimX).toBe(501);   // track: 50/0.1 + 1
-    expect(result.dimY).toBe(200);   // lateral
-    expect(result.dimZ).toBe(100);   // depth
+    expect(result.dimX).toBe(200);   // lateral (cropWidth)
+    expect(result.dimY).toBe(501);   // track: 50/0.1 + 1
+    expect(result.dimZ).toBe(100);   // depth (cropHeight)
     expect(result.estimatedMB).toBeGreaterThan(0);
   });
 
   it('applies downscale factor', () => {
     const full = estimateVolume(200, 100, 50, 0.1, 1.0);
     const half = estimateVolume(200, 100, 50, 0.1, 0.5);
-    expect(half.dimY).toBe(100);  // lateral
-    expect(half.dimZ).toBe(50);   // depth
+    expect(half.dimX).toBe(100);  // lateral * 0.5
+    expect(half.dimZ).toBe(50);   // depth * 0.5
     expect(half.estimatedMB).toBeLessThan(full.estimatedMB);
   });
 });
