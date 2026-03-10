@@ -36,10 +36,6 @@ export class VolumeRendererClassic {
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
-
-  /** Optional callbacks for WebGL context loss/restore */
-  public onContextLostCallback: (() => void) | null = null;
-  public onContextRestoredCallback: (() => void) | null = null;
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
@@ -50,11 +46,6 @@ export class VolumeRendererClassic {
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
   private resizeObserver: ResizeObserver | null = null;
-  private container: HTMLElement;
-  private contextLost = false;
-  private lastVolumeData: Float32Array | null = null;
-  private lastVolumeDims: [number, number, number] = [1, 1, 1];
-  private lastVolumeExtent: [number, number, number] = [1, 1, 1];
   private _needsRender = true;
   // Pre-allocated vectors to avoid GC pressure in hot loops
   private _camLocal = new THREE.Vector3();
@@ -80,34 +71,10 @@ export class VolumeRendererClassic {
       alpha: true,
       powerPreference: 'high-performance',
     });
-    this.container = container;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    const w = Math.max(container.clientWidth, 1);
-    const h = Math.max(container.clientHeight, 1);
-    this.renderer.setSize(w, h);
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
     container.appendChild(this.renderer.domElement);
-
-    // WebGL context loss/restore handlers
-    const canvas = this.renderer.domElement;
-    canvas.addEventListener('webglcontextlost', (e) => {
-      e.preventDefault();
-      this.contextLost = true;
-      cancelAnimationFrame(this.animationId);
-      this.onContextLostCallback?.();
-    });
-    canvas.addEventListener('webglcontextrestored', () => {
-      this.contextLost = false;
-      if (this.tfTexture) this.tfTexture.needsUpdate = true;
-      if (this.lastVolumeData) {
-        this.meshCreated = false;
-        this.volumeTexture = null;
-        this.uploadVolume(this.lastVolumeData, this.lastVolumeDims, this.lastVolumeExtent);
-      }
-      this._needsRender = true;
-      this.animate();
-      this.onContextRestoredCallback?.();
-    });
 
     // Scene (no fog — clean rendering)
     this.scene = new THREE.Scene();
@@ -115,7 +82,7 @@ export class VolumeRendererClassic {
     // Camera
     this.camera = new THREE.PerspectiveCamera(
       this.calibration.camera.fov,
-      w / h,
+      container.clientWidth / container.clientHeight,
       0.1,
       100,
     );
@@ -123,8 +90,8 @@ export class VolumeRendererClassic {
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.15;
-    this.controls.rotateSpeed = 0.3;
+    this.controls.dampingFactor = 0.08;
+    this.controls.rotateSpeed = 0.8;
     this.controls.addEventListener('change', () => { this._needsRender = true; });
 
     // Transfer function texture (1D: 256x1 RGBA)
@@ -352,13 +319,6 @@ export class VolumeRendererClassic {
 
     this.dimensions = dimensions;
     this.extent = extent;
-
-    // Save reference for context restore
-    this.lastVolumeData = data;
-    this.lastVolumeDims = dimensions;
-    this.lastVolumeExtent = extent;
-
-    if (this.contextLost) return;
 
     // FAST PATH: reuse existing texture when dimensions match (avoids GPU alloc/dealloc)
     if (!dimsChanged && this.volumeTexture && this.meshCreated && this.material) {
@@ -666,7 +626,7 @@ void main() {
   // ─── Render loop ──────────────────────────────────────────────────────
 
   private animate = (): void => {
-    if (this.disposed || this.contextLost) return;
+    if (this.disposed) return;
     this.animationId = requestAnimationFrame(this.animate);
 
     const controlsMoved = this.controls.update();
@@ -725,10 +685,6 @@ void main() {
 
   setScrollZoom(enabled: boolean): void {
     this.controls.enableZoom = enabled;
-  }
-
-  setRotateSpeed(speed: number): void {
-    this.controls.rotateSpeed = speed;
   }
 
   setSceneBg(color: string): void {

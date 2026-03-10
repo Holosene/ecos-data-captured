@@ -47,12 +47,12 @@ export const DEFAULT_CALIBRATION: CalibrationConfig = {
   scale: { x: 2, y: 2, z: 2 },
   axisMapping: { lateral: 'x', depth: 'z', track: 'y' },
   camera: {
-    dist: 3.2,
+    dist: 2,
     fov: 30,
     orbit: {
-      posX: -0.24519236895464167,
-      posY: -0.016621703238049877,
-      posZ: 0.5782697573925023,
+      posX: -0.37062050378412215,
+      posY: -0.024429054191487606,
+      posZ: 0.5360077379367973,
       targetX: 0.13442521276099786,
       targetY: 0.02044777884473632,
       targetZ: 0.0499002719202334,
@@ -70,12 +70,12 @@ export const DEFAULT_CALIBRATION_B: CalibrationConfig = {
   scale: { x: 2, y: 2, z: 1 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
   camera: {
-    dist: 2.6,
+    dist: 1.6,
     fov: 40,
     orbit: {
-      posX: -0.5868371850324337,
-      posY: 0.20962505130742645,
-      posZ: 1.9528896191616965,
+      posX: -0.6451516457959247,
+      posY: 0.2503685725297801,
+      posZ: 2.0387956423567872,
       targetX: 0.07538325909266698,
       targetY: -0.05112900841721244,
       targetZ: -0.0003320530894435634,
@@ -92,15 +92,15 @@ export const DEFAULT_CALIBRATION_C: CalibrationConfig = {
   scale: { x: 2, y: 1, z: 1 },
   axisMapping: { lateral: 'z', depth: 'y', track: 'x' },
   camera: {
-    dist: 2.4,
+    dist: 1.5,
     fov: 39,
     orbit: {
-      posX: -0.44172564925315033,
-      posY: -0.03412383920702456,
-      posZ: 1.7644297224870156,
-      targetX: 0.0015423781722030247,
-      targetY: -0.015503201646372144,
-      targetZ: 0.00022390063335996964,
+      posX: -0.47426702506952767,
+      posY: -0.06230380348254261,
+      posZ: 1.8370885137863182,
+      targetX: 0,
+      targetY: 0,
+      targetZ: 0,
     },
   },
   grid: { y: -0.5 },
@@ -125,10 +125,6 @@ export class VolumeRenderer {
 
   private settings: RendererSettings;
   private dimensions: [number, number, number] = [1, 1, 1];
-
-  /** Optional callbacks for WebGL context loss/restore */
-  public onContextLostCallback: (() => void) | null = null;
-  public onContextRestoredCallback: (() => void) | null = null;
   private extent: [number, number, number] = [1, 1, 1];
   private animationId: number = 0;
   private disposed = false;
@@ -139,11 +135,6 @@ export class VolumeRenderer {
   private gridHelper: THREE.GridHelper;
   private axesHelper: THREE.AxesHelper;
   private resizeObserver: ResizeObserver | null = null;
-  private container: HTMLElement;
-  private contextLost = false;
-  private lastVolumeData: Float32Array | null = null;
-  private lastVolumeDims: [number, number, number] = [1, 1, 1];
-  private lastVolumeExtent: [number, number, number] = [1, 1, 1];
   private _needsRender = true; // dirty flag — only render when something changed
   // Pre-allocated vectors to avoid GC pressure in hot loops
   private _camLocal = new THREE.Vector3();
@@ -169,35 +160,10 @@ export class VolumeRenderer {
       alpha: true,
       powerPreference: 'high-performance',
     });
-    this.container = container;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    const w = Math.max(container.clientWidth, 1);
-    const h = Math.max(container.clientHeight, 1);
-    this.renderer.setSize(w, h);
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setClearColor(new THREE.Color(this.calibration.bgColor), 1);
     container.appendChild(this.renderer.domElement);
-
-    // WebGL context loss/restore handlers
-    const canvas = this.renderer.domElement;
-    canvas.addEventListener('webglcontextlost', (e) => {
-      e.preventDefault();
-      this.contextLost = true;
-      cancelAnimationFrame(this.animationId);
-      this.onContextLostCallback?.();
-    });
-    canvas.addEventListener('webglcontextrestored', () => {
-      this.contextLost = false;
-      // Re-upload textures (GPU resources were lost)
-      if (this.tfTexture) this.tfTexture.needsUpdate = true;
-      if (this.lastVolumeData) {
-        this.meshCreated = false;
-        this.volumeTexture = null;
-        this.uploadVolume(this.lastVolumeData, this.lastVolumeDims, this.lastVolumeExtent);
-      }
-      this._needsRender = true;
-      this.animate();
-      this.onContextRestoredCallback?.();
-    });
 
     // Scene (no fog — clean rendering)
     this.scene = new THREE.Scene();
@@ -205,7 +171,7 @@ export class VolumeRenderer {
     // Camera
     this.camera = new THREE.PerspectiveCamera(
       this.calibration.camera.fov,
-      w / h,
+      container.clientWidth / container.clientHeight,
       0.1,
       100,
     );
@@ -213,8 +179,8 @@ export class VolumeRenderer {
     // Controls
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.15;
-    this.controls.rotateSpeed = 0.3;
+    this.controls.dampingFactor = 0.08;
+    this.controls.rotateSpeed = 0.8;
     this.controls.addEventListener('change', () => { this._needsRender = true; });
 
     // Transfer function texture (1D: 256x1 RGBA)
@@ -447,13 +413,6 @@ export class VolumeRenderer {
 
     this.dimensions = dimensions;
     this.extent = extent;
-
-    // Save reference for context restore
-    this.lastVolumeData = data;
-    this.lastVolumeDims = dimensions;
-    this.lastVolumeExtent = extent;
-
-    if (this.contextLost) return;
 
     // FAST PATH: reuse existing texture when dimensions match (avoids GPU alloc/dealloc)
     if (!dimsChanged && this.volumeTexture && this.meshCreated && this.material) {
@@ -800,7 +759,7 @@ void main() {
   // ─── Render loop ──────────────────────────────────────────────────────
 
   private animate = (): void => {
-    if (this.disposed || this.contextLost) return;
+    if (this.disposed) return;
     this.animationId = requestAnimationFrame(this.animate);
 
     // controls.update() returns true when damping moves the camera
@@ -861,10 +820,6 @@ void main() {
 
   setScrollZoom(enabled: boolean): void {
     this.controls.enableZoom = enabled;
-  }
-
-  setRotateSpeed(speed: number): void {
-    this.controls.rotateSpeed = speed;
   }
 
   setSceneBg(color: string): void {

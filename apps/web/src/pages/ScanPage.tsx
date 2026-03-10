@@ -32,14 +32,6 @@ import {
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
-import {
-  getState as getPipelineState,
-  subscribe as subscribePipeline,
-  runPipeline as runStorePipeline,
-  abort as abortPipeline,
-  reset as resetPipeline,
-  publishToRepo,
-} from '../store/pipeline-store.js';
 
 type ScanPhase = 'import' | 'crop' | 'settings' | 'processing' | 'viewer';
 
@@ -68,8 +60,8 @@ interface QualityConfig {
 
 const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
   minimal: {
-    fps: 1,
-    grid: { resX: 48, resY: 48, resZ: 48 },
+    fps: 2,
+    grid: { resX: 64, resY: 64, resZ: 64 },
     preprocessing: {
       upscaleFactor: 1,
       denoiseStrength: 0,
@@ -79,18 +71,18 @@ const QUALITY_PRESETS: Record<QualityPreset, QualityConfig> = {
     },
   },
   medium: {
-    fps: 3,
-    grid: { resX: 80, resY: 80, resZ: 80 },
+    fps: 4,
+    grid: { resX: 96, resY: 96, resZ: 96 },
     preprocessing: {
       upscaleFactor: 1,
-      denoiseStrength: 0,
+      denoiseStrength: 0.08,
       gamma: 0.9,
-      gaussianSigma: 0,
+      gaussianSigma: 0.2,
       deblockStrength: 0,
     },
   },
   complete: {
-    fps: 6,
+    fps: 8,
     grid: { resX: 128, resY: 128, resZ: 128 },
     preprocessing: {
       ...DEFAULT_PREPROCESSING,
@@ -113,7 +105,7 @@ function depthToSliderIndex(depth: number): number {
 
 export function ScanPage() {
   const { state, dispatch } = useAppState();
-  const { t, lang } = useTranslation();
+  const { t } = useTranslation();
 
   const [phase, setPhase] = useState<ScanPhase>('import');
   // All 3 modes generated simultaneously — no mode selection needed
@@ -148,98 +140,20 @@ export function ScanPage() {
   cropRef.current = crop;
   scaleRef.current = scale;
 
-  // Pipeline store subscription — survives unmount/remount
-  const [progress, setProgress] = useState<PipelineV2Progress | null>(getPipelineState().progress);
-  const [volumeData, setVolumeData] = useState<Float32Array | null>(getPipelineState().result?.volumeData ?? null);
-  const [volumeDims, setVolumeDims] = useState<[number, number, number]>(getPipelineState().result?.volumeDims ?? [1, 1, 1]);
-  const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>(getPipelineState().result?.volumeExtent ?? [1, 1, 1]);
+  // Processing state
+  const [progress, setProgress] = useState<PipelineV2Progress | null>(null);
+  const [volumeData, setVolumeData] = useState<Float32Array | null>(null);
+  const [volumeDims, setVolumeDims] = useState<[number, number, number]>([1, 1, 1]);
+  const [volumeExtent, setVolumeExtent] = useState<[number, number, number]>([1, 1, 1]);
   const [instrumentFrames, setInstrumentFrames] = useState<Array<{
     index: number; timeS: number; intensity: Float32Array; width: number; height: number;
-  }> | null>(getPipelineState().result?.instrumentFrames ?? null);
-  const [published, setPublished] = useState(getPipelineState().published);
-  const [publishError, setPublishError] = useState<string | null>(null);
+  }> | null>(null);
+  const abortRef = useRef(false);
 
   // Step bar animation state
   const [stepBarVisible, setStepBarVisible] = useState(true);
   const [stepBarAnimating, setStepBarAnimating] = useState(false);
   const [loadingTest, setLoadingTest] = useState(false);
-
-  // Restore phase from pipeline store on mount
-  useEffect(() => {
-    const ps = getPipelineState();
-    if (ps.status === 'ready' && ps.result) {
-      // Pipeline completed while we were away — restore viewer
-      setVolumeData(ps.result.volumeData);
-      setVolumeDims(ps.result.volumeDims);
-      setVolumeExtent(ps.result.volumeExtent);
-      setInstrumentFrames(ps.result.instrumentFrames);
-      setPublished(ps.published);
-      setPhase('viewer');
-      setTimeout(() => {
-        requestAnimationFrame(() => {
-          setStepBarAnimating(true);
-          setTimeout(() => setStepBarVisible(false), 700);
-        });
-      }, 300);
-    } else if (ps.status === 'extracting' || ps.status === 'projecting' || ps.status === 'saving') {
-      // Pipeline still running — show processing overlay
-      setPhase('processing');
-      setProgress(ps.progress);
-    }
-  }, []);
-
-  // Subscribe to pipeline store updates
-  useEffect(() => {
-    const unsub = subscribePipeline((ps) => {
-      setProgress(ps.progress);
-      setPublished(ps.published);
-
-      if (ps.status === 'ready' && ps.result) {
-        setVolumeData(ps.result.volumeData);
-        setVolumeDims(ps.result.volumeDims);
-        setVolumeExtent(ps.result.volumeExtent);
-        setInstrumentFrames(ps.result.instrumentFrames);
-
-        // Dispatch to AppState so session appears on map
-        dispatch({
-          type: 'SET_V2_VOLUME',
-          data: ps.result.volumeData,
-          dimensions: ps.result.volumeDims,
-          extent: ps.result.volumeExtent,
-        });
-        dispatch({
-          type: 'ADD_SESSION',
-          session: {
-            id: ps.result.sessionId,
-            name: ps.result.videoFileName.replace(/\.\w+$/, ''),
-            createdAt: new Date().toISOString(),
-            videoFileName: ps.result.videoFileName,
-            gpxFileName: ps.result.gpxFileName,
-            bounds: ps.result.bounds,
-            totalDistanceM: ps.result.totalDistanceM,
-            durationS: ps.result.durationS,
-            frameCount: ps.result.instrumentFrames.length,
-            gridDimensions: ps.result.volumeDims,
-            preprocessing: ps.result.preprocessing,
-            beam: ps.result.beam,
-          },
-          gpxTrack: ps.result.gpxPoints,
-        });
-
-        // Transition to viewer
-        setPhase('viewer');
-        setTimeout(() => {
-          requestAnimationFrame(() => {
-            setStepBarAnimating(true);
-            setTimeout(() => setStepBarVisible(false), 700);
-          });
-        }, 1200);
-      } else if (ps.status === 'error') {
-        setPhase('settings');
-      }
-    });
-    return unsub;
-  }, [dispatch]);
 
   // Sync: distance-over-time chart
   const enriched = useMemo(
@@ -541,44 +455,229 @@ export function ScanPage() {
     drawCropOverlay();
   }, [drawCropOverlay]);
 
-  // ─── V2 Processing pipeline (delegated to pipeline-store) ────────────
+  // ─── V2 Processing pipeline ───────────────────────────────────────────
+
+  const workerRef = useRef<Worker | null>(null);
 
   const runPipeline = useCallback(async () => {
+    // Both renderers only need video; GPX is optional
     if (!state.videoFile) return;
+    abortRef.current = false;
     setPhase('processing');
 
-    await runStorePipeline({
-      videoFile: state.videoFile,
-      videoUrl: state.videoUrl,
-      gpxTrack: state.gpxTrack,
-      gpxFile: state.gpxFile,
-      videoDurationS: state.videoDurationS,
-      crop,
-      preprocessing,
-      beam,
-      grid,
-      fpsExtraction,
-      progressMessage: (key: string) => t(`v2.pipeline.${key}` as any),
+    const video = document.createElement('video');
+    video.preload = 'auto';
+    video.crossOrigin = 'anonymous';
+    video.src = state.videoUrl ?? URL.createObjectURL(state.videoFile!);
+    await new Promise<void>((r) => { video.oncanplaythrough = () => r(); });
+
+    const track = state.gpxTrack;
+
+    const totalFrames = Math.floor(state.videoDurationS * fpsExtraction);
+    const frameTimes = Array.from({ length: totalFrames }, (_, i) => ({
+      index: i,
+      timeS: i / fpsExtraction,
+    }));
+
+    // Unified progress: extraction = 0-70%, projection = 70-100%
+    const EXTRACT_WEIGHT = 0.7;
+    const PROJECT_WEIGHT = 0.3;
+
+    setProgress({
+      stage: 'preprocessing',
+      progress: 0,
+      message: t('v2.pipeline.extracting'),
+      currentFrame: 0,
+      totalFrames,
     });
-  }, [state, crop, preprocessing, beam, grid, fpsExtraction, t]);
+
+    const worker = new Worker(
+      new URL('../workers/pipeline-worker.ts', import.meta.url),
+      { type: 'module' },
+    );
+    workerRef.current = worker;
+
+    // On mobile, cap grid resolution to 64³ and skip heavy preprocessing
+    const mobileCheck = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    const pipelineGrid = mobileCheck
+      ? { resX: Math.min(grid.resX, 64), resY: Math.min(grid.resY, 64), resZ: Math.min(grid.resZ, 64) }
+      : grid;
+    const pipelinePreprocessing = mobileCheck
+      ? { ...preprocessing, denoiseStrength: 0, gaussianSigma: 0, deblockStrength: 0 }
+      : preprocessing;
+
+    worker.postMessage({
+      type: 'init',
+      preprocessing: pipelinePreprocessing,
+      beam,
+      grid: pipelineGrid,
+    });
+
+    let extractionDone = false;
+
+    const resultPromise = new Promise<{
+      normalizedData: Float32Array;
+      dims: [number, number, number];
+      extent: [number, number, number];
+      frames: Array<{ index: number; timeS: number; intensity: Float32Array; width: number; height: number }>;
+    }>((resolve, reject) => {
+      worker.onmessage = (e: MessageEvent) => {
+        const msg = e.data;
+
+        if (msg.type === 'preprocessed') {
+          if (extractionDone) {
+            const p = EXTRACT_WEIGHT + (msg.count / totalFrames) * PROJECT_WEIGHT * 0.5;
+            setProgress({ stage: 'preprocessing', progress: Math.min(p, 0.95), message: t('v2.pipeline.extracting'), currentFrame: msg.count, totalFrames });
+          }
+        } else if (msg.type === 'stage' && msg.stage === 'projecting') {
+          setProgress({ stage: 'projecting', progress: EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5, message: t('v2.pipeline.projecting') });
+        } else if (msg.type === 'projection-progress') {
+          const p = EXTRACT_WEIGHT + PROJECT_WEIGHT * 0.5 + (msg.current / msg.total) * PROJECT_WEIGHT * 0.5;
+          setProgress({ stage: 'projecting', progress: Math.min(p, 0.98), message: t('v2.pipeline.projecting'), currentFrame: msg.current, totalFrames: msg.total });
+        } else if (msg.type === 'complete') {
+          resolve({ normalizedData: msg.normalizedData, dims: msg.dims, extent: msg.extent, frames: msg.frames });
+        } else if (msg.type === 'error') {
+          reject(new Error(msg.message));
+        }
+      };
+
+      worker.onerror = (err) => reject(new Error(err.message));
+    });
+
+    // Use more parallel video decoders — each handles sequential seeks in its chunk
+    // On mobile, reduce parallelism and downscale frames for faster processing
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth <= 768;
+    const PARALLEL = isMobile
+      ? Math.min(2, navigator.hardwareConcurrency || 2)
+      : Math.min(6, Math.max(2, navigator.hardwareConcurrency || 4));
+    // Downscale factor: on mobile, halve frame dimensions (4x fewer pixels to process)
+    const mobileScale = isMobile ? 0.5 : 1;
+    const bitmapW = Math.round(crop.width * mobileScale);
+    const bitmapH = Math.round(crop.height * mobileScale);
+    const blobUrl = video.src;
+    const chunkSize = Math.ceil(totalFrames / PARALLEL);
+    let extractedCount = 0;
+
+    const extractChunk = async (videoEl: HTMLVideoElement, startIdx: number, endIdx: number) => {
+      for (let i = startIdx; i < endIdx; i++) {
+        if (abortRef.current) break;
+
+        const timeS = i / fpsExtraction;
+        videoEl.currentTime = timeS;
+        await new Promise<void>((r) => { videoEl.onseeked = () => r(); });
+
+        const bitmap = await createImageBitmap(
+          videoEl, crop.x, crop.y, crop.width, crop.height,
+          mobileScale < 1 ? { resizeWidth: bitmapW, resizeHeight: bitmapH, resizeQuality: 'low' } : undefined as any,
+        );
+
+        worker.postMessage({ type: 'frame', index: i, timeS, bitmap }, [bitmap]);
+
+        extractedCount++;
+        // Throttle progress updates to every 5 frames to reduce React re-renders
+        if (extractedCount % 5 === 0 || extractedCount === totalFrames) {
+          const p = (extractedCount / totalFrames) * EXTRACT_WEIGHT;
+          setProgress({ stage: 'preprocessing', progress: p, message: t('v2.pipeline.extracting'), currentFrame: extractedCount, totalFrames });
+        }
+      }
+    };
+
+    const videos: HTMLVideoElement[] = [video];
+    for (let p = 1; p < PARALLEL; p++) {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.src = blobUrl;
+      videos.push(v);
+    }
+
+    // Wait for all video elements to be ready (parallel load)
+    await Promise.all(
+      videos.slice(1).map((v) => new Promise<void>((r) => {
+        if (v.readyState >= 4) { r(); return; }
+        v.oncanplaythrough = () => r();
+      })),
+    );
+
+    const chunkPromises = videos.map((v, p) => {
+      const start = p * chunkSize;
+      const end = Math.min(start + chunkSize, totalFrames);
+      return extractChunk(v, start, end);
+    });
+
+    await Promise.all(chunkPromises);
+
+    URL.revokeObjectURL(blobUrl);
+    extractionDone = true;
+
+    if (abortRef.current) {
+      worker.terminate();
+      workerRef.current = null;
+      return;
+    }
+
+    worker.postMessage({ type: 'done' });
+
+    const result = await resultPromise;
+    worker.terminate();
+    workerRef.current = null;
+
+    if (abortRef.current) return;
+
+    const { normalizedData, dims, extent, frames: preprocessedFrames } = result;
+
+    setInstrumentFrames(preprocessedFrames);
+    setVolumeData(normalizedData);
+    setVolumeDims(dims);
+    setVolumeExtent(extent);
+
+    dispatch({ type: 'SET_V2_VOLUME', data: normalizedData, dimensions: dims, extent });
+    setProgress({ stage: 'ready', progress: 1, message: t('v2.pipeline.ready') });
+
+    // Show completion state briefly before transitioning
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const sessionId = crypto.randomUUID();
+    const gpxPoints = track ? track.points.map((p) => ({ lat: p.lat, lon: p.lon })) : undefined;
+    const bounds: [number, number, number, number] = gpxPoints
+      ? [
+          Math.min(...gpxPoints.map((p) => p.lat)),
+          Math.min(...gpxPoints.map((p) => p.lon)),
+          Math.max(...gpxPoints.map((p) => p.lat)),
+          Math.max(...gpxPoints.map((p) => p.lon)),
+        ]
+      : [0, 0, 0, 0];
+
+    dispatch({
+      type: 'ADD_SESSION',
+      session: {
+        id: sessionId,
+        name: state.videoFile!.name.replace(/\.\w+$/, ''),
+        createdAt: new Date().toISOString(),
+        videoFileName: state.videoFile!.name,
+        gpxFileName: state.gpxFile?.name ?? '',
+        bounds,
+        totalDistanceM: track?.totalDistanceM ?? 0,
+        durationS: track?.durationS ?? state.videoDurationS,
+        frameCount: preprocessedFrames.length,
+        gridDimensions: dims,
+        preprocessing,
+        beam,
+      },
+      gpxTrack: gpxPoints,
+    });
+
+    // Smooth transition to viewer
+    setPhase('viewer');
+    // Slide step bar away after renderers have initialized (longer delay avoids jank)
+    setTimeout(() => {
+      requestAnimationFrame(() => {
+        setStepBarAnimating(true);
+        setTimeout(() => setStepBarVisible(false), 700);
+      });
+    }, 1200);
+  }, [state, crop, preprocessing, beam, grid, fpsExtraction, dispatch, t]);
 
   const memEstimate = estimateVolumeMemoryMB(grid);
-
-  // ─── Publish session to repo ─────────────────────────────────────────
-  const [publishing, setPublishing] = useState(false);
-
-  const handlePublish = useCallback(async () => {
-    setPublishing(true);
-    setPublishError(null);
-    try {
-      await publishToRepo();
-      setPublished(true);
-    } catch (err) {
-      setPublishError(`Erreur: ${(err as Error).message}`);
-    } finally {
-      setPublishing(false);
-    }
-  }, []);
 
   // ─── Render ───────────────────────────────────────────────────────────
 
@@ -876,7 +975,7 @@ export function ScanPage() {
                       <div style={{ marginTop: '32px' }}>
                         <button
                           onClick={() => {
-                            abortPipeline();
+                            abortRef.current = true;
                             setPhase('settings');
                           }}
                           onMouseEnter={(e) => {
@@ -927,19 +1026,11 @@ export function ScanPage() {
                   const cfg = QUALITY_PRESETS[q];
                   const accentMap = { minimal: '#22c55e', medium: colors.accent, complete: '#f59e0b' };
                   const color = accentMap[q];
-                  const titleMap = {
-                    minimal: t('v2.quality.minimal' as any),
-                    medium: t('v2.quality.medium' as any),
-                    complete: t('v2.quality.complete' as any),
-                  };
-                  const hintMap = lang === 'fr' ? {
+                  const titleMap = { minimal: 'Rapide', medium: 'Équilibré', complete: 'Complet' };
+                  const hintMap = {
                     minimal: `${cfg.fps} image/s, aperçu en quelques secondes`,
                     medium: `${cfg.fps} images/s, bon compromis`,
                     complete: `${cfg.fps} images/s, qualité maximale`,
-                  } : {
-                    minimal: `${cfg.fps} fps, preview in seconds`,
-                    medium: `${cfg.fps} fps, good trade-off`,
-                    complete: `${cfg.fps} fps, max quality`,
                   };
                   return (
                     <button
@@ -1121,46 +1212,6 @@ export function ScanPage() {
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, animation: 'echos-fade-in 500ms ease' }}>
-            {/* Publish bar */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 16px',
-              borderBottom: `1px solid ${colors.border}`,
-              flexShrink: 0,
-            }}>
-              <div style={{ flex: 1 }} />
-
-              {publishError && (
-                <span style={{ fontSize: '12px', color: colors.error, maxWidth: '400px', textAlign: 'right' }}>
-                  {publishError}
-                </span>
-              )}
-
-              {published ? (
-                <span style={{
-                  padding: '8px 20px',
-                  borderRadius: '9999px',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  color: '#22c55e',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                }}>
-                  Session publiée
-                </span>
-              ) : (
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={publishing || !volumeData}
-                  onClick={handlePublish}
-                >
-                  {publishing ? 'Publication...' : 'Poster'}
-                </Button>
-              )}
-            </div>
-
             <VolumeViewer
               volumeData={volumeData}
               dimensions={volumeDims}
@@ -1178,14 +1229,11 @@ export function ScanPage() {
                 setPhase('settings');
               }}
               onNewScan={() => {
-                resetPipeline();
                 setStepBarVisible(true);
                 setStepBarAnimating(false);
                 setPhase('import');
                 setVolumeData(null);
                 setFrameReady(false);
-                setPublished(false);
-                setPublishError(null);
               }}
             />
           </div>
