@@ -1,1 +1,41 @@
-[]
+[
+  {
+    "id": "8d8cd18b-d259-41c6-932b-2d3fdd9723c4",
+    "name": "exemple_video_2026-02-28_at_00.05.10",
+    "createdAt": "2026-03-10T13:13:05.106Z",
+    "videoFileName": "exemple_video_2026-02-28_at_00.05.10.mp4",
+    "gpxFileName": "exemple_22_févr._2026_15_35_50.gpx",
+    "bounds": [
+      45.40374863,
+      5.11701935,
+      45.40392115,
+      5.11710571
+    ],
+    "totalDistanceM": 22.165756294868263,
+    "durationS": 244,
+    "frameCount": 3004,
+    "gridDimensions": [
+      128,
+      512,
+      128
+    ],
+    "preprocessing": {
+      "upscaleFactor": 1,
+      "denoiseStrength": 0.15,
+      "gamma": 0.9,
+      "gaussianSigma": 0.3,
+      "deblockStrength": 0.1
+    },
+    "beam": {
+      "beamAngleDeg": 20,
+      "lateralFalloffSigma": 0.5,
+      "depthMaxM": 85,
+      "nearFieldM": 0.3
+    },
+    "files": {
+      "gpx": "exemple_22_févr._2026_15_35_50.gpx",
+      "volumeInstrument": "volume-instrument.echos-vol",
+      "volumeSpatial": "volume-spatial.echos-vol"
+    }
+  }
+]
