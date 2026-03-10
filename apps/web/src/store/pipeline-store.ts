@@ -153,7 +153,16 @@ export async function publishToRepo(): Promise<void> {
   // Build spatial volume from frames — FULL RESOLUTION, no downsampling.
   // V2 compression (Uint16 + deflate) reduces size ~5-10x, making
   // full-res volumes manageable for git/static hosting.
-  const spatialVol = buildSpatialVolumeFromFrames(r.instrumentFrames);
+  // Cap spatial volume to ~8M voxels to prevent OOM
+  const MAX_PUB_VOXELS = 8_000_000;
+  const pubPerFrame = (r.instrumentFrames[0]?.width ?? 0) * (r.instrumentFrames[0]?.height ?? 0);
+  const pubTotal = pubPerFrame * r.instrumentFrames.length;
+  let pubFrames = r.instrumentFrames;
+  if (pubTotal > MAX_PUB_VOXELS && pubPerFrame > 0) {
+    const step = Math.ceil(pubTotal / MAX_PUB_VOXELS);
+    pubFrames = r.instrumentFrames.filter((_: unknown, i: number) => i % step === 0);
+  }
+  const spatialVol = buildSpatialVolumeFromFrames(pubFrames);
 
   // Build classic cone-projected volume snapshot at middle frame (for Mode C on session page)
   const WINDOW_SIZE = 12;
@@ -477,9 +486,18 @@ export async function runPipeline(opts: {
         extent,
       });
 
-      // Build and save spatial volume — FULL RESOLUTION, no downsampling.
-      // IDB has no size constraint so we keep exact frame data.
-      const spatialRaw = buildSpatialVolumeFromFrames(preprocessedFrames);
+      // Build spatial volume — cap total voxels to ~8M (~32 MB) to prevent OOM crash.
+      // Skip every N-th frame if needed rather than interpolating.
+      const MAX_SPATIAL_VOXELS = 8_000_000;
+      const spatialFrameCount = preprocessedFrames.length;
+      const perFrameVoxels = preprocessedFrames[0]?.width * preprocessedFrames[0]?.height || 1;
+      const totalVoxels = perFrameVoxels * spatialFrameCount;
+      let framesToUse = preprocessedFrames;
+      if (totalVoxels > MAX_SPATIAL_VOXELS) {
+        const step = Math.ceil(totalVoxels / MAX_SPATIAL_VOXELS);
+        framesToUse = preprocessedFrames.filter((_, i) => i % step === 0);
+      }
+      const spatialRaw = buildSpatialVolumeFromFrames(framesToUse);
       if (spatialRaw) {
         await saveVolume(sessionId, 'spatial', {
           data: spatialRaw.data,
