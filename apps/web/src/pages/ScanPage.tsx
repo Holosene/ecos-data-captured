@@ -32,6 +32,7 @@ import {
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
+import { ViewerErrorBoundary } from '../components/ErrorBoundary.js';
 import {
   getState as getPipelineState,
   subscribe as subscribePipeline,
@@ -1161,33 +1162,39 @@ export function ScanPage() {
               )}
             </div>
 
-            <VolumeViewer
-              volumeData={volumeData}
-              dimensions={volumeDims}
-              extent={volumeExtent}
-              frames={instrumentFrames ?? undefined}
-              beam={beam}
-              grid={grid}
-              gpxTrack={state.gpxTrack ?? undefined}
-              videoFileName={state.videoFile?.name}
-              gpxFileName={state.gpxFile?.name}
-              videoDurationS={state.videoDurationS}
-              onReconfigure={() => {
-                setStepBarVisible(true);
-                setStepBarAnimating(false);
-                setPhase('settings');
-              }}
-              onNewScan={() => {
-                resetPipeline();
-                setStepBarVisible(true);
-                setStepBarAnimating(false);
-                setPhase('import');
-                setVolumeData(null);
-                setFrameReady(false);
-                setPublished(false);
-                setPublishError(null);
-              }}
-            />
+            <ViewerErrorBoundary onReset={() => {
+              setStepBarVisible(true);
+              setStepBarAnimating(false);
+              setPhase('settings');
+            }}>
+              <VolumeViewer
+                volumeData={volumeData}
+                dimensions={volumeDims}
+                extent={volumeExtent}
+                frames={instrumentFrames ?? undefined}
+                beam={beam}
+                grid={grid}
+                gpxTrack={state.gpxTrack ?? undefined}
+                videoFileName={state.videoFile?.name}
+                gpxFileName={state.gpxFile?.name}
+                videoDurationS={state.videoDurationS}
+                onReconfigure={() => {
+                  setStepBarVisible(true);
+                  setStepBarAnimating(false);
+                  setPhase('settings');
+                }}
+                onNewScan={() => {
+                  resetPipeline();
+                  setStepBarVisible(true);
+                  setStepBarAnimating(false);
+                  setPhase('import');
+                  setVolumeData(null);
+                  setFrameReady(false);
+                  setPublished(false);
+                  setPublishError(null);
+                }}
+              />
+            </ViewerErrorBoundary>
           </div>
         )}
       </div>

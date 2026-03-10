@@ -195,6 +195,7 @@ function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     let cancelled = false;
+    let resizeTimerId: number | undefined;
 
     // Lazy-load Leaflet only when the map is actually rendered
     // (leaflet CSS is statically imported by MapView)
@@ -242,11 +243,12 @@ function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }
       map.on('mouseout', () => map.scrollWheelZoom.disable());
 
       mapInstanceRef.current = map;
-      setTimeout(() => map.invalidateSize(), 200);
+      resizeTimerId = window.setTimeout(() => map.invalidateSize(), 200);
     })();
 
     return () => {
       cancelled = true;
+      if (resizeTimerId != null) clearTimeout(resizeTimerId);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
@@ -851,27 +853,38 @@ export function VolumeViewer({
   // Upload Mode A data
   useEffect(() => {
     if (!rendererARef.current || !volumeData || volumeData.length === 0) return;
-    rendererARef.current.uploadVolume(volumeData, dimensions, extent);
-    if (autoThreshold) {
-      const threshold = computeAutoThreshold(volumeData, 85);
-      // Apply directly to Mode A settings (doesn't need editingMode)
-      setModeSettings((prev) => ({ ...prev, instrument: { ...prev.instrument, threshold } }));
-      rendererARef.current?.updateSettings({ threshold });
+    try {
+      rendererARef.current.uploadVolume(volumeData, dimensions, extent);
+      if (autoThreshold) {
+        const threshold = computeAutoThreshold(volumeData, 85);
+        setModeSettings((prev) => ({ ...prev, instrument: { ...prev.instrument, threshold } }));
+        rendererARef.current?.updateSettings({ threshold });
+      }
+    } catch (err) {
+      console.error('[VolumeViewer] Mode A upload error:', err);
     }
   }, [volumeData, dimensions, extent]);
 
   // Upload pre-computed spatial data to Mode B (for pre-generated sessions without frames)
   useEffect(() => {
     if (!rendererBRef.current || !spatialData || spatialData.length === 0 || hasFrames) return;
-    const sDims = spatialDimensions ?? dimensions;
-    const sExt = spatialExtent ?? extent;
-    rendererBRef.current.uploadVolume(spatialData, sDims, sExt);
+    try {
+      const sDims = spatialDimensions ?? dimensions;
+      const sExt = spatialExtent ?? extent;
+      rendererBRef.current.uploadVolume(spatialData, sDims, sExt);
+    } catch (err) {
+      console.error('[VolumeViewer] Mode B upload error:', err);
+    }
   }, [spatialData, spatialDimensions, spatialExtent, dimensions, extent, hasFrames]);
 
   // Upload pre-computed volume data to Mode C (for pre-generated sessions without frames)
   useEffect(() => {
     if (!rendererCRef.current || !volumeData || volumeData.length === 0 || hasFrames) return;
-    rendererCRef.current.uploadVolume(volumeData, dimensions, extent);
+    try {
+      rendererCRef.current.uploadVolume(volumeData, dimensions, extent);
+    } catch (err) {
+      console.error('[VolumeViewer] Mode C upload error:', err);
+    }
   }, [volumeData, dimensions, extent, hasFrames]);
 
   // ─── Mode B + C: frame caches (LRU-bounded) ────────────────────────────
@@ -941,34 +954,38 @@ export function VolumeViewer({
     const frms = framesRef.current;
     if (!frms || frms.length === 0) return;
 
-    // Mode B upload
-    if (rendererBRef.current) {
-      const cacheB = frameCacheBRef.current;
-      const cachedB = cacheB.get(frameIdx);
-      if (cachedB) {
-        // Use cached (already cloned) data
-        rendererBRef.current.uploadVolume(cachedB.normalized, cachedB.dimensions, cachedB.extent);
-      } else {
-        // Build into pooled buffer → upload directly to GPU → do NOT cache pooled ref
-        const volB = buildWindowVolumePooled(frms, frameIdx, WINDOW_SIZE);
-        rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+    try {
+      // Mode B upload
+      if (rendererBRef.current) {
+        const cacheB = frameCacheBRef.current;
+        const cachedB = cacheB.get(frameIdx);
+        if (cachedB) {
+          // Use cached (already cloned) data
+          rendererBRef.current.uploadVolume(cachedB.normalized, cachedB.dimensions, cachedB.extent);
+        } else {
+          // Build into pooled buffer → upload directly to GPU → do NOT cache pooled ref
+          const volB = buildWindowVolumePooled(frms, frameIdx, WINDOW_SIZE);
+          rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
+        }
       }
-    }
 
-    // Mode C upload
-    const bm = beamRef.current;
-    const gd = gridRef.current;
-    if (rendererCRef.current && bm && gd) {
-      const cacheC = frameCacheCRef.current;
-      const cachedC = cacheC.get(frameIdx);
-      if (cachedC) {
-        rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
-      } else {
-        // projectFrameWindow allocates its own array — safe to cache
-        const volC = projectFrameWindow(frms, frameIdx, WINDOW_SIZE, bm, gd);
-        cacheC.set(frameIdx, volC);
-        rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+      // Mode C upload
+      const bm = beamRef.current;
+      const gd = gridRef.current;
+      if (rendererCRef.current && bm && gd) {
+        const cacheC = frameCacheCRef.current;
+        const cachedC = cacheC.get(frameIdx);
+        if (cachedC) {
+          rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
+        } else {
+          // projectFrameWindow allocates its own array — safe to cache
+          const volC = projectFrameWindow(frms, frameIdx, WINDOW_SIZE, bm, gd);
+          cacheC.set(frameIdx, volC);
+          rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+        }
       }
+    } catch (err) {
+      console.error('[VolumeViewer] Frame upload error:', err);
     }
   }, [buildWindowVolumePooled]);
 
@@ -1064,15 +1081,17 @@ export function VolumeViewer({
 
     const tick = (timestamp: number) => {
       if (!playingRef.current) return;
-      rafId = requestAnimationFrame(tick);
 
       // Gating: only advance when enough time has elapsed
-      if (lastFrameTime === 0) { lastFrameTime = timestamp; return; }
-      if (timestamp - lastFrameTime < intervalMs) return;
+      if (lastFrameTime === 0) { lastFrameTime = timestamp; rafId = requestAnimationFrame(tick); return; }
+      if (timestamp - lastFrameTime < intervalMs) { rafId = requestAnimationFrame(tick); return; }
       lastFrameTime = timestamp;
 
+      const frms = framesRef.current;
+      if (!frms || frms.length === 0) { rafId = requestAnimationFrame(tick); return; }
+
       const next = currentFrameRef.current + 1;
-      if (next >= framesRef.current!.length) {
+      if (next >= frms.length) {
         setCurrentFrame(currentFrameRef.current);
         setPlaying(false);
         return;
@@ -1080,33 +1099,38 @@ export function VolumeViewer({
       currentFrameRef.current = next;
       frameCounter++;
 
-      // Mode B: always upload (fast — pooled buffer + FAST PATH GPU upload)
-      const frms = framesRef.current;
-      if (frms && frms.length > 0 && rendererBRef.current) {
-        const volB = buildWindowVolumePooled(frms, next, WINDOW_SIZE);
-        rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
-      }
-
-      // Mode C: only update every Nth frame (projectFrameWindow is heavy)
-      const bm = beamRef.current;
-      const gd = gridRef.current;
-      if (rendererCRef.current && bm && gd && frms && frameCounter % MODE_C_EVERY === 0) {
-        const cacheC = frameCacheCRef.current;
-        const cachedC = cacheC.get(next);
-        if (cachedC) {
-          rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
-        } else {
-          const volC = projectFrameWindow(frms, next, WINDOW_SIZE, bm, gd);
-          cacheC.set(next, volC);
-          rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+      try {
+        // Mode B: always upload (fast — pooled buffer + FAST PATH GPU upload)
+        if (rendererBRef.current) {
+          const volB = buildWindowVolumePooled(frms, next, WINDOW_SIZE);
+          rendererBRef.current.uploadVolume(volB.normalized, volB.dimensions, volB.extent);
         }
+
+        // Mode C: only update every Nth frame (projectFrameWindow is heavy)
+        const bm = beamRef.current;
+        const gd = gridRef.current;
+        if (rendererCRef.current && bm && gd && frameCounter % MODE_C_EVERY === 0) {
+          const cacheC = frameCacheCRef.current;
+          const cachedC = cacheC.get(next);
+          if (cachedC) {
+            rendererCRef.current.uploadVolume(cachedC.normalized, cachedC.dimensions, cachedC.extent);
+          } else {
+            const volC = projectFrameWindow(frms, next, WINDOW_SIZE, bm, gd);
+            cacheC.set(next, volC);
+            rendererCRef.current.uploadVolume(volC.normalized, volC.dimensions, volC.extent);
+          }
+        }
+      } catch (err) {
+        console.error('[VolumeViewer] Playback upload error:', err);
       }
 
       // Throttle React state sync to ~15fps — avoids re-rendering
       // the entire 1900-line component at 60fps during playback.
-      if (frameCounter % 4 === 0 || next >= framesRef.current!.length - 1) {
+      if (frameCounter % 4 === 0 || next >= frms.length - 1) {
         setCurrentFrame(next);
       }
+
+      rafId = requestAnimationFrame(tick);
     };
 
     rafId = requestAnimationFrame(tick);

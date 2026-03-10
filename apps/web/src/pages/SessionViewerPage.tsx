@@ -19,6 +19,7 @@ import type { SessionManifestEntry, VolumeSnapshot } from '@echos/core';
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
+import { ViewerErrorBoundary } from '../components/ErrorBoundary.js';
 import { loadVolume as loadVolumeFromIDB } from '../store/session-db.js';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -255,22 +256,24 @@ export default function SessionViewerPage() {
       </div>
 
       {/* Volume viewer — identical component as ScanPage */}
-      <VolumeViewer
-        volumeData={instrumentData}
-        dimensions={instrumentDims}
-        extent={instrumentExtent}
-        spatialData={spatialData}
-        spatialDimensions={spatialDims}
-        spatialExtent={spatialExtent}
-        gpxTrack={gpxTrackObj}
-        videoFileName={entry?.videoFileName ?? entry?.name}
-        gpxFileName={entry?.gpxFileName}
-        beam={entry?.beam}
-        grid={entry ? { resX: entry.gridDimensions[0], resY: entry.gridDimensions[1], resZ: entry.gridDimensions[2] } : undefined}
-        videoDurationS={session ? session.durationS : undefined}
-        onNewScan={() => navigate('/scan')}
-        onClose={() => navigate('/')}
-      />
+      <ViewerErrorBoundary onReset={() => navigate('/')}>
+        <VolumeViewer
+          volumeData={instrumentData}
+          dimensions={instrumentDims}
+          extent={instrumentExtent}
+          spatialData={spatialData}
+          spatialDimensions={spatialDims}
+          spatialExtent={spatialExtent}
+          gpxTrack={gpxTrackObj}
+          videoFileName={entry?.videoFileName ?? entry?.name}
+          gpxFileName={entry?.gpxFileName}
+          beam={entry?.beam}
+          grid={entry ? { resX: entry.gridDimensions[0], resY: entry.gridDimensions[1], resZ: entry.gridDimensions[2] } : undefined}
+          videoDurationS={session ? session.durationS : undefined}
+          onNewScan={() => navigate('/scan')}
+          onClose={() => navigate('/')}
+        />
+      </ViewerErrorBoundary>
     </div>
   );
 }
