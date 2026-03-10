@@ -18,7 +18,7 @@ import type {
   CropRect,
   SessionManifestEntry,
 } from '@echos/core';
-import { serializeVolume, projectFrameWindow } from '@echos/core';
+import { serializeVolume, serializeVolumeV1, projectFrameWindow } from '@echos/core';
 import { saveSession, saveVolume, findDuplicate } from './session-db.js';
 
 // ─── Build spatial (stacked-frame) volume for Mode B + orthogonal slices ────
@@ -44,91 +44,6 @@ function buildSpatialVolumeFromFrames(
   }
   const aspect = dimX / dimZ;
   return { data, dimensions: [dimX, dimY, dimZ], extent: [aspect, 0.5, 1] };
-}
-
-/**
- * Downsample a volume to target dimensions using trilinear interpolation.
- * Accepts either a single uniform max or per-axis max [maxX, maxY, maxZ].
- * Per-axis mode is essential for spatial volumes where the frame-count axis (Y)
- * is much larger than the pixel axes (X, Z) — uniform scaling would crush X/Z.
- */
-function downsampleVolume(
-  data: Float32Array,
-  dims: [number, number, number],
-  extent: [number, number, number],
-  targetMax: number | [number, number, number],
-): { data: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
-  const [sX, sY, sZ] = dims;
-
-  let tX: number, tY: number, tZ: number;
-
-  if (Array.isArray(targetMax)) {
-    // Per-axis targets: cap each axis independently
-    const [maxX, maxY, maxZ] = targetMax;
-    tX = sX <= maxX ? sX : maxX;
-    tY = sY <= maxY ? sY : maxY;
-    tZ = sZ <= maxZ ? sZ : maxZ;
-  } else {
-    // Uniform: scale so largest dim = targetMax
-    if (sX <= targetMax && sY <= targetMax && sZ <= targetMax) {
-      return { data, dimensions: dims, extent };
-    }
-    const maxDim = Math.max(sX, sY, sZ);
-    const scale = targetMax / maxDim;
-    tX = Math.max(1, Math.round(sX * scale));
-    tY = Math.max(1, Math.round(sY * scale));
-    tZ = Math.max(1, Math.round(sZ * scale));
-  }
-
-  // If no change needed
-  if (tX === sX && tY === sY && tZ === sZ) {
-    return { data, dimensions: dims, extent };
-  }
-
-  const out = new Float32Array(tX * tY * tZ);
-  const tStrideZ = tY * tX;
-
-  for (let tz = 0; tz < tZ; tz++) {
-    const sz = (tz / (tZ - 1 || 1)) * (sZ - 1);
-    const sz0 = Math.floor(sz);
-    const sz1 = Math.min(sz0 + 1, sZ - 1);
-    const fz = sz - sz0;
-    for (let ty = 0; ty < tY; ty++) {
-      const sy = (ty / (tY - 1 || 1)) * (sY - 1);
-      const sy0 = Math.floor(sy);
-      const sy1 = Math.min(sy0 + 1, sY - 1);
-      const fy = sy - sy0;
-      for (let tx = 0; tx < tX; tx++) {
-        const sx = (tx / (tX - 1 || 1)) * (sX - 1);
-        const sx0 = Math.floor(sx);
-        const sx1 = Math.min(sx0 + 1, sX - 1);
-        const fx = sx - sx0;
-
-        // Trilinear interpolation
-        const sStrideZ = sY * sX;
-        const c000 = data[sz0 * sStrideZ + sy0 * sX + sx0];
-        const c100 = data[sz0 * sStrideZ + sy0 * sX + sx1];
-        const c010 = data[sz0 * sStrideZ + sy1 * sX + sx0];
-        const c110 = data[sz0 * sStrideZ + sy1 * sX + sx1];
-        const c001 = data[sz1 * sStrideZ + sy0 * sX + sx0];
-        const c101 = data[sz1 * sStrideZ + sy0 * sX + sx1];
-        const c011 = data[sz1 * sStrideZ + sy1 * sX + sx0];
-        const c111 = data[sz1 * sStrideZ + sy1 * sX + sx1];
-
-        const c00 = c000 * (1 - fx) + c100 * fx;
-        const c10 = c010 * (1 - fx) + c110 * fx;
-        const c01 = c001 * (1 - fx) + c101 * fx;
-        const c11 = c011 * (1 - fx) + c111 * fx;
-        const c0 = c00 * (1 - fy) + c10 * fy;
-        const c1 = c01 * (1 - fy) + c11 * fy;
-        const val = c0 * (1 - fz) + c1 * fz;
-
-        out[tz * tStrideZ + ty * tX + tx] = val;
-      }
-    }
-  }
-
-  return { data: out, dimensions: [tX, tY, tZ], extent };
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -227,19 +142,18 @@ export function reset() {
 /**
  * Publish session to the repo via the Vite dev server API.
  * Writes .echos-vol + GPX + updates manifest.json in public/sessions/.
+ *
+ * V2: Uses compressed format (Uint16 + deflate). NO downsampling.
+ * Full-resolution volumes are now small enough for git thanks to compression.
  */
 export async function publishToRepo(): Promise<void> {
   const r = state.result;
   if (!r) throw new Error('No pipeline result to publish');
 
-  // Build spatial volume from frames — downsample to [128, 256, 128] like IDB
-  // to keep file size manageable for git/static hosting (~30 MB vs 1.8 GB).
-  // The session page reconstructs frames from this volume; downsampled frames
-  // are visually equivalent for the volume renderer.
-  const spatialRaw = buildSpatialVolumeFromFrames(r.instrumentFrames);
-  const spatialVol = spatialRaw
-    ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
-    : null;
+  // Build spatial volume from frames — FULL RESOLUTION, no downsampling.
+  // V2 compression (Uint16 + deflate) reduces size ~5-10x, making
+  // full-res volumes manageable for git/static hosting.
+  const spatialVol = buildSpatialVolumeFromFrames(r.instrumentFrames);
 
   // Build classic cone-projected volume snapshot at middle frame (for Mode C on session page)
   const WINDOW_SIZE = 12;
@@ -267,7 +181,7 @@ export async function publishToRepo(): Promise<void> {
     },
   };
 
-  // Serialize volumes to binary
+  // Serialize volumes to compressed V2 binary (Uint16 + deflate)
   const volumeBuffer = serializeVolume({
     data: r.volumeData,
     dimensions: r.volumeDims,
@@ -532,7 +446,9 @@ export async function runPipeline(opts: {
   state.status = 'ready';
   notify();
 
-  // Auto-save to IndexedDB for navigation safety (local only, not shared)
+  // Auto-save to IndexedDB for navigation safety (local only, not shared).
+  // IDB uses V1 (uncompressed) since browser storage has no size constraint
+  // and V1 is faster to serialize/deserialize (no compression overhead).
   try {
     const duplicate = await findDuplicate(pipelineResult.videoFileName, pipelineResult.gpxFileName);
     if (!duplicate) {
@@ -561,16 +477,14 @@ export async function runPipeline(opts: {
         extent,
       });
 
-      // Build and save spatial volume — per-axis downsampling (X/Z: 128, Y: 256)
+      // Build spatial volume — FULL RESOLUTION, no downsampling.
+      // IDB has no size constraint so we keep exact frame data.
       const spatialRaw = buildSpatialVolumeFromFrames(preprocessedFrames);
-      const spatialVol = spatialRaw
-        ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
-        : null;
-      if (spatialVol) {
+      if (spatialRaw) {
         await saveVolume(sessionId, 'spatial', {
-          data: spatialVol.data,
-          dimensions: spatialVol.dimensions,
-          extent: spatialVol.extent,
+          data: spatialRaw.data,
+          dimensions: spatialRaw.dimensions,
+          extent: spatialRaw.extent,
         });
         manifest.files.volumeSpatial = 'volume-spatial.echos-vol';
       }

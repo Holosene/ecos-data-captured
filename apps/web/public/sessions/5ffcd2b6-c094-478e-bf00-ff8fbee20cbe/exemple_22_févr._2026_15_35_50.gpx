@@ -1,0 +1,174 @@
+<?xml version='1.0' encoding='UTF-8' standalone='yes' ?>
+<gpx xmlns="http://www.topografix.com/GPX/1/1" xmlns:geotracker="http://ilyabogdanovich.com/gpx/extensions/geotracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd" version="1.1" creator="Enregistré par Geo Tracker pour Android de Ilya Bogdanovich">
+  <metadata>
+    <name>22 févr. 2026 15:35:50</name>
+    <author>
+      <name>Enregistré par Geo Tracker pour Android de Ilya Bogdanovich</name>
+      <link href="https://play.google.com/store/apps/details?id=com.ilyabogdanovich.geotracker" />
+    </author>
+    <link href="https://play.google.com/store/apps/details?id=com.ilyabogdanovich.geotracker" />
+    <time>2026-02-22T14:35:50Z</time>
+  </metadata>
+  <trk>
+    <name>22 févr. 2026 15:35:50</name>
+    <src>Enregistré par Geo Tracker pour Android de Ilya Bogdanovich</src>
+    <link href="https://play.google.com/store/apps/details?id=com.ilyabogdanovich.geotracker" />
+    <extensions>
+      <geotracker:meta>
+        <geotracker:length>22.17</geotracker:length>
+        <geotracker:duration>356595</geotracker:duration>
+        <geotracker:creationtime>2026-02-22T14:35:50Z</geotracker:creationtime>
+        <geotracker:activity>0</geotracker:activity>
+      </geotracker:meta>
+    </extensions>
+    <trkseg>
+      <trkpt lat="45.40374863" lon="5.11702573">
+        <ele>465.28</ele>
+        <time>2026-02-22T14:37:34Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40375768" lon="5.11702412">
+        <ele>465.85</ele>
+        <time>2026-02-22T14:37:49Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.21" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40376683" lon="5.11701935">
+        <ele>466.05</ele>
+        <time>2026-02-22T14:37:54Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.23" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40377691" lon="5.11702406">
+        <ele>466.28</ele>
+        <time>2026-02-22T14:38:10Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.18" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.4037819" lon="5.11703803">
+        <ele>465.89</ele>
+        <time>2026-02-22T14:38:17Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.21" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40378809" lon="5.11704983">
+        <ele>465.51</ele>
+        <time>2026-02-22T14:38:21Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.23" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40379496" lon="5.11705927">
+        <ele>465.3</ele>
+        <time>2026-02-22T14:38:26Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.18" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40380417" lon="5.11706486">
+        <ele>465.34</ele>
+        <time>2026-02-22T14:38:31Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.19" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40381258" lon="5.11707079">
+        <ele>465.45</ele>
+        <time>2026-02-22T14:38:36Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.15" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40382035" lon="5.1170792">
+        <ele>465.46</ele>
+        <time>2026-02-22T14:38:45Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40382936" lon="5.11708105">
+        <ele>465.51</ele>
+        <time>2026-02-22T14:39:04Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40383765" lon="5.11708628">
+        <ele>465.72</ele>
+        <time>2026-02-22T14:39:34Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40384532" lon="5.11709629">
+        <ele>465.77</ele>
+        <time>2026-02-22T14:39:42Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40385175" lon="5.11710543">
+        <ele>465.92</ele>
+        <time>2026-02-22T14:40:03Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.4038611" lon="5.11710571">
+        <ele>465.52</ele>
+        <time>2026-02-22T14:41:11Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40387078" lon="5.11709781">
+        <ele>465.41</ele>
+        <time>2026-02-22T14:41:14Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.17" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40388124" lon="5.11709294">
+        <ele>465.2</ele>
+        <time>2026-02-22T14:41:18Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.15" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40389048" lon="5.11708978">
+        <ele>464.91</ele>
+        <time>2026-02-22T14:41:24Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40390073" lon="5.11709204">
+        <ele>464.72</ele>
+        <time>2026-02-22T14:41:29Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.4039114" lon="5.11709266">
+        <ele>464.74</ele>
+        <time>2026-02-22T14:41:33Z</time>
+        <extensions>
+          <geotracker:meta c="2.57" s="0.22" />
+        </extensions>
+      </trkpt>
+      <trkpt lat="45.40392115" lon="5.1170964">
+        <ele>464.85</ele>
+        <time>2026-02-22T14:41:38Z</time>
+        <extensions>
+          <geotracker:meta s="0" />
+        </extensions>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>
