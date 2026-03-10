@@ -48,26 +48,42 @@ function buildSpatialVolumeFromFrames(
 
 /**
  * Downsample a volume to target dimensions using trilinear interpolation.
- * Keeps file sizes manageable (e.g. 128³ ≈ 8 MB instead of 1.9 GB).
+ * Accepts either a single uniform max or per-axis max [maxX, maxY, maxZ].
+ * Per-axis mode is essential for spatial volumes where the frame-count axis (Y)
+ * is much larger than the pixel axes (X, Z) — uniform scaling would crush X/Z.
  */
 function downsampleVolume(
   data: Float32Array,
   dims: [number, number, number],
   extent: [number, number, number],
-  targetMax: number,
+  targetMax: number | [number, number, number],
 ): { data: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } {
   const [sX, sY, sZ] = dims;
-  // If already small enough, return as-is
-  if (sX <= targetMax && sY <= targetMax && sZ <= targetMax) {
-    return { data, dimensions: dims, extent };
+
+  let tX: number, tY: number, tZ: number;
+
+  if (Array.isArray(targetMax)) {
+    // Per-axis targets: cap each axis independently
+    const [maxX, maxY, maxZ] = targetMax;
+    tX = sX <= maxX ? sX : maxX;
+    tY = sY <= maxY ? sY : maxY;
+    tZ = sZ <= maxZ ? sZ : maxZ;
+  } else {
+    // Uniform: scale so largest dim = targetMax
+    if (sX <= targetMax && sY <= targetMax && sZ <= targetMax) {
+      return { data, dimensions: dims, extent };
+    }
+    const maxDim = Math.max(sX, sY, sZ);
+    const scale = targetMax / maxDim;
+    tX = Math.max(1, Math.round(sX * scale));
+    tY = Math.max(1, Math.round(sY * scale));
+    tZ = Math.max(1, Math.round(sZ * scale));
   }
 
-  // Scale uniformly so the largest dim = targetMax
-  const maxDim = Math.max(sX, sY, sZ);
-  const scale = targetMax / maxDim;
-  const tX = Math.max(1, Math.round(sX * scale));
-  const tY = Math.max(1, Math.round(sY * scale));
-  const tZ = Math.max(1, Math.round(sZ * scale));
+  // If no change needed
+  if (tX === sX && tY === sY && tZ === sZ) {
+    return { data, dimensions: dims, extent };
+  }
 
   const out = new Float32Array(tX * tY * tZ);
   const tStrideZ = tY * tX;
@@ -216,11 +232,12 @@ export async function publishToRepo(): Promise<void> {
   const r = state.result;
   if (!r) throw new Error('No pipeline result to publish');
 
-  // Build spatial volume from frames, downsampled to max 256 per axis (~16 MB)
-  // Higher resolution than 128 gives better orthogonal slices on session page
+  // Build spatial volume from frames — per-axis downsampling to preserve frame resolution.
+  // X/Z (pixel axes) capped at 128; Y (frame axis) capped at 256.
+  // This avoids crushing X/Z to tiny values when frame count is large (~3000).
   const spatialRaw = buildSpatialVolumeFromFrames(r.instrumentFrames);
   const spatialVol = spatialRaw
-    ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, 256)
+    ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
     : null;
 
   // Build classic cone-projected volume snapshot at middle frame (for Mode C on session page)
@@ -543,10 +560,10 @@ export async function runPipeline(opts: {
         extent,
       });
 
-      // Build and save spatial volume (stacked frames, downsampled to 256 max for better slices)
+      // Build and save spatial volume — per-axis downsampling (X/Z: 128, Y: 256)
       const spatialRaw = buildSpatialVolumeFromFrames(preprocessedFrames);
       const spatialVol = spatialRaw
-        ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, 256)
+        ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
         : null;
       if (spatialVol) {
         await saveVolume(sessionId, 'spatial', {
