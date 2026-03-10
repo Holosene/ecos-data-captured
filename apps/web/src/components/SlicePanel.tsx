@@ -219,14 +219,12 @@ function SliceView({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        maxHeight: isPortrait ? '500px' : '300px',
         minHeight: '120px',
       }}>
         <canvas
           ref={canvasRef}
           style={{
             maxWidth: '100%',
-            maxHeight: isPortrait ? '500px' : '300px',
             imageRendering: 'pixelated',
             objectFit: 'contain',
             display: 'block',
@@ -326,13 +324,6 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         dimensions={dimensions}
         axis="y"
         label={t('v2.slices.crossSection')}
-        preset={preset}
-      />
-      <SliceView
-        volumeData={volumeData}
-        dimensions={dimensions}
-        axis="z"
-        label={t('v2.slices.planView')}
         preset={preset}
       />
       <SliceView

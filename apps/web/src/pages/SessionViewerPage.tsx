@@ -315,6 +315,12 @@ export default function SessionViewerPage() {
           volumeData={instrumentData}
           dimensions={instrumentDims}
           extent={instrumentExtent}
+          spatialData={spatialData}
+          spatialDimensions={spatialDims}
+          spatialExtent={spatialExtent}
+          classicData={classicData}
+          classicDimensions={classicDims}
+          classicExtent={classicExtent}
           frames={reconstructedFrames}
           beam={entry?.beam}
           grid={entry ? { resX: entry.gridDimensions[0], resY: entry.gridDimensions[1], resZ: entry.gridDimensions[2] } : undefined}

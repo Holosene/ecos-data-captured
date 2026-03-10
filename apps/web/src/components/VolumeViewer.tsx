@@ -786,7 +786,7 @@ export function VolumeViewer({
   const hasSpatialScrub = spatialFrameCount > WINDOW_SIZE;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(20);
+  const [playSpeed, setPlaySpeed] = useState(5);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
@@ -1376,7 +1376,7 @@ export function VolumeViewer({
                 {/* Invisible spacer — matches play button + gap height for equal section spacing */}
                 <div style={{ height: `${sliderPlayGap + 56}px` }} />
               </>
-            ) : (hasFrames || (mode === 'spatial' && hasSpatialScrub)) ? (
+            ) : (hasFrames || hasSpatialScrub) ? (
               /* Temporal slider + play: frames OR spatial scrub */
               <>
                 <div style={{
@@ -1731,7 +1731,7 @@ export function VolumeViewer({
         />
 
         {/* Slider + play controls — show when functional (frames, spatial scrub, or instrument) */}
-        {(mode === 'instrument' || hasFrames || (mode === 'spatial' && hasSpatialScrub)) && (
+        {(mode === 'instrument' || hasFrames || hasSpatialScrub) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <div style={{ flex: 1, padding: '6px 12px', background: colors.surface, borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center' }}>
               <input
@@ -1747,7 +1747,7 @@ export function VolumeViewer({
                 style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '4px' }}
               />
             </div>
-            {(hasFrames || (mode === 'spatial' && hasSpatialScrub)) && (
+            {(hasFrames || hasSpatialScrub) && (
               <button
                 onClick={() => { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); }}
                 style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
