@@ -28,8 +28,7 @@ import { ExportPanel } from './ExportPanel.js';
 import { useTranslation } from '../i18n/index.js';
 import { useTheme } from '../theme/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import type L_Type from 'leaflet';
 
 interface VolumeViewerProps {
   /** Mode A (Instrument) data — always present */
@@ -53,6 +52,7 @@ interface VolumeViewerProps {
   onSettingsChange?: (settings: RendererSettings) => void;
   onReconfigure?: () => void;
   onNewScan?: () => void;
+  onClose?: () => void;
 }
 
 const WINDOW_SIZE = 12;
@@ -63,21 +63,45 @@ function buildSliceVolumeFromFrames(
 ): { data: Float32Array; dimensions: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
   const dimX = frameList[0].width;
-  const dimY = frameList.length;
   const dimZ = frameList[0].height;
   if (dimX === 0 || dimZ === 0) return null;
-  const data = new Float32Array(dimX * dimY * dimZ);
-  const strideZ = dimY * dimX;
-  for (let yi = 0; yi < dimY; yi++) {
-    const intensity = frameList[yi].intensity;
-    const yiOffset = yi * dimX;
-    for (let zi = 0; zi < dimZ; zi++) {
-      const srcOffset = zi * dimX;
-      const dstOffset = zi * strideZ + yiOffset;
-      data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
+
+  // Cap frame count to avoid OOM — 128 frames × 256×256 ≈ 32MB which is safe.
+  // For larger sets, subsample evenly to preserve temporal coverage.
+  const MAX_SLICE_FRAMES = 128;
+  let usedFrames = frameList;
+  if (frameList.length > MAX_SLICE_FRAMES) {
+    const step = frameList.length / MAX_SLICE_FRAMES;
+    usedFrames = [];
+    for (let i = 0; i < MAX_SLICE_FRAMES; i++) {
+      usedFrames.push(frameList[Math.floor(i * step)]);
     }
   }
-  return { data, dimensions: [dimX, dimY, dimZ] };
+
+  const dimY = usedFrames.length;
+  const totalSize = dimX * dimY * dimZ;
+
+  // Guard against excessively large allocations (>256MB)
+  if (totalSize > 64_000_000) return null;
+
+  try {
+    const data = new Float32Array(totalSize);
+    const strideZ = dimY * dimX;
+    for (let yi = 0; yi < dimY; yi++) {
+      const intensity = usedFrames[yi].intensity;
+      const yiOffset = yi * dimX;
+      for (let zi = 0; zi < dimZ; zi++) {
+        const srcOffset = zi * dimX;
+        const dstOffset = zi * strideZ + yiOffset;
+        data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
+      }
+    }
+    return { data, dimensions: [dimX, dimY, dimZ] };
+  } catch {
+    // OOM or other allocation failure — skip slice volume
+    console.warn('[VolumeViewer] Failed to build slice volume — too many frames');
+    return null;
+  }
 }
 
 // ─── Rendu B: windowed volume for temporal playback ────────────────────────
@@ -187,66 +211,78 @@ const CAMERA_PRESETS: { key: CameraPreset; labelKey: string; Icon: React.FC }[] 
 // ─── Leaflet Map component ─────────────────────────────────────────────────
 function GpsMap({ points, theme }: { points?: Array<{ lat: number; lon: number }>; theme: string }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<L.Map | null>(null);
+  const mapInstanceRef = useRef<L_Type.Map | null>(null);
+  const leafletRef = useRef<typeof L_Type | null>(null);
 
   const hasPoints = points && points.length >= 2;
 
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
+    let cancelled = false;
 
-    const tileUrl = theme === 'light'
-      ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+    // Lazy-load Leaflet only when the map is actually rendered
+    // (leaflet CSS is statically imported by MapView)
+    (async () => {
+      const L = await import('leaflet').then(m => m.default);
+      if (cancelled) return;
+      leafletRef.current = L;
 
-    const map = L.map(mapContainerRef.current, {
-      zoomControl: false,
-      attributionControl: false,
-      scrollWheelZoom: false,
-    });
+      const tileUrl = theme === 'light'
+        ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
-    L.control.zoom({ position: 'topright' }).addTo(map);
-    L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
+      const map = L.map(mapContainerRef.current!, {
+        zoomControl: false,
+        attributionControl: false,
+        scrollWheelZoom: false,
+      });
 
-    if (hasPoints) {
-      const latLngs = points.map((p) => L.latLng(p.lat, p.lon));
-      const polyline = L.polyline(latLngs, {
-        color: colors.accent,
-        weight: 3,
-        opacity: 0.8,
-        smoothFactor: 1.5,
-      }).addTo(map);
+      L.control.zoom({ position: 'topright' }).addTo(map);
+      L.tileLayer(tileUrl, { maxZoom: 19 }).addTo(map);
 
-      L.circleMarker(latLngs[0], {
-        radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
-      }).addTo(map);
+      if (hasPoints) {
+        const latLngs = points!.map((p) => L.latLng(p.lat, p.lon));
+        const polyline = L.polyline(latLngs, {
+          color: colors.accent,
+          weight: 3,
+          opacity: 0.8,
+          smoothFactor: 1.5,
+        }).addTo(map);
 
-      L.circleMarker(latLngs[latLngs.length - 1], {
-        radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
-      }).addTo(map);
+        L.circleMarker(latLngs[0], {
+          radius: 5, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1, weight: 0,
+        }).addTo(map);
 
-      map.fitBounds(polyline.getBounds(), { padding: [20, 20], maxZoom: 19 });
-    } else {
-      // Neutral view — world overview, no markers
-      map.setView([20, 0], 2);
-    }
+        L.circleMarker(latLngs[latLngs.length - 1], {
+          radius: 5, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 1, weight: 0,
+        }).addTo(map);
 
-    map.on('click', () => map.scrollWheelZoom.enable());
-    map.on('mouseout', () => map.scrollWheelZoom.disable());
+        map.fitBounds(polyline.getBounds(), { padding: [20, 20], maxZoom: 19 });
+      } else {
+        map.setView([20, 0], 2);
+      }
 
-    mapInstanceRef.current = map;
-    const sizeTimer = setTimeout(() => map.invalidateSize(), 200);
+      map.on('click', () => map.scrollWheelZoom.enable());
+      map.on('mouseout', () => map.scrollWheelZoom.disable());
+
+      mapInstanceRef.current = map;
+      setTimeout(() => map.invalidateSize(), 200);
+    })();
 
     return () => {
-      clearTimeout(sizeTimer);
-      map.remove();
-      mapInstanceRef.current = null;
+      cancelled = true;
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
     };
   }, [points, theme, hasPoints]);
 
   // Swap tiles on theme change
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map) return;
+    const L = leafletRef.current;
+    if (!map || !L) return;
     map.eachLayer((layer) => {
       if (layer instanceof L.TileLayer) layer.remove();
     });
@@ -361,6 +397,7 @@ export function VolumeViewer({
   onSettingsChange,
   onReconfigure,
   onNewScan,
+  onClose,
 }: VolumeViewerProps) {
   // Mobile detection — responsive to resize
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
@@ -375,6 +412,50 @@ export function VolumeViewer({
   const containerARef = useRef<HTMLDivElement>(null);
   const containerBRef = useRef<HTMLDivElement>(null);
   const containerCRef = useRef<HTMLDivElement>(null);
+
+  // ─── Ambient Music ──────────────────────────────────────────────────────
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [musicStarted, setMusicStarted] = useState(false);
+
+  useEffect(() => {
+    const basePath = import.meta.env.BASE_URL ?? '/ecos-data-captured/';
+    const audio = new Audio(`${basePath}audio/ambient.mp3`);
+    audio.loop = true;
+    // PC gets 20% more volume (0.36 vs 0.30 on mobile)
+    const baseVolume = 0.30;
+    const pcBoost = 1.2;
+    audio.volume = isMobile ? baseVolume : baseVolume * pcBoost;
+    // Preload to avoid cutting off on PC
+    audio.preload = 'auto';
+    audioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      audioRef.current = null;
+    };
+  }, [isMobile]);
+
+  // Start music on first user interaction (required by autoplay policies)
+  useEffect(() => {
+    if (musicStarted) return;
+    const startMusic = () => {
+      if (audioRef.current && !musicStarted) {
+        audioRef.current.play().catch(() => {});
+        setMusicStarted(true);
+      }
+    };
+    document.addEventListener('pointerdown', startMusic, { once: true });
+    document.addEventListener('keydown', startMusic, { once: true });
+    // Also try immediate play (works on mobile more often)
+    if (audioRef.current) {
+      audioRef.current.play().then(() => setMusicStarted(true)).catch(() => {});
+    }
+    return () => {
+      document.removeEventListener('pointerdown', startMusic);
+      document.removeEventListener('keydown', startMusic);
+    };
+  }, [musicStarted]);
 
   // Renderers
   const rendererARef = useRef<VolumeRenderer | null>(null);
@@ -703,39 +784,54 @@ export function VolumeViewer({
 
   const fullSliceVolume = useMemo(() => {
     if (!frames || frames.length === 0) return null;
-    return buildSliceVolumeFromFrames(frames);
+    try {
+      return buildSliceVolumeFromFrames(frames);
+    } catch {
+      console.warn('[VolumeViewer] Slice volume build failed');
+      return null;
+    }
   }, [frames]);
 
   // ─── Initialize 3 renderers — strict defaults, no localStorage ──────────
   useEffect(() => {
     const bgColor = theme === 'light' ? '#f5f5f7' : '#111111';
 
-    // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
-    // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
-    if (containerARef.current && !rendererARef.current) {
-      rendererARef.current = new VolumeRenderer(
-        containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor },
-      );
-      rendererARef.current.setGridAxesVisible(false);
-      rendererARef.current.setScrollZoom(false);
-    }
+    // Mobile speed multiplier — reduced max speed on mobile
+    const mobileSpeedMul = isMobile ? 0.15 : 1;
 
-    // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
-    if (containerBRef.current && !rendererBRef.current && (hasFrames || hasSpatialData)) {
-      rendererBRef.current = new VolumeRenderer(
-        containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor },
-      );
-      rendererBRef.current.setGridAxesVisible(false);
-      rendererBRef.current.setScrollZoom(false);
-    }
+    try {
+      // Mode A — VolumeRenderer + DEFAULT_CALIBRATION
+      // DO NOT call setCameraPreset after construction — constructor already applies orbit from calibration
+      if (containerARef.current && !rendererARef.current) {
+        rendererARef.current = new VolumeRenderer(
+          containerARef.current, modeSettings.instrument, { ...DEFAULT_CALIBRATION, bgColor },
+        );
+        rendererARef.current.setGridAxesVisible(false);
+        rendererARef.current.setScrollZoom(false);
+        if (isMobile) rendererARef.current.setRotateSpeed(0.3 * mobileSpeedMul);
+      }
 
-    // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
-    if (containerCRef.current && !rendererCRef.current && (hasFrames || hasVolumeData)) {
-      rendererCRef.current = new VolumeRendererClassic(
-        containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor },
-      );
-      rendererCRef.current.setGridAxesVisible(false);
-      rendererCRef.current.setScrollZoom(false);
+      // Mode B — VolumeRenderer + DEFAULT_CALIBRATION_B
+      if (containerBRef.current && !rendererBRef.current && (hasFrames || hasSpatialData)) {
+        rendererBRef.current = new VolumeRenderer(
+          containerBRef.current, modeSettings.spatial, { ...DEFAULT_CALIBRATION_B, bgColor },
+        );
+        rendererBRef.current.setGridAxesVisible(false);
+        rendererBRef.current.setScrollZoom(false);
+        if (isMobile) rendererBRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
+      }
+
+      // Mode C — VolumeRendererClassic + DEFAULT_CALIBRATION_C
+      if (containerCRef.current && !rendererCRef.current && (hasFrames || hasVolumeData)) {
+        rendererCRef.current = new VolumeRendererClassic(
+          containerCRef.current, modeSettings.classic, { ...DEFAULT_CALIBRATION_C, bgColor },
+        );
+        rendererCRef.current.setGridAxesVisible(false);
+        rendererCRef.current.setScrollZoom(false);
+        if (isMobile) rendererCRef.current.setRotateSpeed(0.3 * mobileSpeedMul);
+      }
+    } catch (err) {
+      console.error('[VolumeViewer] Failed to create WebGL renderers:', err);
     }
 
     return () => {
@@ -1032,8 +1128,11 @@ export function VolumeViewer({
         }
       }
 
-      // Sync React state every frame for smooth slider
-      setCurrentFrame(next);
+      // Throttle React state sync to ~15fps — avoids re-rendering
+      // the entire 1900-line component at 60fps during playback.
+      if (frameCounter % 4 === 0 || next >= framesRef.current!.length - 1) {
+        setCurrentFrame(next);
+      }
     };
 
     rafId = requestAnimationFrame(tick);
@@ -1192,7 +1291,7 @@ export function VolumeViewer({
                   />
                 </div>
                 {/* Invisible spacer — matches play button + gap height for equal section spacing */}
-                <div style={{ height: `${sliderPlayGap + 52}px` }} />
+                <div style={{ height: `${sliderPlayGap + 56}px` }} />
               </>
             ) : (
               /* Temporal modes: frame slider + play button */
@@ -1238,23 +1337,25 @@ export function VolumeViewer({
                     }
                   }}
                   style={{
-                    width: '52px', height: '52px', borderRadius: '50%',
+                    width: '56px', height: '56px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing && isTemporal ? colors.accentMuted : colors.surface,
                     color: colors.accent,
                     cursor: 'pointer',
-                    fontSize: '18px',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    paddingLeft: playing && isTemporal ? '0' : '2px',
                     transition: 'all 150ms ease',
                   }}
                 >
                   {playing && isTemporal ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
-                  ) : '\u25B6'}
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}>
+                      <path d="M6 4l15 8-15 8V4z" />
+                    </svg>
+                  )}
                 </button>
               </>
             )}
@@ -1566,9 +1667,9 @@ export function VolumeViewer({
           {isTemporal && (
             <button
               onClick={() => { if (isTemporal && hasFrames) { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); } }}
-              style={{ width: '36px', height: '36px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, paddingLeft: playing ? '0' : '2px' }}
+              style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
             >
-              {playing && isTemporal ? (<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : '\u25B6'}
+              {playing && isTemporal ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
             </button>
           )}
         </div>
@@ -1595,7 +1696,7 @@ export function VolumeViewer({
     if (showB) mobileSections.push({ mode: 'spatial', ref: containerBRef, title: t('v2.vol.block' as TranslationKey), subtitle: t('v2.vol.blockDesc' as TranslationKey) });
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '100vw', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', maxWidth: '100vw', overflow: 'hidden', padding: '0 var(--page-gutter)' }}>
         {/* Title */}
         <div style={{ paddingTop: '16px', marginBottom: '12px' }}>
           <h1 style={{ margin: 0, color: colors.text1, fontSize: '20px', fontWeight: 600, marginBottom: '2px' }}>
@@ -1638,21 +1739,41 @@ export function VolumeViewer({
         {/* Volume sections — stacked */}
         {mobileSections.map((s, i) => renderMobileVolumeSection(s.mode, s.ref, s.title, s.subtitle, i))}
 
+        {/* Credits */}
+        <div style={{
+          textAlign: 'center',
+          padding: '24px 16px',
+          color: colors.text3,
+          fontSize: '11px',
+          lineHeight: 1.6,
+        }}>
+        </div>
+
         {/* Bottom actions */}
-        {(onReconfigure || onNewScan) && (
+        {(onReconfigure || onNewScan || onClose) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
-            <button
-              className="echos-action-btn"
-              onClick={() => {
-                const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
-                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
-              }}
-              style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
-            >
-              {t('common.poster' as TranslationKey)}
-            </button>
+            {onClose ? (
+              <button
+                className="echos-action-btn"
+                onClick={onClose}
+                style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.border}`, background: 'transparent', color: colors.text2, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
+              >
+                {t('common.close' as TranslationKey)}
+              </button>
+            ) : (
+              <button
+                className="echos-action-btn"
+                onClick={() => {
+                  const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
+                  const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+                }}
+                style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
+              >
+                {t('common.poster' as TranslationKey)}
+              </button>
+            )}
             {onReconfigure && (
               <button className="echos-action-btn" onClick={onReconfigure} style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}>
                 {t('v2.viewer.reconfigure')}
@@ -1672,7 +1793,7 @@ export function VolumeViewer({
   // ─── DESKTOP LAYOUT (unchanged) ────────────────────────────────────────────
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', padding: '0 var(--content-gutter)' }}>
       {/* ── Title — always at top, full width ───────────── */}
       <div style={{ paddingTop: 'clamp(32px, 5vh, 64px)', marginBottom: '40px' }}>
         <h1 style={{
@@ -1823,41 +1944,66 @@ export function VolumeViewer({
         onCaptureScreenshot={handleCaptureScreenshot}
       />
 
+      {/* Credits */}
+      <div style={{
+        textAlign: 'center',
+        padding: '32px 24px',
+        color: colors.text3,
+        fontSize: '13px',
+        lineHeight: 1.7,
+      }}>
+      </div>
+
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
-      {(onReconfigure || onNewScan) && (
+      {(onReconfigure || onNewScan || onClose) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
-          {/* Poster button — accent outline */}
-          <button
-            className="echos-action-btn"
-            onClick={() => {
-              const sessionData = {
-                timestamp: new Date().toISOString(),
-                gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
-                dimensions,
-                extent,
-                beam,
-                grid,
-                settings: modeSettings,
-              };
-              const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `ecos-session-${Date.now()}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }}
-            style={{
-              padding: '12px 32px', borderRadius: '9999px',
-              border: `1.5px solid ${colors.accent}`,
-              background: 'transparent', color: colors.accent,
-              fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
-              cursor: 'pointer', transition: 'all 150ms ease',
-            }}
-          >
-            {t('common.poster' as TranslationKey)}
-          </button>
+          {onClose ? (
+            <button
+              className="echos-action-btn"
+              onClick={onClose}
+              style={{
+                padding: '12px 32px', borderRadius: '9999px',
+                border: `1.5px solid ${colors.border}`,
+                background: 'transparent', color: colors.text2,
+                fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
+                cursor: 'pointer', transition: 'all 150ms ease',
+              }}
+            >
+              {t('common.close' as TranslationKey)}
+            </button>
+          ) : (
+            <button
+              className="echos-action-btn"
+              onClick={() => {
+                const sessionData = {
+                  timestamp: new Date().toISOString(),
+                  gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
+                  dimensions,
+                  extent,
+                  beam,
+                  grid,
+                  settings: modeSettings,
+                };
+                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ecos-session-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              style={{
+                padding: '12px 32px', borderRadius: '9999px',
+                border: `1.5px solid ${colors.accent}`,
+                background: 'transparent', color: colors.accent,
+                fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
+                cursor: 'pointer', transition: 'all 150ms ease',
+              }}
+            >
+              {t('common.poster' as TranslationKey)}
+            </button>
+          )}
           {onReconfigure && (
             <button
               className="echos-action-btn"
