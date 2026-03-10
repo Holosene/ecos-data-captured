@@ -14,6 +14,5 @@ packages/core/__tests__/**/*.js.map
 packages/core/__tests__/**/*.d.ts
 packages/core/__tests__/**/*.d.ts.map
 
-# Large session binaries (use Git LFS or generate locally)
-apps/web/public/sessions/**/*.echos-vol
+# Large session binaries
 apps/web/public/sessions/**/*.mp4

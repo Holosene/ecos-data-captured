@@ -1205,7 +1205,7 @@ export function VolumeViewer({
 
   const renderVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
-    containerRef: React.RefObject<HTMLDivElement | null>,
+    containerRef: React.RefObject<HTMLDivElement>,
     title: string,
     subtitle: string,
     sectionIndex: number,
@@ -1586,7 +1586,7 @@ export function VolumeViewer({
   // ─── Mobile volume section renderer ──────────────────────────────────────
   const renderMobileVolumeSection = (
     mode: 'instrument' | 'spatial' | 'classic',
-    containerRef: React.RefObject<HTMLDivElement | null>,
+    containerRef: React.RefObject<HTMLDivElement>,
     title: string,
     subtitle: string,
     sectionIndex: number,

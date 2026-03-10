@@ -254,7 +254,7 @@ export function ScanPage() {
     if (enriched.length === 0) return '';
     const maxT = enriched[enriched.length - 1].elapsedS || 1;
     return enriched
-      .map((pt) => {
+      .map((pt: { elapsedS: number; cumulativeDistanceM: number }) => {
         const x = (pt.elapsedS / maxT) * chartWidth;
         const y = chartHeight - (pt.cumulativeDistanceM / (maxDist || 1)) * chartHeight;
         return `${x},${y}`;
@@ -421,7 +421,7 @@ export function ScanPage() {
       const depthResult = autoDetectDepthMax(fullImageData, detected);
       if (depthResult !== null) {
         setDetectedDepth(depthResult);
-        setBeam((b) => ({ ...b, depthMaxM: depthResult }));
+        setBeam((b: typeof beam) => ({ ...b, depthMaxM: depthResult }));
         setDepthSliderIdx(depthToSliderIndex(depthResult));
         setAutoDepth(true);
       }

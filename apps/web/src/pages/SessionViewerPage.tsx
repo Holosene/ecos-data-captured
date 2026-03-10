@@ -89,7 +89,7 @@ export default function SessionViewerPage() {
       if (entry.files.volumeInstrument) {
         fetches.push(
           fetchSessionVolume(basePath, sessionId, entry.files.volumeInstrument)
-            .then((buffer) => {
+            .then((buffer: ArrayBuffer) => {
               const snap = deserializeVolume(buffer);
               setInstrumentData(snap.data);
               setInstrumentDims(snap.dimensions);
@@ -102,7 +102,7 @@ export default function SessionViewerPage() {
       if (entry.files.volumeSpatial) {
         fetches.push(
           fetchSessionVolume(basePath, sessionId, entry.files.volumeSpatial)
-            .then((buffer) => {
+            .then((buffer: ArrayBuffer) => {
               const snap = deserializeVolume(buffer);
               setSpatialData(snap.data);
               setSpatialDims(snap.dimensions);
@@ -168,7 +168,7 @@ export default function SessionViewerPage() {
             <p style={{ color: colors.text2, fontSize: '14px', marginBottom: '16px' }}>
               Chargement du volume pré-généré...
             </p>
-            <ProgressBar progress={progress / 100} />
+            <ProgressBar value={progress / 100} />
           </GlassPanel>
         </div>
       </div>

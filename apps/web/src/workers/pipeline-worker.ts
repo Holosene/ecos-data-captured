@@ -76,7 +76,7 @@ self.onmessage = (e: MessageEvent) => {
       // Mode B + C are computed in real-time from frames in the VolumeViewer.
       self.postMessage({ type: 'stage', stage: 'projecting' });
 
-      const result = buildInstrumentVolume(frames, beam, grid, (current, total) => {
+      const result = buildInstrumentVolume(frames, beam, grid, (current: number, total: number) => {
         self.postMessage({ type: 'projection-progress', current, total });
       });
 
@@ -103,7 +103,7 @@ self.onmessage = (e: MessageEvent) => {
 
       self.postMessage(
         { type: 'complete', normalizedData, dims, extent: ext, frames: frameData },
-        transferables,
+        { transfer: transferables },
       );
     } catch (err) {
       self.postMessage({ type: 'error', message: String(err) });

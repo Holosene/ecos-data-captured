@@ -283,7 +283,7 @@ export function ViewerStep() {
             Volume: {dimX} x {dimY} x {dimZ}
           </span>
           <span style={{ color: colors.text3 }}>
-            Spacing: {volume.metadata.spacing.map((s) => s.toFixed(3)).join(' x ')} m
+            Spacing: {volume.metadata.spacing.map((s: number) => s.toFixed(3)).join(' x ')} m
           </span>
           <span style={{ color: colors.text3 }}>
             Distance: {volume.metadata.totalDistanceM.toFixed(1)} m
@@ -305,7 +305,7 @@ export function ViewerStep() {
           <div style={{ fontSize: '14px', fontWeight: 600, color: colors.warning, marginBottom: '10px' }}>
             {t('viewer.warnings')}
           </div>
-          {qcReport.warnings.map((w, i) => (
+          {qcReport.warnings.map((w: string, i: number) => (
             <div key={i} style={{ fontSize: '13px', color: colors.text2, marginBottom: '4px' }}>
               - {w}
             </div>

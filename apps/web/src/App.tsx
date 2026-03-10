@@ -216,11 +216,11 @@ export function App() {
 
     // 1. Load static manifest
     const staticPromise = fetchSessionManifest(basePath)
-      .then(async (entries) => {
+      .then(async (entries: SessionManifestEntry[]) => {
         const sessions = entries.map(manifestEntryToSession);
         const gpxTracks = new Map<string, Array<{ lat: number; lon: number }>>();
         await Promise.allSettled(
-          entries.map(async (entry) => {
+          entries.map(async (entry: SessionManifestEntry) => {
             try {
               const track = await fetchSessionGpxTrack(basePath, entry.id, entry.files.gpx, parseGpx);
               gpxTracks.set(entry.id, track);
@@ -241,7 +241,7 @@ export function App() {
     Promise.all([staticPromise, idbPromise]).then(([staticData, idbSessions]) => {
       const allEntries = [...staticData.entries];
       const allSessions = [...staticData.sessions];
-      const allTracks = new Map(staticData.gpxTracks);
+      const allTracks = new Map<string, Array<{ lat: number; lon: number }>>(staticData.gpxTracks);
 
       // Merge IndexedDB sessions (avoid duplicates with static)
       for (const stored of idbSessions) {

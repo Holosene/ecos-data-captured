@@ -371,6 +371,16 @@ export const translations = {
     'common.themeDark': 'Mode sombre',
     'common.poster': 'Poster',
     'common.close': 'Fermer',
+    'scanSelect.title': 'Choisir le mode de scan',
+    'scanSelect.desc': 'Sélectionnez le moteur de traitement pour votre acquisition.',
+    'scanSelect.current': 'actuel',
+    'scanSelect.classic': 'classique',
+    'scanSelect.v2.title': 'Pipeline V2',
+    'scanSelect.v2.desc': 'Moteur moderne avec prétraitement avancé et projection volumétrique optimisée.',
+    'scanSelect.v2.cta': 'Lancer V2',
+    'scanSelect.v1.title': 'Pipeline classique',
+    'scanSelect.v1.desc': 'Moteur original avec calibration manuelle et construction de volume pas-à-pas.',
+    'scanSelect.v1.cta': 'Lancer V1',
   },
 
   en: {
@@ -743,6 +753,16 @@ export const translations = {
     'common.themeDark': 'Dark mode',
     'common.poster': 'Poster',
     'common.close': 'Close',
+    'scanSelect.title': 'Choose scan mode',
+    'scanSelect.desc': 'Select the processing engine for your acquisition.',
+    'scanSelect.current': 'current',
+    'scanSelect.classic': 'classic',
+    'scanSelect.v2.title': 'Pipeline V2',
+    'scanSelect.v2.desc': 'Modern engine with advanced preprocessing and optimized volumetric projection.',
+    'scanSelect.v2.cta': 'Launch V2',
+    'scanSelect.v1.title': 'Classic pipeline',
+    'scanSelect.v1.desc': 'Original engine with manual calibration and step-by-step volume building.',
+    'scanSelect.v1.cta': 'Launch V1',
   },
 } as const;
 

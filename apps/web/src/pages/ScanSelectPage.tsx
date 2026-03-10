@@ -62,7 +62,7 @@ export function ScanSelectPage() {
           <p style={{ color: colors.text2, fontSize: '13px', lineHeight: 1.6, marginBottom: '20px' }}>
             {t('scanSelect.v2.desc')}
           </p>
-          <Button variant="primary" size="lg" style={{ width: '100%' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate('/scan/v2'); }}>
+          <Button variant="primary" size="lg" style={{ width: '100%' }} onClick={() => navigate('/scan/v2')}>
             {t('scanSelect.v2.cta')}
           </Button>
         </HoverCard>
@@ -79,7 +79,7 @@ export function ScanSelectPage() {
           <p style={{ color: colors.text2, fontSize: '13px', lineHeight: 1.6, marginBottom: '20px' }}>
             {t('scanSelect.v1.desc')}
           </p>
-          <Button variant="secondary" size="lg" style={{ width: '100%' }} onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate('/scan/classic'); }}>
+          <Button variant="secondary" size="lg" style={{ width: '100%' }} onClick={() => navigate('/scan/classic')}>
             {t('scanSelect.v1.cta')}
           </Button>
         </HoverCard>

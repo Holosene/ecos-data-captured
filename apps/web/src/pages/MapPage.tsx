@@ -114,7 +114,7 @@ function SessionCard({
           {session.name}
         </div>
         {isSelected && (
-          <Button variant="primary" size="sm" onClick={(e: React.MouseEvent) => { e.stopPropagation(); onOpen(); }}>
+          <Button variant="primary" size="sm" onClick={() => { onOpen(); }}>
             Ouvrir
           </Button>
         )}

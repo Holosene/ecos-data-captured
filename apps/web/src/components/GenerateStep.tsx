@@ -95,7 +95,6 @@ export function GenerateStep() {
         onProgress((i + 1) / totalFrames, `Extracting frame ${i + 1}/${totalFrames}`);
       }
 
-      URL.revokeObjectURL(url);
       return frames;
     },
     [state],
@@ -157,7 +156,7 @@ export function GenerateStep() {
 
         const volume = buildVolume(
           { frames, mappings, calibration: state.calibration },
-          (p, msg) => {
+          (p: number, msg: string) => {
             dispatch({
               type: 'SET_PROGRESS',
               progress: { stage: 'building', progress: 0.6 + p * 0.35, message: msg },

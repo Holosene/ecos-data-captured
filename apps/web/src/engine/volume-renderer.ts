@@ -768,7 +768,7 @@ void main() {
 
   updateTransferFunction(mode: ChromaticMode): void {
     const lut = generateLUT(mode);
-    this.tfTexture.image.data.set(lut);
+    (this.tfTexture.image.data as Uint8Array).set(lut);
     this.tfTexture.needsUpdate = true;
   }
 

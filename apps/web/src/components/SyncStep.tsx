@@ -22,7 +22,7 @@ export function SyncStep() {
     if (enriched.length === 0) return '';
     const maxT = enriched[enriched.length - 1].elapsedS || 1;
     return enriched
-      .map((pt) => {
+      .map((pt: { elapsedS: number; cumulativeDistanceM: number }) => {
         const x = (pt.elapsedS / maxT) * chartWidth;
         const y = chartHeight - (pt.cumulativeDistanceM / (maxDist || 1)) * chartHeight;
         return `${x},${y}`;
