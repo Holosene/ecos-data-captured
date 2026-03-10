@@ -99,7 +99,8 @@ export function publishSessionPlugin(): Plugin {
             let entries: any[] = [];
             if (existsSync(MANIFEST_PATH)) {
               try {
-                entries = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+                const parsed = JSON.parse(readFileSync(MANIFEST_PATH, 'utf-8'));
+                entries = Array.isArray(parsed) ? parsed : [];
               } catch {
                 entries = [];
               }
