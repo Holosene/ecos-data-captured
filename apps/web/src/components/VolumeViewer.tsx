@@ -786,7 +786,7 @@ export function VolumeViewer({
   const hasSpatialScrub = spatialFrameCount > WINDOW_SIZE;
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [playSpeed, setPlaySpeed] = useState(5);
+  const [playSpeed, setPlaySpeed] = useState(20);
   const playingRef = useRef(false);
   const currentFrameRef = useRef(0);
 
