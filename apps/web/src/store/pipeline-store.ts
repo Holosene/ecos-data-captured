@@ -232,13 +232,10 @@ export async function publishToRepo(): Promise<void> {
   const r = state.result;
   if (!r) throw new Error('No pipeline result to publish');
 
-  // Build spatial volume from frames — per-axis downsampling to preserve frame resolution.
-  // X/Z (pixel axes) capped at 128; Y (frame axis) capped at 256.
-  // This avoids crushing X/Z to tiny values when frame count is large (~3000).
-  const spatialRaw = buildSpatialVolumeFromFrames(r.instrumentFrames);
-  const spatialVol = spatialRaw
-    ? downsampleVolume(spatialRaw.data, spatialRaw.dimensions, spatialRaw.extent, [128, 256, 128])
-    : null;
+  // Build spatial volume from frames — NO downsampling so the session page
+  // can reconstruct the exact original frames and use the same code paths
+  // (buildWindowVolume, projectFrameWindow) as the scan page.
+  const spatialVol = buildSpatialVolumeFromFrames(r.instrumentFrames);
 
   // Build classic cone-projected volume snapshot at middle frame (for Mode C on session page)
   const WINDOW_SIZE = 12;

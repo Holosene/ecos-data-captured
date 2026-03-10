@@ -8,14 +8,14 @@
  * Route: /session/:sessionId
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GlassPanel, Button, ProgressBar, colors, fonts } from '@echos/ui';
 import {
   deserializeVolume,
   fetchSessionVolume,
 } from '@echos/core';
-import type { SessionManifestEntry, VolumeSnapshot } from '@echos/core';
+import type { SessionManifestEntry, VolumeSnapshot, PreprocessedFrame } from '@echos/core';
 import { useAppState } from '../store/app-state.js';
 import { useTranslation } from '../i18n/index.js';
 import { VolumeViewer } from '../components/VolumeViewer.js';
@@ -150,6 +150,38 @@ export default function SessionViewerPage() {
       loadVolumes();
     }
   }, [entry, loadState, loadVolumes]);
+
+  // Reconstruct PreprocessedFrame[] from the un-downsampled spatial volume.
+  // The spatial volume is a direct frame-stack (buildSpatialVolumeFromFrames),
+  // so slicing along Y gives back the exact original frames.
+  // This lets VolumeViewer use the same code paths as the scan page
+  // (buildWindowVolume for Mode B, projectFrameWindow for Mode C).
+  const reconstructedFrames = useMemo<PreprocessedFrame[] | undefined>(() => {
+    if (!spatialData || spatialData.length === 0) return undefined;
+    const [dimX, dimY, dimZ] = spatialDims;
+    if (dimX === 0 || dimY === 0 || dimZ === 0) return undefined;
+
+    const totalDuration = session?.durationS ?? entry?.durationS ?? 0;
+    const frames: PreprocessedFrame[] = [];
+
+    for (let y = 0; y < dimY; y++) {
+      const intensity = new Float32Array(dimX * dimZ);
+      for (let z = 0; z < dimZ; z++) {
+        const srcOffset = z * dimY * dimX + y * dimX;
+        const dstOffset = z * dimX;
+        intensity.set(spatialData.subarray(srcOffset, srcOffset + dimX), dstOffset);
+      }
+      frames.push({
+        index: y,
+        timeS: dimY > 1 ? (y / (dimY - 1)) * totalDuration : 0,
+        intensity,
+        width: dimX,
+        height: dimZ,
+      });
+    }
+
+    return frames;
+  }, [spatialData, spatialDims, session, entry]);
 
   // Build GPX track object for viewer
   const gpxTrackObj = (gpxTrackPoints && gpxTrackPoints.length > 0 && session)
@@ -290,6 +322,7 @@ export default function SessionViewerPage() {
           classicData={classicData}
           classicDimensions={classicDims}
           classicExtent={classicExtent}
+          frames={reconstructedFrames}
           beam={entry?.beam}
           grid={entry ? { resX: entry.gridDimensions[0], resY: entry.gridDimensions[1], resZ: entry.gridDimensions[2] } : undefined}
           gpxTrack={gpxTrackObj}
