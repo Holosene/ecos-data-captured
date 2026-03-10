@@ -611,7 +611,7 @@ export function ScanPage() {
         </div>
       )}
 
-      <div className="scan-content" style={{ padding: 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="scan-content" style={{ padding: phase === 'viewer' ? 0 : 'clamp(8px, 1.5vw, 16px) var(--content-gutter)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
         {/* ── Import Phase ──────────────────────────────────────────── */}
         {phase === 'import' && (
