@@ -320,25 +320,21 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         ))}
       </div>
 
-      {/* 2-column layout: cross-section + plan */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        <SliceView
-          volumeData={volumeData}
-          dimensions={dimensions}
-          axis="y"
-          label={t('v2.slices.crossSection')}
-          preset={preset}
-        />
-        <SliceView
-          volumeData={volumeData}
-          dimensions={dimensions}
-          axis="z"
-          label={t('v2.slices.planView')}
-          preset={preset}
-        />
-      </div>
-
-      {/* Full-width: longitudinal */}
+      {/* All slices full-width for consistent layout regardless of data dimensions */}
+      <SliceView
+        volumeData={volumeData}
+        dimensions={dimensions}
+        axis="y"
+        label={t('v2.slices.crossSection')}
+        preset={preset}
+      />
+      <SliceView
+        volumeData={volumeData}
+        dimensions={dimensions}
+        axis="z"
+        label={t('v2.slices.planView')}
+        preset={preset}
+      />
       <SliceView
         volumeData={volumeData}
         dimensions={dimensions}

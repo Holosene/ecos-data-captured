@@ -1306,8 +1306,8 @@ export function VolumeViewer({
                 {/* Invisible spacer — matches play button + gap height for equal section spacing */}
                 <div style={{ height: `${sliderPlayGap + 56}px` }} />
               </>
-            ) : (
-              /* Temporal modes: frame slider + play button */
+            ) : isTemporal && hasFrames ? (
+              /* Temporal modes WITH frames: frame slider + play button */
               <>
                 <div style={{
                   width: 'max(280px, 44%)',
@@ -1323,15 +1323,13 @@ export function VolumeViewer({
                   <input
                     type="range"
                     min={0}
-                    max={isTemporal && hasFrames ? totalFrames - 1 : 100}
-                    value={isTemporal && hasFrames ? currentFrame : 50}
+                    max={totalFrames - 1}
+                    value={currentFrame}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                      if (isTemporal && hasFrames) {
-                        setPlaying(false);
-                        const val = Number(e.target.value);
-                        currentFrameRef.current = val;
-                        setCurrentFrame(val);
-                      }
+                      setPlaying(false);
+                      const val = Number(e.target.value);
+                      currentFrameRef.current = val;
+                      setCurrentFrame(val);
                     }}
                     style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '6px' }}
                   />
@@ -1341,25 +1339,23 @@ export function VolumeViewer({
 
                 <button
                   onClick={() => {
-                    if (isTemporal && hasFrames) {
-                      if (currentFrame >= totalFrames - 1) {
-                        currentFrameRef.current = 0;
-                        setCurrentFrame(0);
-                      }
-                      setPlaying((p) => !p);
+                    if (currentFrame >= totalFrames - 1) {
+                      currentFrameRef.current = 0;
+                      setCurrentFrame(0);
                     }
+                    setPlaying((p) => !p);
                   }}
                   style={{
                     width: '56px', height: '56px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
-                    background: playing && isTemporal ? colors.accentMuted : colors.surface,
+                    background: playing ? colors.accentMuted : colors.surface,
                     color: colors.accent,
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 150ms ease',
                   }}
                 >
-                  {playing && isTemporal ? (
+                  {playing ? (
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
@@ -1371,6 +1367,9 @@ export function VolumeViewer({
                   )}
                 </button>
               </>
+            ) : (
+              /* Static pre-computed volumes (no frames): spacer only */
+              <div style={{ height: `${sliderPlayGap + 56}px` }} />
             )}
           </div>
 
@@ -1661,31 +1660,33 @@ export function VolumeViewer({
           }}
         />
 
-        {/* Slider + play controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-          <div style={{ flex: 1, padding: '6px 12px', background: colors.surface, borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center' }}>
-            <input
-              type="range"
-              min={mode === 'instrument' ? -0.75 : 0}
-              max={mode === 'instrument' ? 0.75 : (isTemporal && hasFrames ? totalFrames - 1 : 100)}
-              step={mode === 'instrument' ? 0.01 : 1}
-              value={mode === 'instrument' ? -tracePositionZ : (isTemporal && hasFrames ? currentFrame : 50)}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                if (mode === 'instrument') { handleTracePositionZ(-parseFloat(e.target.value)); }
-                else if (isTemporal && hasFrames) { setPlaying(false); const v = Number(e.target.value); currentFrameRef.current = v; setCurrentFrame(v); }
-              }}
-              style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '4px' }}
-            />
+        {/* Slider + play controls — only show when functional */}
+        {(mode === 'instrument' || (isTemporal && hasFrames)) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+            <div style={{ flex: 1, padding: '6px 12px', background: colors.surface, borderRadius: '16px', border: `1px solid ${colors.border}`, display: 'flex', alignItems: 'center' }}>
+              <input
+                type="range"
+                min={mode === 'instrument' ? -0.75 : 0}
+                max={mode === 'instrument' ? 0.75 : totalFrames - 1}
+                step={mode === 'instrument' ? 0.01 : 1}
+                value={mode === 'instrument' ? -tracePositionZ : currentFrame}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  if (mode === 'instrument') { handleTracePositionZ(-parseFloat(e.target.value)); }
+                  else { setPlaying(false); const v = Number(e.target.value); currentFrameRef.current = v; setCurrentFrame(v); }
+                }}
+                style={{ flex: 1, accentColor: colors.accent, cursor: 'pointer', height: '4px' }}
+              />
+            </div>
+            {isTemporal && hasFrames && (
+              <button
+                onClick={() => { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); }}
+                style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                {playing ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
+              </button>
+            )}
           </div>
-          {isTemporal && (
-            <button
-              onClick={() => { if (isTemporal && hasFrames) { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); } }}
-              style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing && isTemporal ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            >
-              {playing && isTemporal ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Settings panel — collapsible */}
         {isExpanded && (
