@@ -1033,16 +1033,19 @@ export function VolumeViewer({
     uploadFrameToRenderers(currentFrame);
   }, [currentFrame, hasFrames, playing, uploadFrameToRenderers]);
 
-  // Slice data
+  // Slice data — prefer frame-stacked volume, then spatialData, then instrument volumeData
   useEffect(() => {
     if (fullSliceVolume) {
       setSliceVolumeData(fullSliceVolume.data);
       setSliceDimensions(fullSliceVolume.dimensions);
+    } else if (spatialData && spatialData.length > 0 && spatialDimensions) {
+      setSliceVolumeData(spatialData);
+      setSliceDimensions(spatialDimensions);
     } else if (volumeData && volumeData.length > 0) {
       setSliceVolumeData(volumeData);
       setSliceDimensions(dimensions);
     }
-  }, [fullSliceVolume, volumeData, dimensions]);
+  }, [fullSliceVolume, spatialData, spatialDimensions, volumeData, dimensions]);
 
   // ─── Playback loop — RAF-driven, uploads directly to renderers ──────────
   // Uses requestAnimationFrame for vsync-aligned smooth playback.

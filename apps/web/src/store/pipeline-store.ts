@@ -21,6 +21,31 @@ import type {
 import { serializeVolume } from '@echos/core';
 import { saveSession, saveVolume, findDuplicate } from './session-db.js';
 
+// ─── Build spatial (stacked-frame) volume for Mode B + orthogonal slices ────
+
+function buildSpatialVolumeFromFrames(
+  frameList: Array<{ intensity: Float32Array; width: number; height: number }>,
+): { data: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } | null {
+  if (!frameList || frameList.length === 0) return null;
+  const dimX = frameList[0].width;
+  const dimY = frameList.length;
+  const dimZ = frameList[0].height;
+  if (dimX === 0 || dimZ === 0) return null;
+  const data = new Float32Array(dimX * dimY * dimZ);
+  const strideZ = dimY * dimX;
+  for (let yi = 0; yi < dimY; yi++) {
+    const intensity = frameList[yi].intensity;
+    const yiOffset = yi * dimX;
+    for (let zi = 0; zi < dimZ; zi++) {
+      const srcOffset = zi * dimX;
+      const dstOffset = zi * strideZ + yiOffset;
+      data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
+    }
+  }
+  const aspect = dimX / dimZ;
+  return { data, dimensions: [dimX, dimY, dimZ], extent: [aspect, 0.5, 1] };
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PipelineResult {
@@ -122,6 +147,9 @@ export async function publishToRepo(): Promise<void> {
   const r = state.result;
   if (!r) throw new Error('No pipeline result to publish');
 
+  // Build spatial volume from frames
+  const spatialVol = buildSpatialVolumeFromFrames(r.instrumentFrames);
+
   const manifest: SessionManifestEntry = {
     id: r.sessionId,
     name: r.videoFileName.replace(/\.\w+$/, ''),
@@ -138,27 +166,37 @@ export async function publishToRepo(): Promise<void> {
     files: {
       gpx: r.gpxFileName || undefined,
       volumeInstrument: 'volume-instrument.echos-vol',
+      ...(spatialVol ? { volumeSpatial: 'volume-spatial.echos-vol' } : {}),
     },
   };
 
-  // Serialize volume to binary
+  // Serialize volumes to binary
   const volumeBuffer = serializeVolume({
     data: r.volumeData,
     dimensions: r.volumeDims,
     extent: r.volumeExtent,
   });
 
-  // Build wire protocol: [headerLen:u32] [headerJSON] [volumeBytes]
+  const spatialBuffer = spatialVol
+    ? serializeVolume({ data: spatialVol.data, dimensions: spatialVol.dimensions, extent: spatialVol.extent })
+    : null;
+
+  // Build wire protocol: [headerLen:u32] [headerJSON] [instrumentBytes] [spatialBytes?]
   const header = JSON.stringify({
     manifest,
     volumeSize: volumeBuffer.byteLength,
+    spatialVolumeSize: spatialBuffer ? spatialBuffer.byteLength : 0,
     gpxText: r.gpxText || null,
   });
   const headerBytes = new TextEncoder().encode(header);
-  const payload = new Uint8Array(4 + headerBytes.length + volumeBuffer.byteLength);
+  const totalSize = 4 + headerBytes.length + volumeBuffer.byteLength + (spatialBuffer ? spatialBuffer.byteLength : 0);
+  const payload = new Uint8Array(totalSize);
   new DataView(payload.buffer).setUint32(0, headerBytes.length, true);
   payload.set(headerBytes, 4);
   payload.set(new Uint8Array(volumeBuffer), 4 + headerBytes.length);
+  if (spatialBuffer) {
+    payload.set(new Uint8Array(spatialBuffer), 4 + headerBytes.length + volumeBuffer.byteLength);
+  }
 
   const resp = await fetch('/api/publish-session', {
     method: 'POST',
@@ -413,6 +451,17 @@ export async function runPipeline(opts: {
         dimensions: dims,
         extent,
       });
+
+      // Build and save spatial volume (stacked frames) for Mode B + slices
+      const spatialVol = buildSpatialVolumeFromFrames(preprocessedFrames);
+      if (spatialVol) {
+        await saveVolume(sessionId, 'spatial', {
+          data: spatialVol.data,
+          dimensions: spatialVol.dimensions,
+          extent: spatialVol.extent,
+        });
+        manifest.files.volumeSpatial = 'volume-spatial.echos-vol';
+      }
 
       await saveSession({
         id: sessionId,

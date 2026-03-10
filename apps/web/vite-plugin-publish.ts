@@ -43,12 +43,17 @@ export function publishSessionPlugin(): Plugin {
             const headerJson = body.subarray(4, 4 + headerLen).toString('utf-8');
             const header = JSON.parse(headerJson);
 
-            const { manifest, volumeSize, gpxText } = header;
+            const { manifest, volumeSize, spatialVolumeSize, gpxText } = header;
             const sessionId = manifest.id;
 
-            // Extract volume binary
+            // Extract volume binaries
             const volStart = 4 + headerLen;
             const volumeBuffer = body.subarray(volStart, volStart + volumeSize);
+
+            const spatialStart = volStart + volumeSize;
+            const spatialBuffer = spatialVolumeSize > 0
+              ? body.subarray(spatialStart, spatialStart + spatialVolumeSize)
+              : null;
 
             // Create session directory
             const sessionDir = join(SESSIONS_DIR, sessionId);
@@ -56,11 +61,19 @@ export function publishSessionPlugin(): Plugin {
               mkdirSync(sessionDir, { recursive: true });
             }
 
-            // Write volume binary
+            // Write instrument volume binary
             if (manifest.files.volumeInstrument) {
               writeFileSync(
                 join(sessionDir, manifest.files.volumeInstrument),
                 volumeBuffer,
+              );
+            }
+
+            // Write spatial volume binary
+            if (spatialBuffer && manifest.files.volumeSpatial) {
+              writeFileSync(
+                join(sessionDir, manifest.files.volumeSpatial),
+                spatialBuffer,
               );
             }
 
