@@ -23,23 +23,71 @@ import { saveSession, saveVolume, findDuplicate } from './session-db.js';
 
 // ─── Build spatial (stacked-frame) volume for Mode B + orthogonal slices ────
 
+// Max voxels for the spatial volume (64M voxels ≈ 256 MB Float32).
+// When the full-resolution stack would exceed this, each frame is bilinear-
+// downsampled so that ALL frames are kept (no temporal skipping).
+const MAX_SPATIAL_VOXELS = 64_000_000;
+
+/** Bilinear-downsample a single grayscale frame (Float32, row-major). */
+function downsampleFrame(
+  src: Float32Array, srcW: number, srcH: number, dstW: number, dstH: number,
+): Float32Array {
+  const dst = new Float32Array(dstW * dstH);
+  const scaleX = srcW / dstW;
+  const scaleY = srcH / dstH;
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = dy * scaleY;
+    const y0 = Math.min(Math.floor(sy), srcH - 1);
+    const y1 = Math.min(y0 + 1, srcH - 1);
+    const fy = sy - y0;
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = dx * scaleX;
+      const x0 = Math.min(Math.floor(sx), srcW - 1);
+      const x1 = Math.min(x0 + 1, srcW - 1);
+      const fx = sx - x0;
+      const v00 = src[y0 * srcW + x0];
+      const v10 = src[y0 * srcW + x1];
+      const v01 = src[y1 * srcW + x0];
+      const v11 = src[y1 * srcW + x1];
+      dst[dy * dstW + dx] = (v00 * (1 - fx) + v10 * fx) * (1 - fy)
+                           + (v01 * (1 - fx) + v11 * fx) * fy;
+    }
+  }
+  return dst;
+}
+
 function buildSpatialVolumeFromFrames(
   frameList: Array<{ intensity: Float32Array; width: number; height: number }>,
 ): { data: Float32Array; dimensions: [number, number, number]; extent: [number, number, number] } | null {
   if (!frameList || frameList.length === 0) return null;
-  const dimX = frameList[0].width;
-  const dimY = frameList.length;
-  const dimZ = frameList[0].height;
-  if (dimX === 0 || dimZ === 0) return null;
+  const srcW = frameList[0].width;
+  const srcH = frameList[0].height;
+  const numFrames = frameList.length;
+  if (srcW === 0 || srcH === 0) return null;
+
+  // Determine target per-frame resolution to stay within voxel budget
+  const totalVoxels = srcW * srcH * numFrames;
+  let dimX = srcW;
+  let dimZ = srcH;
+  if (totalVoxels > MAX_SPATIAL_VOXELS) {
+    const scale = Math.sqrt(MAX_SPATIAL_VOXELS / totalVoxels);
+    dimX = Math.max(16, Math.round(srcW * scale));
+    dimZ = Math.max(16, Math.round(srcH * scale));
+  }
+
+  const dimY = numFrames;
   const data = new Float32Array(dimX * dimY * dimZ);
   const strideZ = dimY * dimX;
+  const needsDownsample = dimX !== srcW || dimZ !== srcH;
+
   for (let yi = 0; yi < dimY; yi++) {
-    const intensity = frameList[yi].intensity;
+    const raw = frameList[yi].intensity;
+    const pixels = needsDownsample ? downsampleFrame(raw, srcW, srcH, dimX, dimZ) : raw;
     const yiOffset = yi * dimX;
     for (let zi = 0; zi < dimZ; zi++) {
       const srcOffset = zi * dimX;
       const dstOffset = zi * strideZ + yiOffset;
-      data.set(intensity.subarray(srcOffset, srcOffset + dimX), dstOffset);
+      data.set(pixels.subarray(srcOffset, srcOffset + dimX), dstOffset);
     }
   }
   const aspect = dimX / dimZ;
