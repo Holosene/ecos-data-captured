@@ -1276,123 +1276,39 @@ export function VolumeViewer({
     return rendererARef.current?.captureScreenshot() ?? null;
   }, []);
 
-  // ─── Full PNG export: all volume renders + orthogonal slices ─────────
+  // ─── Individual PNG exports: one file per render at max quality ──────
   const handleCaptureAllPng = useCallback(async () => {
-    const RES = 1920; // High-res capture width
-    const PADDING = 40;
-    const LABEL_H = 48;
-    const BG = '#0D0F14';
-    const TEXT_COLOR = '#E8E8EC';
+    const RES = 1920; // High-res capture size for 3D renderers
 
-    // Load all images from data URLs
-    const loadImg = (url: string): Promise<HTMLImageElement> =>
-      new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = url;
-      });
+    const downloadDataUrl = (dataUrl: string, filename: string) => {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      a.click();
+    };
 
-    // Capture volume renderers at high res
-    const captures: { label: string; dataUrl: string | null }[] = [];
+    // Export each 3D renderer individually
     if (rendererARef.current) {
-      captures.push({ label: 'Instrument', dataUrl: rendererARef.current.captureHighRes(RES, RES) });
+      const url = rendererARef.current.captureHighRes(RES, RES);
+      if (url) downloadDataUrl(url, 'echos_instrument.png');
     }
     if (rendererBRef.current) {
-      captures.push({ label: 'Spatial', dataUrl: rendererBRef.current.captureHighRes(RES, RES) });
+      const url = rendererBRef.current.captureHighRes(RES, RES);
+      if (url) downloadDataUrl(url, 'echos_spatial.png');
     }
     if (rendererCRef.current) {
-      captures.push({ label: 'Classic', dataUrl: rendererCRef.current.captureHighRes(RES, RES) });
+      const url = rendererCRef.current.captureHighRes(RES, RES);
+      if (url) downloadDataUrl(url, 'echos_classic.png');
     }
 
-    // Capture slice canvases
+    // Export each slice canvas individually (native resolution = max quality)
     const sliceData = slicePanelRef.current?.captureSlices();
-
-    // Load all images
-    const volumeImgs: { label: string; img: HTMLImageElement }[] = [];
-    for (const c of captures) {
-      if (c.dataUrl) {
-        try {
-          const img = await loadImg(c.dataUrl);
-          volumeImgs.push({ label: c.label, img });
-        } catch { /* skip */ }
-      }
-    }
-
-    const sliceImgs: { label: string; img: HTMLImageElement }[] = [];
     if (sliceData?.crossSection) {
-      try {
-        sliceImgs.push({ label: 'Coupe transversale (XZ)', img: await loadImg(sliceData.crossSection) });
-      } catch { /* skip */ }
+      downloadDataUrl(sliceData.crossSection, 'echos_coupe_transversale.png');
     }
     if (sliceData?.longitudinal) {
-      try {
-        sliceImgs.push({ label: 'Coupe longitudinale (YZ)', img: await loadImg(sliceData.longitudinal) });
-      } catch { /* skip */ }
+      downloadDataUrl(sliceData.longitudinal, 'echos_coupe_longitudinale.png');
     }
-
-    if (volumeImgs.length === 0 && sliceImgs.length === 0) return;
-
-    // Layout: volumes in a row, then slices below (full width each)
-    const volCount = volumeImgs.length;
-    const totalW = RES * 2 + PADDING * 2; // Composite canvas width
-    const volCellW = volCount > 0 ? Math.floor((totalW - PADDING * 2 - (volCount - 1) * PADDING) / volCount) : 0;
-    const volRowH = volCount > 0 ? volCellW + LABEL_H : 0;
-
-    // Slices: render full width, scale to fit
-    let slicesTotalH = 0;
-    const sliceLayouts: { img: HTMLImageElement; label: string; x: number; y: number; w: number; h: number }[] = [];
-    const sliceAreaW = totalW - PADDING * 2;
-    for (const s of sliceImgs) {
-      const scale = sliceAreaW / s.img.width;
-      const h = Math.round(s.img.height * scale);
-      sliceLayouts.push({ img: s.img, label: s.label, x: PADDING, y: 0, w: sliceAreaW, h });
-      slicesTotalH += h + LABEL_H + PADDING;
-    }
-
-    const totalH = PADDING + (volCount > 0 ? volRowH + PADDING : 0) + slicesTotalH + PADDING;
-
-    // Draw composite
-    const canvas = document.createElement('canvas');
-    canvas.width = totalW;
-    canvas.height = totalH;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = BG;
-    ctx.fillRect(0, 0, totalW, totalH);
-    ctx.fillStyle = TEXT_COLOR;
-    ctx.font = 'bold 28px system-ui, sans-serif';
-    ctx.textBaseline = 'top';
-
-    // Draw volumes row
-    let y = PADDING;
-    if (volCount > 0) {
-      for (let i = 0; i < volumeImgs.length; i++) {
-        const x = PADDING + i * (volCellW + PADDING);
-        ctx.fillStyle = TEXT_COLOR;
-        ctx.fillText(volumeImgs[i].label, x, y);
-        ctx.drawImage(volumeImgs[i].img, x, y + LABEL_H, volCellW, volCellW);
-      }
-      y += volRowH + PADDING;
-    }
-
-    // Draw slices
-    for (const s of sliceLayouts) {
-      ctx.fillStyle = TEXT_COLOR;
-      ctx.fillText(s.label, PADDING, y);
-      ctx.drawImage(s.img, PADDING, y + LABEL_H, s.w, s.h);
-      y += s.h + LABEL_H + PADDING;
-    }
-
-    // Download
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'echos_export.png';
-      a.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
   }, []);
 
   const chromaticModes = getChromaticModes();
