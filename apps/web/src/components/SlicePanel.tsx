@@ -79,6 +79,7 @@ function renderSlice(
   axis: 'x' | 'y' | 'z',
   sliceIndex: number,
   preset: PresetName,
+  heightScale = 1,
 ) {
   const [dimX, dimY, dimZ] = dims;
 
@@ -87,24 +88,27 @@ function renderSlice(
   else if (axis === 'y') { w = dimX; h = dimZ; }
   else { w = dimY; h = dimZ; }
 
+  const displayH = Math.round(h * heightScale);
+
   // Only reset canvas size if dimensions changed (avoids pixel buffer reallocation)
-  if (canvas.width !== w || canvas.height !== h) {
+  if (canvas.width !== w || canvas.height !== displayH) {
     canvas.width = w;
-    canvas.height = h;
+    canvas.height = displayH;
     imageDataCache.current = null; // invalidate cache
   }
 
   // Reuse ImageData if possible
   let imageData = imageDataCache.current;
-  if (!imageData || imageData.width !== w || imageData.height !== h) {
-    imageData = ctx.createImageData(w, h);
+  if (!imageData || imageData.width !== w || imageData.height !== displayH) {
+    imageData = ctx.createImageData(w, displayH);
     imageDataCache.current = imageData;
   }
 
   const colorMap = PRESETS[preset].colorMap;
   const pixels = imageData.data;
 
-  for (let row = 0; row < h; row++) {
+  for (let displayRow = 0; displayRow < displayH; displayRow++) {
+    const row = Math.min(Math.floor(displayRow / heightScale), h - 1);
     for (let col = 0; col < w; col++) {
       let idx: number;
       if (axis === 'z') idx = sliceIndex * dimY * dimX + row * dimX + col;
@@ -126,7 +130,7 @@ function renderSlice(
         }
       }
 
-      const pxIdx = (row * w + col) * 4;
+      const pxIdx = (displayRow * w + col) * 4;
       pixels[pxIdx] = r;
       pixels[pxIdx + 1] = g;
       pixels[pxIdx + 2] = b;
@@ -153,12 +157,14 @@ function SliceView({
   axis,
   label,
   preset,
+  canvasScale = 1,
 }: {
   volumeData: Float32Array;
   dimensions: [number, number, number];
   axis: 'x' | 'y' | 'z';
   label: string;
   preset: PresetName;
+  canvasScale?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
@@ -185,9 +191,9 @@ function SliceView({
 
   useEffect(() => {
     if (canvasRef.current && ctxRef.current && volumeData.length > 0) {
-      renderSlice(canvasRef.current, ctxRef.current, imageDataCacheRef, volumeData, dimensions, axis, sliceIdx, preset);
+      renderSlice(canvasRef.current, ctxRef.current, imageDataCacheRef, volumeData, dimensions, axis, sliceIdx, preset, canvasScale);
     }
-  }, [volumeData, dimensions, axis, sliceIdx, preset]);
+  }, [volumeData, dimensions, axis, sliceIdx, preset, canvasScale]);
 
   useEffect(() => {
     if (sliceIdx > maxSlice) setSliceIdx(Math.floor(maxSlice / 2));
@@ -332,6 +338,7 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         axis="x"
         label={t('v2.slices.longitudinal')}
         preset={preset}
+        canvasScale={2}
       />
     </div>
   );
