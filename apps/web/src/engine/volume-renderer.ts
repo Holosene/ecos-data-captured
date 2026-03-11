@@ -168,6 +168,7 @@ export class VolumeRenderer {
       antialias: true,
       alpha: true,
       powerPreference: 'high-performance',
+      preserveDrawingBuffer: true,
     });
     this.container = container;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -795,6 +796,26 @@ void main() {
   captureScreenshot(): string {
     this.renderer.render(this.scene, this.camera);
     return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  /** Render at a given resolution and return data URL */
+  captureHighRes(width: number, height: number): string {
+    const oldW = this.renderer.domElement.width;
+    const oldH = this.renderer.domElement.height;
+    const oldPixelRatio = this.renderer.getPixelRatio();
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(width, height);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
+    const dataUrl = this.renderer.domElement.toDataURL('image/png');
+    // Restore original size
+    this.renderer.setPixelRatio(oldPixelRatio);
+    this.renderer.setSize(oldW / oldPixelRatio, oldH / oldPixelRatio);
+    this.camera.aspect = (oldW / oldPixelRatio) / (oldH / oldPixelRatio);
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
+    return dataUrl;
   }
 
   // ─── Render loop ──────────────────────────────────────────────────────
