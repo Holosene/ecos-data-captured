@@ -28,11 +28,12 @@ interface ExportPanelProps {
   dimensions: [number, number, number];
   extent: [number, number, number];
   onCaptureScreenshot?: () => string | null;
+  onCaptureAllPng?: () => Promise<void>;
   onExportSession?: () => void;
   onExportHTML?: () => void;
 }
 
-export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreenshot, onExportSession, onExportHTML }: ExportPanelProps) {
+export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreenshot, onCaptureAllPng, onExportSession, onExportHTML }: ExportPanelProps) {
   const { t } = useTranslation();
 
   const handleExportNrrd = useCallback(() => {
@@ -69,6 +70,11 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
   }, [volumeData, dimensions, extent]);
 
   const handleExportPng = useCallback(() => {
+    if (onCaptureAllPng) {
+      onCaptureAllPng();
+      return;
+    }
+    // Fallback: single screenshot
     if (!onCaptureScreenshot) return;
     const dataUrl = onCaptureScreenshot();
     if (!dataUrl) return;
@@ -77,7 +83,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
     a.href = dataUrl;
     a.download = 'echos_capture.png';
     a.click();
-  }, [onCaptureScreenshot]);
+  }, [onCaptureScreenshot, onCaptureAllPng]);
 
   const handleExportCsv = useCallback(() => {
     if (!volumeData || volumeData.length === 0) return;
@@ -118,7 +124,7 @@ export function ExportPanel({ volumeData, dimensions, extent, onCaptureScreensho
 
   const exportButtons = [
     { label: 'NRRD', onClick: handleExportNrrd, disabled: !hasVolume },
-    { label: 'PNG', onClick: handleExportPng, disabled: !onCaptureScreenshot },
+    { label: 'PNG', onClick: handleExportPng, disabled: !onCaptureScreenshot && !onCaptureAllPng },
     { label: 'CSV', onClick: handleExportCsv, disabled: !hasVolume },
     ...(onExportSession ? [{ label: t('common.poster' as never), onClick: onExportSession, disabled: false }] : []),
     ...(onExportHTML ? [{ label: 'HTML', onClick: onExportHTML, disabled: !hasVolume }] : []),

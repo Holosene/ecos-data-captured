@@ -8,7 +8,7 @@
  *   - Memory-optimized: cached ImageData, skip unnecessary canvas resets
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
 import { colors, fonts } from '@echos/ui';
 import { useTranslation } from '../i18n/index.js';
 import type { TranslationKey } from '../i18n/translations.js';
@@ -158,6 +158,7 @@ function SliceView({
   label,
   preset,
   canvasScale = 1,
+  canvasRefOut,
 }: {
   volumeData: Float32Array;
   dimensions: [number, number, number];
@@ -165,8 +166,10 @@ function SliceView({
   label: string;
   preset: PresetName;
   canvasScale?: number;
+  canvasRefOut?: React.RefObject<HTMLCanvasElement | null>;
 }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const internalCanvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = canvasRefOut || internalCanvasRef;
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const imageDataCacheRef = useRef<ImageData | null>(null);
   const { t } = useTranslation();
@@ -274,9 +277,22 @@ interface SlicePanelProps {
   dimensions: [number, number, number];
 }
 
-export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
+export interface SlicePanelHandle {
+  captureSlices: () => { crossSection: string | null; longitudinal: string | null };
+}
+
+export const SlicePanel = forwardRef<SlicePanelHandle, SlicePanelProps>(function SlicePanel({ volumeData, dimensions }, ref) {
   const [preset, setPreset] = useState<PresetName>('Water Off');
   const { t } = useTranslation();
+  const crossSectionCanvasRef = useRef<HTMLCanvasElement>(null);
+  const longitudinalCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    captureSlices: () => ({
+      crossSection: crossSectionCanvasRef.current?.toDataURL('image/png') ?? null,
+      longitudinal: longitudinalCanvasRef.current?.toDataURL('image/png') ?? null,
+    }),
+  }));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -331,6 +347,7 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         axis="y"
         label={t('v2.slices.crossSection')}
         preset={preset}
+        canvasRefOut={crossSectionCanvasRef}
       />
       <SliceView
         volumeData={volumeData}
@@ -339,7 +356,8 @@ export function SlicePanel({ volumeData, dimensions }: SlicePanelProps) {
         label={t('v2.slices.longitudinal')}
         preset={preset}
         canvasScale={2}
+        canvasRefOut={longitudinalCanvasRef}
       />
     </div>
   );
-}
+});
