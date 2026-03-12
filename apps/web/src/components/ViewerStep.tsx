@@ -63,13 +63,15 @@ const PRESETS = {
 
 type PresetName = keyof typeof PRESETS;
 
+// Minimum canvas width for upscaling low-resolution slices
+const MIN_CANVAS_W = 512;
+
 function renderSlice(
   canvas: HTMLCanvasElement,
   volume: Volume,
   axis: 'x' | 'y' | 'z',
   sliceIndex: number,
   preset: PresetName,
-  heightScale = 1,
 ) {
   const { data, metadata } = volume;
   const [dimX, dimY, dimZ] = metadata.dimensions;
@@ -81,15 +83,20 @@ function renderSlice(
   else if (axis === 'y') { w = dimX; h = dimZ; }
   else { w = dimY; h = dimZ; }
 
-  const displayH = Math.round(h * heightScale);
-  canvas.width = w;
+  // Auto-upscale small canvases so all modes look consistent
+  const upscale = w < MIN_CANVAS_W ? Math.ceil(MIN_CANVAS_W / w) : 1;
+  const displayW = w * upscale;
+  const displayH = h * upscale;
+
+  canvas.width = displayW;
   canvas.height = displayH;
-  const imageData = ctx.createImageData(w, displayH);
+  const imageData = ctx.createImageData(displayW, displayH);
   const colorMap = PRESETS[preset].colorMap;
 
   for (let displayRow = 0; displayRow < displayH; displayRow++) {
-    const row = Math.min(Math.floor(displayRow / heightScale), h - 1);
-    for (let col = 0; col < w; col++) {
+    const row = Math.min(Math.floor(displayRow / upscale), h - 1);
+    for (let displayCol = 0; displayCol < displayW; displayCol++) {
+      const col = Math.min(Math.floor(displayCol / upscale), w - 1);
       let val: number;
       if (axis === 'z') val = data[sliceIndex * dimY * dimX + row * dimX + col];
       else if (axis === 'y') val = data[row * dimY * dimX + sliceIndex * dimX + col];
@@ -109,7 +116,7 @@ function renderSlice(
         }
       }
 
-      const idx = (displayRow * w + col) * 4;
+      const idx = (displayRow * displayW + displayCol) * 4;
       imageData.data[idx] = r;
       imageData.data[idx + 1] = g;
       imageData.data[idx + 2] = b;
@@ -125,13 +132,11 @@ function SliceView({
   axis,
   label,
   preset,
-  heightScale = 1,
 }: {
   volume: Volume;
   axis: 'x' | 'y' | 'z';
   label: string;
   preset: PresetName;
-  heightScale?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimX, dimY, dimZ] = volume.metadata.dimensions;
@@ -140,9 +145,9 @@ function SliceView({
 
   useEffect(() => {
     if (canvasRef.current) {
-      renderSlice(canvasRef.current, volume, axis, sliceIdx, preset, heightScale);
+      renderSlice(canvasRef.current, volume, axis, sliceIdx, preset);
     }
-  }, [volume, axis, sliceIdx, preset, heightScale]);
+  }, [volume, axis, sliceIdx, preset]);
 
   const axisLabels = {
     x: { h: 'Distance (Y)', v: 'Depth (Z)' },
@@ -299,11 +304,8 @@ export function ViewerStep() {
         </div>
       </GlassPanel>
 
-      <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        <SliceView volume={volume} axis="y" label={t('viewer.crossSection')} preset={preset} />
-        <SliceView volume={volume} axis="z" label={t('viewer.planView')} preset={preset} />
-      </div>
-      <SliceView volume={volume} axis="x" label={t('viewer.longitudinal')} preset={preset} heightScale={2} />
+      <SliceView volume={volume} axis="y" label={t('viewer.crossSection')} preset={preset} />
+      <SliceView volume={volume} axis="x" label={t('viewer.longitudinal')} preset={preset} />
 
       {qcReport && qcReport.warnings.length > 0 && (
         <GlassPanel padding="16px" style={{ borderColor: colors.warning }}>
