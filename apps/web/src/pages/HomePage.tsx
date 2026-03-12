@@ -181,7 +181,7 @@ export function HomePage() {
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = colors.accent;
                 const img = e.currentTarget.querySelector('picture img') as HTMLImageElement;
-                if (img) { img.style.transform = 'scale(1.05)'; img.style.filter = 'brightness(1.1)'; }
+                if (img) { img.style.transform = 'scale(1.02)'; img.style.filter = 'brightness(1.05)'; }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = 'transparent';
@@ -193,7 +193,7 @@ export function HomePage() {
                 name={name}
                 alt=""
                 loading="eager"
-                style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1), filter 300ms ease' }}
+                style={{ transition: 'transform 300ms ease, filter 300ms ease' }}
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
               <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
@@ -271,7 +271,7 @@ export function HomePage() {
         {/* Gallery container — single horizontal scroll block on mobile */}
         <div className="gallery-container">
           {/* Row 1: gallery-01 (wide) + gallery-03 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '300px', marginBottom: '12px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '280px', marginBottom: '12px' }}>
             {galleryRow1.map((item) => (
               <div
                 key={item.name}
@@ -284,7 +284,7 @@ export function HomePage() {
                   overflow: 'hidden',
                   borderRadius: '12px',
                   border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
-                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
+                  transition: 'flex 500ms ease, border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
                 onMouseEnter={() => setHoveredImage(item.name)}
@@ -293,7 +293,7 @@ export function HomePage() {
                 <ProgressiveImg
                   name={item.name}
                   alt=""
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
@@ -305,7 +305,7 @@ export function HomePage() {
           </div>
 
           {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '260px' }}>
+          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '280px' }}>
             {galleryRow2.map((item) => (
               <div
                 key={item.name}
@@ -318,7 +318,7 @@ export function HomePage() {
                   overflow: 'hidden',
                   borderRadius: '12px',
                   border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
-                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
+                  transition: 'flex 500ms ease, border-color 300ms ease',
                 }}
                 onClick={() => openLightbox(galleryImages, item.index)}
                 onMouseEnter={() => setHoveredImage(item.name)}
@@ -327,7 +327,7 @@ export function HomePage() {
                 <ProgressiveImg
                   name={item.name}
                   alt=""
-                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
+                  style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
                 <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
@@ -377,13 +377,13 @@ export function HomePage() {
           overflow: 'hidden',
           border: `1px solid ${colors.border}`,
           display: 'flex',
-          transition: 'all 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+          transition: 'all 400ms ease',
         }}>
           {/* Map — shrinks to 1/4 when a trace is focused */}
           <div className="map-main-area" style={{
             flex: focusedSessionId ? '0 0 25%' : '1 1 100%',
             height: '100%',
-            transition: 'flex 400ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+            transition: 'flex 400ms ease',
             overflow: 'hidden',
           }}>
             <MapView
@@ -739,7 +739,7 @@ export function HomePage() {
             opacity: showFloatingCta ? 1 : 0,
             transform: showFloatingCta ? 'translateY(0)' : 'translateY(20px)',
             pointerEvents: showFloatingCta ? 'auto' : 'none',
-            transition: 'opacity 300ms ease, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), background 200ms ease, filter 200ms ease',
+            transition: 'opacity 300ms ease, transform 300ms ease, background 200ms ease, filter 200ms ease',
           }}
         >
           {t('home.cta')}

@@ -283,10 +283,10 @@ export default function SessionViewerPage() {
           style={{
             background: 'none',
             border: `1px solid ${colors.border}`,
-            borderRadius: '8px',
-            padding: '6px 14px',
+            borderRadius: '10px',
+            padding: '10px 20px',
             color: colors.text2,
-            fontSize: '13px',
+            fontSize: '14px',
             cursor: 'pointer',
             fontFamily: 'inherit',
             transition: 'all 150ms ease',
@@ -298,11 +298,11 @@ export default function SessionViewerPage() {
         </button>
         <div style={{ flex: 1 }} />
         <span style={{
-          padding: '5px 14px',
+          padding: '10px 20px',
           borderRadius: '9999px',
           background: colors.accentMuted,
           color: colors.accent,
-          fontSize: '12px',
+          fontSize: '14px',
           fontWeight: 600,
           letterSpacing: '0.02em',
         }}>
