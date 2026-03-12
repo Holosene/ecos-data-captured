@@ -70,6 +70,9 @@ type PresetName = keyof typeof PRESETS;
 
 // ─── Optimized slice rendering ──────────────────────────────────────────
 
+// Minimum canvas width for upscaling low-resolution slices (e.g. minimal/medium modes)
+const MIN_CANVAS_W = 512;
+
 function renderSlice(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
@@ -79,7 +82,6 @@ function renderSlice(
   axis: 'x' | 'y' | 'z',
   sliceIndex: number,
   preset: PresetName,
-  heightScale = 1,
 ) {
   const [dimX, dimY, dimZ] = dims;
 
@@ -88,19 +90,22 @@ function renderSlice(
   else if (axis === 'y') { w = dimX; h = dimZ; }
   else { w = dimY; h = dimZ; }
 
-  const displayH = Math.round(h * heightScale);
+  // Auto-upscale small canvases so all modes look consistent
+  const upscale = w < MIN_CANVAS_W ? Math.ceil(MIN_CANVAS_W / w) : 1;
+  const displayW = w * upscale;
+  const displayH = h * upscale;
 
   // Only reset canvas size if dimensions changed (avoids pixel buffer reallocation)
-  if (canvas.width !== w || canvas.height !== displayH) {
-    canvas.width = w;
+  if (canvas.width !== displayW || canvas.height !== displayH) {
+    canvas.width = displayW;
     canvas.height = displayH;
     imageDataCache.current = null; // invalidate cache
   }
 
   // Reuse ImageData if possible
   let imageData = imageDataCache.current;
-  if (!imageData || imageData.width !== w || imageData.height !== displayH) {
-    imageData = ctx.createImageData(w, displayH);
+  if (!imageData || imageData.width !== displayW || imageData.height !== displayH) {
+    imageData = ctx.createImageData(displayW, displayH);
     imageDataCache.current = imageData;
   }
 
@@ -108,8 +113,9 @@ function renderSlice(
   const pixels = imageData.data;
 
   for (let displayRow = 0; displayRow < displayH; displayRow++) {
-    const row = Math.min(Math.floor(displayRow / heightScale), h - 1);
-    for (let col = 0; col < w; col++) {
+    const row = Math.min(Math.floor(displayRow / upscale), h - 1);
+    for (let displayCol = 0; displayCol < displayW; displayCol++) {
+      const col = Math.min(Math.floor(displayCol / upscale), w - 1);
       let idx: number;
       if (axis === 'z') idx = sliceIndex * dimY * dimX + row * dimX + col;
       else if (axis === 'y') idx = row * dimY * dimX + sliceIndex * dimX + col;
@@ -130,7 +136,7 @@ function renderSlice(
         }
       }
 
-      const pxIdx = (displayRow * w + col) * 4;
+      const pxIdx = (displayRow * displayW + displayCol) * 4;
       pixels[pxIdx] = r;
       pixels[pxIdx + 1] = g;
       pixels[pxIdx + 2] = b;
@@ -157,7 +163,6 @@ function SliceView({
   axis,
   label,
   preset,
-  canvasScale = 1,
   canvasRefOut,
 }: {
   volumeData: Float32Array;
@@ -165,7 +170,6 @@ function SliceView({
   axis: 'x' | 'y' | 'z';
   label: string;
   preset: PresetName;
-  canvasScale?: number;
   canvasRefOut?: React.RefObject<HTMLCanvasElement | null>;
 }) {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -194,9 +198,9 @@ function SliceView({
 
   useEffect(() => {
     if (canvasRef.current && ctxRef.current && volumeData.length > 0) {
-      renderSlice(canvasRef.current, ctxRef.current, imageDataCacheRef, volumeData, dimensions, axis, sliceIdx, preset, canvasScale);
+      renderSlice(canvasRef.current, ctxRef.current, imageDataCacheRef, volumeData, dimensions, axis, sliceIdx, preset);
     }
-  }, [volumeData, dimensions, axis, sliceIdx, preset, canvasScale]);
+  }, [volumeData, dimensions, axis, sliceIdx, preset]);
 
   useEffect(() => {
     if (sliceIdx > maxSlice) setSliceIdx(Math.floor(maxSlice / 2));
@@ -228,14 +232,12 @@ function SliceView({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        maxHeight: isPortrait ? '500px' : '300px',
         minHeight: '120px',
       }}>
         <canvas
           ref={canvasRef}
           style={{
             maxWidth: '100%',
-            maxHeight: isPortrait ? '500px' : '300px',
             imageRendering: 'pixelated',
             objectFit: 'contain',
             display: 'block',
@@ -342,26 +344,15 @@ export const SlicePanel = forwardRef<SlicePanelHandle, SlicePanelProps>(function
         ))}
       </div>
 
-      {/* 2-column layout: cross-section + plan */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        <SliceView
-          volumeData={volumeData}
-          dimensions={dimensions}
-          axis="y"
-          label={t('v2.slices.crossSection')}
-          preset={preset}
-          canvasRefOut={crossSectionCanvasRef}
-        />
-        <SliceView
-          volumeData={volumeData}
-          dimensions={dimensions}
-          axis="z"
-          label={t('v2.slices.planView')}
-          preset={preset}
-        />
-      </div>
-
-      {/* Full-width: longitudinal */}
+      {/* All slices full-width for consistent layout regardless of data dimensions */}
+      <SliceView
+        volumeData={volumeData}
+        dimensions={dimensions}
+        axis="y"
+        label={t('v2.slices.crossSection')}
+        preset={preset}
+        canvasRefOut={crossSectionCanvasRef}
+      />
       <SliceView
         volumeData={volumeData}
         dimensions={dimensions}
