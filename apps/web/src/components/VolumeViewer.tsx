@@ -59,6 +59,10 @@ interface VolumeViewerProps {
   onReconfigure?: () => void;
   onNewScan?: () => void;
   onClose?: () => void;
+  onPublish?: () => void;
+  published?: boolean;
+  publishing?: boolean;
+  publishError?: string | null;
 }
 
 const WINDOW_SIZE = 12;
@@ -419,6 +423,10 @@ export function VolumeViewer({
   onReconfigure,
   onNewScan,
   onClose,
+  onPublish,
+  published,
+  publishing,
+  publishError,
 }: VolumeViewerProps) {
   // Mobile detection — responsive to resize
   const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 768);
@@ -1872,9 +1880,14 @@ export function VolumeViewer({
         </div>
 
         {/* Bottom actions */}
-        {(onReconfigure || onNewScan || onClose) && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px' }}>
-            {onClose ? (
+        {(onReconfigure || onNewScan || onClose || onPublish) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingBottom: '16px', paddingTop: '8px', alignItems: 'center' }}>
+            {publishError && (
+              <span style={{ fontSize: '11px', color: colors.error, textAlign: 'center' }}>
+                {publishError}
+              </span>
+            )}
+            {onClose && (
               <button
                 className="echos-action-btn"
                 onClick={onClose}
@@ -1882,19 +1895,16 @@ export function VolumeViewer({
               >
                 {t('common.close' as TranslationKey)}
               </button>
-            ) : (
-              <button
-                className="echos-action-btn"
-                onClick={() => {
-                  const sessionData = { timestamp: new Date().toISOString(), gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null, dimensions, extent, beam, grid, settings: modeSettings };
-                  const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a'); a.href = url; a.download = `ecos-session-${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
-                }}
-                style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}
-              >
-                {t('common.poster' as TranslationKey)}
-              </button>
+            )}
+            {onPublish && !published && (
+              <Button variant="primary" size="lg" disabled={publishing} onClick={onPublish} style={{ width: '100%' }}>
+                {publishing ? 'Publication...' : t('common.poster' as TranslationKey)}
+              </Button>
+            )}
+            {published && (
+              <span style={{ padding: '10px 24px', borderRadius: '9999px', background: 'rgba(34, 197, 94, 0.15)', color: '#22c55e', fontSize: '13px', fontWeight: 600 }}>
+                Session publiée
+              </span>
             )}
             {onReconfigure && (
               <button className="echos-action-btn" onClick={onReconfigure} style={{ padding: '10px 24px', borderRadius: '9999px', border: `1.5px solid ${colors.accent}`, background: 'transparent', color: colors.accent, fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', width: '100%' }}>
@@ -2095,9 +2105,14 @@ export function VolumeViewer({
 
       {/* Bottom action buttons */}
       <div style={{ height: '32px', flexShrink: 0 }} />
-      {(onReconfigure || onNewScan || onClose) && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px' }}>
-          {onClose ? (
+      {(onReconfigure || onNewScan || onClose || onPublish) && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', flexShrink: 0, paddingBottom: '24px', flexWrap: 'wrap' }}>
+          {publishError && (
+            <span style={{ fontSize: '12px', color: colors.error, maxWidth: '400px', textAlign: 'center' }}>
+              {publishError}
+            </span>
+          )}
+          {onClose && (
             <button
               className="echos-action-btn"
               onClick={onClose}
@@ -2111,37 +2126,28 @@ export function VolumeViewer({
             >
               {t('common.close' as TranslationKey)}
             </button>
-          ) : (
-            <button
-              className="echos-action-btn"
-              onClick={() => {
-                const sessionData = {
-                  timestamp: new Date().toISOString(),
-                  gpxTrack: gpxTrack ? { points: gpxTrack.points, totalDistanceM: gpxTrack.totalDistanceM } : null,
-                  dimensions,
-                  extent,
-                  beam,
-                  grid,
-                  settings: modeSettings,
-                };
-                const blob = new Blob([JSON.stringify(sessionData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ecos-session-${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              style={{
-                padding: '12px 32px', borderRadius: '9999px',
-                border: `1.5px solid ${colors.accent}`,
-                background: 'transparent', color: colors.accent,
-                fontSize: '15px', fontWeight: 600, fontFamily: 'inherit',
-                cursor: 'pointer', transition: 'all 150ms ease',
-              }}
+          )}
+          {onPublish && !published && (
+            <Button
+              variant="primary"
+              size="lg"
+              disabled={publishing}
+              onClick={onPublish}
             >
-              {t('common.poster' as TranslationKey)}
-            </button>
+              {publishing ? 'Publication...' : t('common.poster' as TranslationKey)}
+            </Button>
+          )}
+          {published && (
+            <span style={{
+              padding: '12px 32px',
+              borderRadius: '9999px',
+              background: 'rgba(34, 197, 94, 0.15)',
+              color: '#22c55e',
+              fontSize: '15px',
+              fontWeight: 600,
+            }}>
+              Session publiée
+            </span>
           )}
           {onReconfigure && (
             <button
