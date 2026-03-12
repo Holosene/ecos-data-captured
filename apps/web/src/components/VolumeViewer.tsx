@@ -1462,7 +1462,7 @@ export function VolumeViewer({
                     setPlaying((p) => !p);
                   }}
                   style={{
-                    width: '56px', height: '56px', borderRadius: '50%',
+                    width: '56px', height: '56px', borderRadius: '16px',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing ? colors.accentMuted : colors.surface,
                     color: colors.accent,
@@ -1472,12 +1472,12 @@ export function VolumeViewer({
                   }}
                 >
                   {playing ? (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="3" width="6" height="18" rx="1.5" />
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
                   ) : (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}>
                       <path d="M6 4l15 8-15 8V4z" />
                     </svg>
                   )}
@@ -1796,9 +1796,9 @@ export function VolumeViewer({
             {(hasFrames || hasSpatialScrub) && (
               <button
                 onClick={() => { if (currentFrame >= totalFrames - 1) { currentFrameRef.current = 0; setCurrentFrame(0); } setPlaying((p) => !p); }}
-                style={{ width: '40px', height: '40px', borderRadius: '50%', border: `1.5px solid ${colors.accent}`, background: playing ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                style={{ width: '44px', height: '44px', borderRadius: '14px', border: `1.5px solid ${colors.accent}`, background: playing ? colors.accentMuted : colors.surface, color: colors.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
               >
-                {playing ? (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '-1px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
+                {playing ? (<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="6" height="18" rx="1.5" /><rect x="14" y="3" width="6" height="18" rx="1.5" /></svg>) : (<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}><path d="M6 4l15 8-15 8V4z" /></svg>)}
               </button>
             )}
           </div>
