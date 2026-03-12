@@ -1122,46 +1122,6 @@ export function ScanPage() {
         {/* ── Viewer Phase ──────────────────────────────────────────── */}
         {phase === 'viewer' && (
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, animation: 'echos-fade-in 500ms ease' }}>
-            {/* Publish bar */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '10px 16px',
-              borderBottom: `1px solid ${colors.border}`,
-              flexShrink: 0,
-            }}>
-              <div style={{ flex: 1 }} />
-
-              {publishError && (
-                <span style={{ fontSize: '12px', color: colors.error, maxWidth: '400px', textAlign: 'right' }}>
-                  {publishError}
-                </span>
-              )}
-
-              {published ? (
-                <span style={{
-                  padding: '8px 20px',
-                  borderRadius: '9999px',
-                  background: 'rgba(34, 197, 94, 0.15)',
-                  color: '#22c55e',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                }}>
-                  Session publiée
-                </span>
-              ) : (
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={publishing || !volumeData}
-                  onClick={handlePublish}
-                >
-                  {publishing ? 'Publication...' : 'Poster'}
-                </Button>
-              )}
-            </div>
-
             <ViewerErrorBoundary onReset={() => {
               setStepBarVisible(true);
               setStepBarAnimating(false);
@@ -1193,6 +1153,10 @@ export function ScanPage() {
                   setPublished(false);
                   setPublishError(null);
                 }}
+                onPublish={handlePublish}
+                published={published}
+                publishing={publishing}
+                publishError={publishError}
               />
             </ViewerErrorBoundary>
           </div>
