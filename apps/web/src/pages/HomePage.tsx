@@ -103,7 +103,7 @@ export function HomePage() {
     setLightboxOpen(true);
   };
 
-  const heroImageNames = ['hero-main', 'hero-side'];
+  const heroImageNames = ['hero-side', 'hero-main'];
   const heroImages = heroImageNames.map((n) => `${import.meta.env.BASE_URL}${n}.png`);
 
   const galleryRow1 = [

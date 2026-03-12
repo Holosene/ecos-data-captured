@@ -70,9 +70,6 @@ type PresetName = keyof typeof PRESETS;
 
 // ─── Optimized slice rendering ──────────────────────────────────────────
 
-// Minimum canvas width for upscaling low-resolution slices (e.g. minimal/medium modes)
-const MIN_CANVAS_W = 512;
-
 function renderSlice(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
@@ -90,32 +87,25 @@ function renderSlice(
   else if (axis === 'y') { w = dimX; h = dimZ; }
   else { w = dimY; h = dimZ; }
 
-  // Auto-upscale small canvases so all modes look consistent
-  const upscale = w < MIN_CANVAS_W ? Math.ceil(MIN_CANVAS_W / w) : 1;
-  const displayW = w * upscale;
-  const displayH = h * upscale;
-
   // Only reset canvas size if dimensions changed (avoids pixel buffer reallocation)
-  if (canvas.width !== displayW || canvas.height !== displayH) {
-    canvas.width = displayW;
-    canvas.height = displayH;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
     imageDataCache.current = null; // invalidate cache
   }
 
   // Reuse ImageData if possible
   let imageData = imageDataCache.current;
-  if (!imageData || imageData.width !== displayW || imageData.height !== displayH) {
-    imageData = ctx.createImageData(displayW, displayH);
+  if (!imageData || imageData.width !== w || imageData.height !== h) {
+    imageData = ctx.createImageData(w, h);
     imageDataCache.current = imageData;
   }
 
   const colorMap = PRESETS[preset].colorMap;
   const pixels = imageData.data;
 
-  for (let displayRow = 0; displayRow < displayH; displayRow++) {
-    const row = Math.min(Math.floor(displayRow / upscale), h - 1);
-    for (let displayCol = 0; displayCol < displayW; displayCol++) {
-      const col = Math.min(Math.floor(displayCol / upscale), w - 1);
+  for (let row = 0; row < h; row++) {
+    for (let col = 0; col < w; col++) {
       let idx: number;
       if (axis === 'z') idx = sliceIndex * dimY * dimX + row * dimX + col;
       else if (axis === 'y') idx = row * dimY * dimX + sliceIndex * dimX + col;
@@ -136,7 +126,7 @@ function renderSlice(
         }
       }
 
-      const pxIdx = (displayRow * displayW + displayCol) * 4;
+      const pxIdx = (row * w + col) * 4;
       pixels[pxIdx] = r;
       pixels[pxIdx + 1] = g;
       pixels[pxIdx + 2] = b;

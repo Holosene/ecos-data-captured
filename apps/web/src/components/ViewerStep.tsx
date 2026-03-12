@@ -63,9 +63,6 @@ const PRESETS = {
 
 type PresetName = keyof typeof PRESETS;
 
-// Minimum canvas width for upscaling low-resolution slices
-const MIN_CANVAS_W = 512;
-
 function renderSlice(
   canvas: HTMLCanvasElement,
   volume: Volume,
@@ -83,20 +80,13 @@ function renderSlice(
   else if (axis === 'y') { w = dimX; h = dimZ; }
   else { w = dimY; h = dimZ; }
 
-  // Auto-upscale small canvases so all modes look consistent
-  const upscale = w < MIN_CANVAS_W ? Math.ceil(MIN_CANVAS_W / w) : 1;
-  const displayW = w * upscale;
-  const displayH = h * upscale;
-
-  canvas.width = displayW;
-  canvas.height = displayH;
-  const imageData = ctx.createImageData(displayW, displayH);
+  canvas.width = w;
+  canvas.height = h;
+  const imageData = ctx.createImageData(w, h);
   const colorMap = PRESETS[preset].colorMap;
 
-  for (let displayRow = 0; displayRow < displayH; displayRow++) {
-    const row = Math.min(Math.floor(displayRow / upscale), h - 1);
-    for (let displayCol = 0; displayCol < displayW; displayCol++) {
-      const col = Math.min(Math.floor(displayCol / upscale), w - 1);
+  for (let row = 0; row < h; row++) {
+    for (let col = 0; col < w; col++) {
       let val: number;
       if (axis === 'z') val = data[sliceIndex * dimY * dimX + row * dimX + col];
       else if (axis === 'y') val = data[row * dimY * dimX + sliceIndex * dimX + col];
@@ -116,7 +106,7 @@ function renderSlice(
         }
       }
 
-      const idx = (displayRow * displayW + displayCol) * 4;
+      const idx = (row * w + col) * 4;
       imageData.data[idx] = r;
       imageData.data[idx + 1] = g;
       imageData.data[idx + 2] = b;
@@ -304,7 +294,10 @@ export function ViewerStep() {
         </div>
       </GlassPanel>
 
-      <SliceView volume={volume} axis="y" label={t('viewer.crossSection')} preset={preset} />
+      <div className="grid-2-cols" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <SliceView volume={volume} axis="y" label={t('viewer.crossSection')} preset={preset} />
+        <SliceView volume={volume} axis="z" label={t('viewer.planView')} preset={preset} />
+      </div>
       <SliceView volume={volume} axis="x" label={t('viewer.longitudinal')} preset={preset} />
 
       {qcReport && qcReport.warnings.length > 0 && (
