@@ -106,15 +106,6 @@ export function HomePage() {
   const heroImageNames = ['hero-side', 'hero-main'];
   const heroImages = heroImageNames.map((n) => `${import.meta.env.BASE_URL}${n}.png`);
 
-  /* Hover direction map: transform-origin determines the growth direction */
-  const galleryHoverOrigin: Record<string, string> = {
-    'gallery-01': 'top center',    // grows down
-    'gallery-03': 'top center',    // grows down
-    'gallery-04': 'left center',   // grows right
-    'gallery-05': 'bottom center', // grows up
-    'gallery-06': 'bottom center', // grows up
-  };
-
   const galleryRow1 = [
     { name: 'gallery-01', baseFlex: 2, index: 0 },
     { name: 'gallery-03', baseFlex: 1, index: 1 },
@@ -277,86 +268,74 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Gallery container — flex rows with directional hover */}
+        {/* Gallery container — single horizontal scroll block on mobile */}
         <div className="gallery-container">
           {/* Row 1: gallery-01 (wide) + gallery-03 */}
           <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '300px', marginBottom: '12px' }}>
-            {galleryRow1.map((item) => {
-              const isHovered = hoveredImage === item.name;
-              const origin = galleryHoverOrigin[item.name] || 'center center';
-              return (
-                <div
-                  key={item.name}
-                  className="gallery-card visual-placeholder"
-                  data-baseflex={item.baseFlex}
-                  style={{
-                    flex: item.baseFlex,
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderRadius: '12px',
-                    border: isHovered ? `2px solid ${colors.accent}` : '2px solid transparent',
-                    transformOrigin: origin,
-                    transform: isHovered ? 'scale(1.06)' : 'scale(1)',
-                    transition: 'transform 400ms ease, border-color 300ms ease',
-                    zIndex: isHovered ? 2 : 1,
-                  }}
-                  onClick={() => openLightbox(galleryImages, item.index)}
-                  onMouseEnter={() => setHoveredImage(item.name)}
-                  onMouseLeave={() => setHoveredImage(null)}
-                >
-                  <ProgressiveImg
-                    name={item.name}
-                    alt=""
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                    <IconImage size={24} color={colors.text3} />
-                    <span style={{ fontSize: '11px' }}>{item.name}.png</span>
-                  </div>
+            {galleryRow1.map((item) => (
+              <div
+                key={item.name}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.name)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <ProgressiveImg
+                  name={item.name}
+                  alt=""
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
 
           {/* Row 2: gallery-04, gallery-05, gallery-06 */}
           <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '260px' }}>
-            {galleryRow2.map((item) => {
-              const isHovered = hoveredImage === item.name;
-              const origin = galleryHoverOrigin[item.name] || 'center center';
-              return (
-                <div
-                  key={item.name}
-                  className="gallery-card visual-placeholder"
-                  data-baseflex={item.baseFlex}
-                  style={{
-                    flex: item.baseFlex,
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderRadius: '12px',
-                    border: isHovered ? `2px solid ${colors.accent}` : '2px solid transparent',
-                    transformOrigin: origin,
-                    transform: isHovered ? 'scale(1.06)' : 'scale(1)',
-                    transition: 'transform 400ms ease, border-color 300ms ease',
-                    zIndex: isHovered ? 2 : 1,
-                  }}
-                  onClick={() => openLightbox(galleryImages, item.index)}
-                  onMouseEnter={() => setHoveredImage(item.name)}
-                  onMouseLeave={() => setHoveredImage(null)}
-                >
-                  <ProgressiveImg
-                    name={item.name}
-                    alt=""
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                    <IconImage size={24} color={colors.text3} />
-                    <span style={{ fontSize: '11px' }}>{item.name}.png</span>
-                  </div>
+            {galleryRow2.map((item) => (
+              <div
+                key={item.name}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  transition: 'flex 500ms cubic-bezier(0.34, 1.56, 0.64, 1), border-color 300ms ease',
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.name)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <ProgressiveImg
+                  name={item.name}
+                  alt=""
+                  style={{ transition: 'transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)', transform: hoveredImage === item.name ? 'scale(1.05)' : 'scale(1)' }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -621,7 +600,7 @@ export function HomePage() {
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: '20px',
-            alignItems: 'start',
+            alignItems: 'stretch',
           }}
         >
           {/* Column 1: S1 + S3 — vertical reading order */}
@@ -696,14 +675,15 @@ export function HomePage() {
         </button>
       </div>
 
-      {/* Lightbox */}
-      {lightboxOpen && (
+      {/* Lightbox — rendered via portal to bypass transform containing block issues */}
+      {lightboxOpen && ReactDOM.createPortal(
         <ImageLightbox
           images={lightboxImages}
           currentIndex={lightboxIndex}
           onClose={() => setLightboxOpen(false)}
           onNavigate={(index) => setLightboxIndex(index)}
-        />
+        />,
+        document.body,
       )}
 
       {/* Floating scan CTA — rendered via portal to bypass overflow/transform containing block issues */}
