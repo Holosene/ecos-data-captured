@@ -106,6 +106,15 @@ export function HomePage() {
   const heroImageNames = ['hero-side', 'hero-main'];
   const heroImages = heroImageNames.map((n) => `${import.meta.env.BASE_URL}${n}.png`);
 
+  /* Hover direction map: transform-origin determines the growth direction */
+  const galleryHoverOrigin: Record<string, string> = {
+    'gallery-01': 'top center',    // grows down
+    'gallery-03': 'top center',    // grows down
+    'gallery-04': 'left center',   // grows right
+    'gallery-05': 'bottom center', // grows up
+    'gallery-06': 'bottom center', // grows up
+  };
+
   const galleryRow1 = [
     { name: 'gallery-01', baseFlex: 2, index: 0 },
     { name: 'gallery-03', baseFlex: 1, index: 1 },
@@ -155,7 +164,7 @@ export function HomePage() {
           <Button variant="secondary" size="md" onClick={() => {
             const el = document.getElementById('manifesto-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }} style={{ borderColor: '#888' }}>
+          }} style={{ border: `2px solid ${colors.border}` }}>
             {t('home.cta2')}
           </Button>
         </div>
@@ -275,36 +284,42 @@ export function HomePage() {
           gridTemplateRows: '280px 280px',
           gap: '12px',
         }}>
-          {allGalleryItems.map((item) => (
-            <div
-              key={item.name}
-              className="gallery-card visual-placeholder"
-              data-baseflex={item.baseFlex}
-              style={{
-                gridColumn: item.baseFlex === 2 ? 'span 2' : undefined,
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-                borderRadius: '12px',
-                border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
-                transition: 'border-color 300ms ease',
-              }}
-              onClick={() => openLightbox(galleryImages, item.index)}
-              onMouseEnter={() => setHoveredImage(item.name)}
-              onMouseLeave={() => setHoveredImage(null)}
-            >
-              <ProgressiveImg
-                name={item.name}
-                alt=""
-                style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
-                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-              />
-              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                <IconImage size={24} color={colors.text3} />
-                <span style={{ fontSize: '11px' }}>{item.name}.png</span>
+          {allGalleryItems.map((item) => {
+            const isHovered = hoveredImage === item.name;
+            const origin = galleryHoverOrigin[item.name] || 'center center';
+            return (
+              <div
+                key={item.name}
+                className="gallery-card visual-placeholder"
+                data-baseflex={item.baseFlex}
+                style={{
+                  gridColumn: item.baseFlex === 2 ? 'span 2' : undefined,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  borderRadius: '12px',
+                  border: isHovered ? `2px solid ${colors.accent}` : '2px solid transparent',
+                  transformOrigin: origin,
+                  transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'transform 400ms ease, border-color 300ms ease',
+                  zIndex: isHovered ? 2 : 1,
+                }}
+                onClick={() => openLightbox(galleryImages, item.index)}
+                onMouseEnter={() => setHoveredImage(item.name)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <ProgressiveImg
+                  name={item.name}
+                  alt=""
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                  <IconImage size={24} color={colors.text3} />
+                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -528,16 +543,6 @@ export function HomePage() {
 
       </section>
 
-      {/* Documentation */}
-      <section
-        id="docs-section"
-        style={{
-          padding: `clamp(24px, 2.5vw, 40px) var(--content-gutter) clamp(24px, 2.5vw, 40px)`,
-        }}
-      >
-        <DocsSection />
-      </section>
-
       {/* Manifesto */}
       <section
         id="manifesto-section"
@@ -600,20 +605,29 @@ export function HomePage() {
             </GlassPanel>
           </div>
 
-          {/* Column 2: S2 + S4 — vertical reading order */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <GlassPanel padding="24px">
+          {/* Column 2: S2 — stretches to align bottom with S3 */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <GlassPanel padding="24px" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
                 {t('manifesto.s2.title')}
               </h3>
               <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px' }}>{t('manifesto.s2.p1')}</p>
               <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s2.p2')}</p>
             </GlassPanel>
-
           </div>
         </div>
 
 
+      </section>
+
+      {/* Documentation */}
+      <section
+        id="docs-section"
+        style={{
+          padding: `clamp(24px, 2.5vw, 40px) var(--content-gutter) clamp(24px, 2.5vw, 40px)`,
+        }}
+      >
+        <DocsSection />
       </section>
 
       {/* Scroll to top — hidden on mobile via .scroll-to-top */}

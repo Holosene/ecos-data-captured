@@ -314,21 +314,14 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   to { transform: scale(1); opacity: 1; }
 }
 
-/* Gallery card — flex-based hover zoom */
+/* Gallery card — directional hover zoom via transform-origin */
 .gallery-card {
-  transition: flex 0.4s ease,
-              border-color 0.2s ease,
+  transition: transform 0.4s ease,
+              border-color 0.3s ease,
               box-shadow 0.3s ease;
 }
 .gallery-card:hover {
-  border-color: var(--c-border-hover) !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-}
-.gallery-card img {
-  transition: transform 0.4s ease;
-}
-.gallery-card:hover img {
-  transform: scale(1.02);
 }
 .gallery-row { min-height: 0; }
 .gallery-item { min-width: 0; }
