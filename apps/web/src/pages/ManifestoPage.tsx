@@ -86,25 +86,6 @@ export function ManifestoPage() {
             </p>
           </GlassPanel>
 
-          {/* Row 2, Right */}
-          <GlassPanel padding="32px">
-            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
-              {t('manifesto.s4.title')}
-            </h2>
-            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
-              {t('manifesto.s4.p1')}
-            </p>
-          </GlassPanel>
-
-          {/* Row 3, full width */}
-          <GlassPanel padding="32px" style={{ gridColumn: 'span 2' }} className="manifesto-s5-panel">
-            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '16px', color: colors.text1 }}>
-              {t('manifesto.s5.title')}
-            </h2>
-            <p style={{ color: colors.text2, lineHeight: '1.8', fontSize: '16px' }}>
-              {t('manifesto.s5.p1')}
-            </p>
-          </GlassPanel>
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '56px' }}>

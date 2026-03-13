@@ -1462,7 +1462,7 @@ export function VolumeViewer({
                     setPlaying((p) => !p);
                   }}
                   style={{
-                    width: '56px', height: '56px', borderRadius: '16px',
+                    width: '56px', height: '56px', borderRadius: '50%',
                     border: `1.5px solid ${colors.accent}`,
                     background: playing ? colors.accentMuted : colors.surface,
                     color: colors.accent,
@@ -1477,7 +1477,7 @@ export function VolumeViewer({
                       <rect x="14" y="3" width="6" height="18" rx="1.5" />
                     </svg>
                   ) : (
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: '2px' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" style={{ marginLeft: '2px' }}>
                       <path d="M6 4l15 8-15 8V4z" />
                     </svg>
                   )}

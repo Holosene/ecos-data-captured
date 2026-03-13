@@ -155,7 +155,7 @@ export function HomePage() {
           <Button variant="secondary" size="md" onClick={() => {
             const el = document.getElementById('manifesto-section');
             if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}>
+          }} style={{ borderColor: '#888' }}>
             {t('home.cta2')}
           </Button>
         </div>
@@ -167,7 +167,7 @@ export function HomePage() {
           className="hero-visual-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 1fr',
+            gridTemplateColumns: '1fr 2fr',
             gridTemplateRows: 'minmax(260px, 390px)',
             gap: '12px',
           }}
@@ -268,75 +268,43 @@ export function HomePage() {
           </div>
         </div>
 
-        {/* Gallery container — single horizontal scroll block on mobile */}
-        <div className="gallery-container">
-          {/* Row 1: gallery-01 (wide) + gallery-03 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '280px', marginBottom: '12px' }}>
-            {galleryRow1.map((item) => (
-              <div
-                key={item.name}
-                className="gallery-card visual-placeholder"
-                data-baseflex={item.baseFlex}
-                style={{
-                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  borderRadius: '12px',
-                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
-                  transition: 'flex 500ms ease, border-color 300ms ease',
-                }}
-                onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.name)}
-                onMouseLeave={() => setHoveredImage(null)}
-              >
-                <ProgressiveImg
-                  name={item.name}
-                  alt=""
-                  style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                  <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
-                </div>
+        {/* Gallery container — CSS grid so gallery-03 and gallery-06 have identical widths */}
+        <div className="gallery-container" style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
+          gridTemplateRows: '280px 280px',
+          gap: '12px',
+        }}>
+          {allGalleryItems.map((item) => (
+            <div
+              key={item.name}
+              className="gallery-card visual-placeholder"
+              data-baseflex={item.baseFlex}
+              style={{
+                gridColumn: item.baseFlex === 2 ? 'span 2' : undefined,
+                cursor: 'pointer',
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: '12px',
+                border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
+                transition: 'border-color 300ms ease',
+              }}
+              onClick={() => openLightbox(galleryImages, item.index)}
+              onMouseEnter={() => setHoveredImage(item.name)}
+              onMouseLeave={() => setHoveredImage(null)}
+            >
+              <ProgressiveImg
+                name={item.name}
+                alt=""
+                style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+              <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
+                <IconImage size={24} color={colors.text3} />
+                <span style={{ fontSize: '11px' }}>{item.name}.png</span>
               </div>
-            ))}
-          </div>
-
-          {/* Row 2: gallery-04, gallery-05, gallery-06 */}
-          <div className="gallery-row" style={{ display: 'flex', gap: '12px', height: '280px' }}>
-            {galleryRow2.map((item) => (
-              <div
-                key={item.name}
-                className="gallery-card visual-placeholder"
-                data-baseflex={item.baseFlex}
-                style={{
-                  flex: hoveredImage === item.name ? item.baseFlex * 1.8 : item.baseFlex,
-                  cursor: 'pointer',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  borderRadius: '12px',
-                  border: hoveredImage === item.name ? `2px solid ${colors.accent}` : '2px solid transparent',
-                  transition: 'flex 500ms ease, border-color 300ms ease',
-                }}
-                onClick={() => openLightbox(galleryImages, item.index)}
-                onMouseEnter={() => setHoveredImage(item.name)}
-                onMouseLeave={() => setHoveredImage(null)}
-              >
-                <ProgressiveImg
-                  name={item.name}
-                  alt=""
-                  style={{ transition: 'transform 400ms ease', transform: hoveredImage === item.name ? 'scale(1.02)' : 'scale(1)' }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', pointerEvents: 'none' }}>
-                  <IconImage size={24} color={colors.text3} />
-                  <span style={{ fontSize: '11px' }}>{item.name}.png</span>
-                </div>
-              </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -642,36 +610,9 @@ export function HomePage() {
               <p style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', marginTop: '10px' }}>{t('manifesto.s2.p2')}</p>
             </GlassPanel>
 
-            <GlassPanel padding="24px">
-              <h3 style={{ fontSize: '19px', fontWeight: 700, marginBottom: '12px', color: colors.text1 }}>
-                {t('manifesto.s4.title')}
-              </h3>
-              <ul style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: '8px' }}>
-                {tArray('manifesto.s4.items').map((item, i) => (
-                  <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
-                    <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>-</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </GlassPanel>
           </div>
         </div>
 
-        {/* S5 — Roadmap, full width below the two columns */}
-        <GlassPanel padding="28px" style={{ marginTop: '20px' }}>
-          <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '18px', color: colors.text1, letterSpacing: '-0.01em' }}>
-            {t('manifesto.s5.title')}
-          </h3>
-          <ul className="roadmap-list" style={{ color: colors.text2, lineHeight: '1.7', fontSize: '13px', listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 32px' }}>
-            {tArray('manifesto.s5.items').map((item, i) => (
-              <li key={i} style={{ display: 'flex', gap: '10px', alignItems: 'baseline' }}>
-                <span style={{ color: colors.accent, flexShrink: 0, fontWeight: 700, fontSize: '15px', lineHeight: 1 }}>+</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-        </GlassPanel>
 
       </section>
 

@@ -316,7 +316,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* Gallery card — flex-based hover zoom */
 .gallery-card {
-  transition: flex 0.45s cubic-bezier(0.22, 0.61, 0.36, 1),
+  transition: flex 0.4s ease,
               border-color 0.2s ease,
               box-shadow 0.3s ease;
 }
@@ -325,7 +325,7 @@ input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 .gallery-card img {
-  transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transition: transform 0.4s ease;
 }
 .gallery-card:hover img {
   transform: scale(1.02);
